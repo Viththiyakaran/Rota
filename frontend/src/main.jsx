@@ -90,7 +90,7 @@ function App() {
   return (
     <div className="min-h-screen bg-fuel-cream">
       <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
+        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 lg:grid-cols-[1fr_auto_1fr]">
           <button className="flex items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
             <span className="flex h-11 w-11 items-center justify-center rounded-md bg-fuel-deep text-lg font-black text-fuel-lime">
               {branding.logoDataUrl ? (
@@ -107,11 +107,11 @@ function App() {
           </button>
           <button
             onClick={() => setPage("add-shift")}
-            className={`rounded-md bg-fuel-green px-5 py-3 text-sm font-black text-white shadow-lift transition hover:bg-fuel-deep ${isAdmin ? "" : "hidden"}`}
+            className={`hidden rounded-md bg-fuel-green px-5 py-3 text-sm font-black text-white shadow-lift transition hover:bg-fuel-deep lg:block ${isAdmin ? "" : "lg:hidden"}`}
           >
             Add Shift
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-black uppercase text-fuel-green">{currentUser.role}</p>
               <p className="text-sm font-bold text-slate-600">{currentUser.staffName || currentUser.username}</p>
@@ -141,7 +141,7 @@ function App() {
       </main>
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/95 backdrop-blur-xl">
-        <div className={`mx-auto grid max-w-7xl gap-1 overflow-x-auto px-2 py-2 ${isAdmin ? "grid-cols-8" : "grid-cols-6"}`}>
+        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 py-2">
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
@@ -150,7 +150,7 @@ function App() {
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 title={item.label}
-                className={`flex min-h-14 flex-col items-center justify-center rounded-md px-1 text-[11px] font-black transition ${
+                className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center rounded-md px-2 text-[11px] font-black transition sm:min-w-24 ${
                   active ? "bg-fuel-mist text-fuel-green shadow-soft" : "text-slate-500 hover:bg-slate-50"
                 }`}
               >

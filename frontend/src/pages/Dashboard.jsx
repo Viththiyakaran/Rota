@@ -14,15 +14,17 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [error, setError] = React.useState("");
 
   React.useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       api.staff(),
       api.week(toDateInputValue(getMonday())),
       api.reminders()
     ])
-      .then(([staffRows, shiftRows, reminderRows]) => {
-        setStaff(staffRows);
-        setShifts(shiftRows);
-        setReminders(reminderRows);
+      .then(([staffResult, shiftResult, reminderResult]) => {
+        if (staffResult.status === "fulfilled") setStaff(staffResult.value);
+        if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
+        if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
+        const failed = [staffResult, shiftResult, reminderResult].find((result) => result.status === "rejected");
+        if (failed) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -43,10 +45,18 @@ export function Dashboard({ goTo, currentUser, branding }) {
         </p>
       </div>
 
-      <Status loading={loading} error={error}>
-        <div className="grid gap-3 sm:grid-cols-2">
+      {error && !loading && (
+        <p className="rounded-md bg-amber-50 p-3 font-bold text-amber-800">
+          Some dashboard data could not load: {error}
+        </p>
+      )}
+
+      <Status loading={loading} error="">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric icon={Users} label="Active staff" value={activeStaff} />
           <Metric icon={CalendarDays} label="Shifts this week" value={shifts.length} />
+          <Metric icon={MessageCircle} label="Reminders" value={reminders.length} />
+          <Metric icon={CalendarDays} label="Week days" value="7" />
         </div>
 
         <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>

@@ -513,20 +513,20 @@ app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get("/api/reminders/upcoming", async (_req, res, next) => {
+app.get("/api/reminders/upcoming", async (req, res, next) => {
   try {
-    const now = new Date().toISOString();
+    const today = new Date().toISOString().slice(0, 10);
     const staffFilter = req.user.role === "staff" && req.user.staffId ? "AND staff.id = ?" : "";
-    const params = req.user.role === "staff" && req.user.staffId ? [now, req.user.staffId] : [now];
+    const params = req.user.role === "staff" && req.user.staffId ? [today, req.user.staffId] : [today];
     const rows = await all(
       `SELECT shifts.*, staff.name AS staffName, staff.phone, staff.role,
               coverStaff.name AS coverForStaffName
        FROM shifts
        JOIN staff ON staff.id = shifts.staffId
        LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
-       WHERE staff.active = 1 AND reminderTime >= ?
+       WHERE staff.active = 1 AND shifts.shiftDate >= ?
        ${staffFilter}
-       ORDER BY reminderTime ASC
+       ORDER BY shifts.shiftDate ASC, shifts.startTime ASC
        LIMIT 20`,
       params
     );
