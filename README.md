@@ -13,6 +13,7 @@ FuelOps Rota is a simple mobile-friendly rota planner for a UK fuel station.
 ## Features
 
 - Staff management with add, edit and deactivate actions
+- Login for admin and staff users
 - Shift planner with break minutes, reminder minutes, notes and paid-hour calculations
 - Monday to Sunday weekly rota view
 - Upcoming reminders dashboard
@@ -71,6 +72,24 @@ http://localhost:5173
 The SQLite database file is created automatically at `backend/fuelops.sqlite`. If the database is empty, the backend seeds sample staff and shifts on startup.
 
 Node 22.5 or newer is recommended because the backend uses Node's built-in SQLite support.
+
+## Default Logins
+
+Admin:
+
+```text
+username: admin
+password: admin123
+```
+
+Staff:
+
+```text
+username: afridi, veera or viththi
+password: staff123
+```
+
+When a new staff member is added, the app creates a staff login automatically using their name as the username and `staff123` as the first password.
 
 ## Railway Hosting
 

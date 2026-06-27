@@ -6,7 +6,7 @@ import { Status } from "../components/Status.jsx";
 import { addDays, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
 
-export function Dashboard({ goTo }) {
+export function Dashboard({ goTo, currentUser }) {
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
   const [reminders, setReminders] = React.useState([]);
@@ -29,6 +29,7 @@ export function Dashboard({ goTo }) {
   }, []);
 
   const activeStaff = staff.filter((person) => person.active).length;
+  const isAdmin = currentUser?.role === "admin";
   const weekStart = getMonday();
   const weekDays = Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index)));
 
@@ -48,16 +49,25 @@ export function Dashboard({ goTo }) {
           <Metric icon={CalendarDays} label="Shifts this week" value={shifts.length} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <button onClick={() => goTo("add-staff")} className="rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-deep">
-            Add Staff
-          </button>
-          <button onClick={() => goTo("add-shift")} className="rounded-md bg-fuel-ink px-5 py-4 font-black text-white shadow-soft transition hover:bg-fuel-deep">
-            Add Shift
-          </button>
+        <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {isAdmin && (
+            <button onClick={() => goTo("add-staff")} className="rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-deep">
+              Add Staff
+            </button>
+          )}
+          {isAdmin && (
+            <button onClick={() => goTo("add-shift")} className="rounded-md bg-fuel-ink px-5 py-4 font-black text-white shadow-soft transition hover:bg-fuel-deep">
+              Add Shift
+            </button>
+          )}
           <button onClick={() => goTo("rota")} className="rounded-md bg-fuel-lime px-5 py-4 font-black text-fuel-ink shadow-soft transition hover:bg-fuel-gold">
             Weekly Rota
           </button>
+          {!isAdmin && (
+            <button onClick={() => goTo("reminders")} className="rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-deep">
+              My Reminders
+            </button>
+          )}
         </div>
 
         <Card>

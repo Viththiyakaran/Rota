@@ -1,4 +1,5 @@
 import path from "node:path";
+import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
@@ -82,6 +83,30 @@ export async function initDb() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      passwordHash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin', 'staff')),
+      staffId INTEGER,
+      active INTEGER NOT NULL DEFAULT 1,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staffId) REFERENCES staff(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      userId INTEGER NOT NULL,
+      expiresAt TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  `);
+
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
 
@@ -90,6 +115,7 @@ export async function initDb() {
     await seedData();
   }
 
+  await seedUsers();
   await ensurePermanentRotaThroughYear(new Date());
 }
 
@@ -115,6 +141,24 @@ async function seedData() {
   }
 
   await insertPermanentWeek(getMonday(new Date()), endOfYear(new Date()));
+}
+
+async function seedUsers() {
+  const userCount = await get("SELECT COUNT(*) AS count FROM users");
+  if (userCount.count > 0) return;
+
+  await run(
+    "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
+    ["admin", hashPassword("admin123"), "admin", null, 1]
+  );
+
+  const staffRows = await all("SELECT id, name FROM staff WHERE active = 1");
+  for (const staff of staffRows) {
+    await run(
+      "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
+      [toUsername(staff.name), hashPassword("staff123"), "staff", staff.id, 1]
+    );
+  }
 }
 
 async function ensurePermanentRotaThroughYear(date) {
@@ -224,6 +268,74 @@ export function decorateShift(row) {
     paidHours: Number(paidHours.toFixed(2)),
     reminderMessage: buildReminderMessage(row.shiftDate, row.startTime)
   };
+}
+
+export function findUserByUsername(username) {
+  return get("SELECT * FROM users WHERE lower(username) = lower(?) AND active = 1", [username]);
+}
+
+export function verifyPassword(password, storedHash) {
+  const [salt, key] = storedHash.split(":");
+  if (!salt || !key) return false;
+
+  const attempted = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256").toString("hex");
+  if (key.length !== attempted.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(key, "hex"), Buffer.from(attempted, "hex"));
+}
+
+export function createSession(userId) {
+  const token = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString();
+  run("INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)", [token, userId, expiresAt]);
+  return { token, expiresAt };
+}
+
+export function deleteSession(token) {
+  return run("DELETE FROM sessions WHERE token = ?", [token]);
+}
+
+export function getSessionUser(token) {
+  if (!token) return null;
+  return get(
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, staff.name AS staffName
+     FROM sessions
+     JOIN users ON users.id = sessions.userId
+     LEFT JOIN staff ON staff.id = users.staffId
+     WHERE sessions.token = ? AND sessions.expiresAt > ? AND users.active = 1`,
+    [token, new Date().toISOString()]
+  );
+}
+
+export function publicUser(user) {
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    staffId: user.staffId,
+    staffName: user.staffName
+  };
+}
+
+export function createStaffUser(staffId, name) {
+  const username = toUsername(name);
+  const existing = get("SELECT id FROM users WHERE username = ?", [username]);
+  if (existing) return existing;
+
+  return run(
+    "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
+    [username, hashPassword("staff123"), "staff", staffId, 1]
+  );
+}
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const key = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256").toString("hex");
+  return `${salt}:${key}`;
+}
+
+function toUsername(name) {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
 function buildReminderMessage(shiftDate, startTime) {

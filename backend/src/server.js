@@ -3,7 +3,21 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { all, calculateReminderTime, decorateShift, get, initDb, run } from "./db.js";
+import {
+  all,
+  calculateReminderTime,
+  createSession,
+  createStaffUser,
+  decorateShift,
+  deleteSession,
+  findUserByUsername,
+  get,
+  getSessionUser,
+  initDb,
+  publicUser,
+  run,
+  verifyPassword
+} from "./db.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
@@ -18,6 +32,33 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, name: "FuelOps Rota API" });
 });
 
+app.post("/api/auth/login", async (req, res, next) => {
+  try {
+    const { username = "", password = "" } = req.body;
+    const user = findUserByUsername(username.trim());
+    if (!user || !verifyPassword(password, user.passwordHash)) {
+      return res.status(401).json({ error: "Invalid username or password." });
+    }
+
+    const session = createSession(user.id);
+    const sessionUser = getSessionUser(session.token);
+    res.json({ token: session.token, expiresAt: session.expiresAt, user: publicUser(sessionUser) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/auth/me", requireAuth, (req, res) => {
+  res.json({ user: publicUser(req.user) });
+});
+
+app.post("/api/auth/logout", requireAuth, (req, res) => {
+  deleteSession(req.token);
+  res.status(204).send();
+});
+
+app.use("/api", requireAuth);
+
 app.get("/api/staff", async (_req, res, next) => {
   try {
     const rows = await all("SELECT * FROM staff ORDER BY active DESC, id ASC");
@@ -27,7 +68,7 @@ app.get("/api/staff", async (_req, res, next) => {
   }
 });
 
-app.post("/api/staff", async (req, res, next) => {
+app.post("/api/staff", requireAdmin, async (req, res, next) => {
   try {
     const { name, phone = "", email = "", role, active = true } = req.body;
     if (!name || !role) return res.status(400).json({ error: "Name and role are required." });
@@ -36,6 +77,7 @@ app.post("/api/staff", async (req, res, next) => {
       "INSERT INTO staff (name, phone, email, role, active) VALUES (?, ?, ?, ?, ?)",
       [name, phone, email, role, active ? 1 : 0]
     );
+    createStaffUser(result.id, name);
     const row = await get("SELECT * FROM staff WHERE id = ?", [result.id]);
     res.status(201).json({ ...row, active: Boolean(row.active) });
   } catch (error) {
@@ -43,7 +85,7 @@ app.post("/api/staff", async (req, res, next) => {
   }
 });
 
-app.put("/api/staff/:id", async (req, res, next) => {
+app.put("/api/staff/:id", requireAdmin, async (req, res, next) => {
   try {
     const current = await get("SELECT * FROM staff WHERE id = ?", [req.params.id]);
     if (!current) return res.status(404).json({ error: "Staff member not found." });
@@ -62,6 +104,7 @@ app.put("/api/staff/:id", async (req, res, next) => {
        WHERE id = ?`,
       [nextStaff.name, nextStaff.phone, nextStaff.email, nextStaff.role, nextStaff.active, req.params.id]
     );
+    await run("UPDATE users SET active = ?, updatedAt = CURRENT_TIMESTAMP WHERE staffId = ?", [nextStaff.active, req.params.id]);
     const row = await get("SELECT * FROM staff WHERE id = ?", [req.params.id]);
     res.json({ ...row, active: Boolean(row.active) });
   } catch (error) {
@@ -91,7 +134,7 @@ app.get("/api/shifts/week", async (req, res, next) => {
   }
 });
 
-app.post("/api/shifts", async (req, res, next) => {
+app.post("/api/shifts", requireAdmin, async (req, res, next) => {
   try {
     const {
       staffId,
@@ -134,7 +177,7 @@ app.post("/api/shifts", async (req, res, next) => {
   }
 });
 
-app.put("/api/shifts/:id", async (req, res, next) => {
+app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
   try {
     const current = await get("SELECT * FROM shifts WHERE id = ?", [req.params.id]);
     if (!current) return res.status(404).json({ error: "Shift not found." });
@@ -180,7 +223,7 @@ app.put("/api/shifts/:id", async (req, res, next) => {
   }
 });
 
-app.delete("/api/shifts/:id", async (req, res, next) => {
+app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
   try {
     const result = await run("DELETE FROM shifts WHERE id = ?", [req.params.id]);
     if (result.changes === 0) return res.status(404).json({ error: "Shift not found." });
@@ -231,6 +274,23 @@ app.use((error, _req, res, _next) => {
   console.error(error);
   res.status(500).json({ error: "Something went wrong." });
 });
+
+function requireAuth(req, res, next) {
+  const header = req.get("authorization") || "";
+  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const user = getSessionUser(token);
+
+  if (!user) return res.status(401).json({ error: "Please log in." });
+
+  req.token = token;
+  req.user = user;
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== "admin") return res.status(403).json({ error: "Admin access is required." });
+  next();
+}
 
 initDb().then(() => {
   app.listen(port, () => {

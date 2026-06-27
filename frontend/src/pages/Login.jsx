@@ -1,0 +1,85 @@
+import React from "react";
+import { LockKeyhole, UserRound } from "lucide-react";
+import { api, setAuthToken } from "../api.js";
+import { Field, inputClass } from "../components/Field.jsx";
+
+export function Login({ onLogin }) {
+  const [form, setForm] = React.useState({ username: "admin", password: "admin123" });
+  const [error, setError] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+
+  const submit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      const result = await api.login(form);
+      setAuthToken(result.token);
+      onLogin(result.user);
+    } catch (err) {
+      setAuthToken("");
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-fuel-cream px-4 py-8">
+      <section className="w-full max-w-md rounded-md border border-fuel-line bg-white p-5 shadow-lift">
+        <div className="mb-6 flex items-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-md bg-fuel-deep text-xl font-black text-fuel-lime">
+            F
+          </span>
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-fuel-green">FuelOps</p>
+            <h1 className="text-3xl font-black leading-none text-fuel-ink">Rota Login</h1>
+          </div>
+        </div>
+
+        <form className="space-y-4" onSubmit={submit}>
+          <Field label="Username">
+            <div className="relative">
+              <UserRound className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
+              <input
+                className={`${inputClass} pl-10`}
+                value={form.username}
+                onChange={(event) => setForm({ ...form, username: event.target.value })}
+                autoComplete="username"
+              />
+            </div>
+          </Field>
+
+          <Field label="Password">
+            <div className="relative">
+              <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
+              <input
+                className={`${inputClass} pl-10`}
+                type="password"
+                value={form.password}
+                onChange={(event) => setForm({ ...form, password: event.target.value })}
+                autoComplete="current-password"
+              />
+            </div>
+          </Field>
+
+          {error && <p className="rounded-md bg-red-50 px-3 py-3 text-sm font-black text-red-700">{error}</p>}
+
+          <button
+            className="w-full rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-deep disabled:opacity-60"
+            disabled={saving}
+          >
+            {saving ? "Signing in..." : "Sign in"}
+          </button>
+        </form>
+
+        <div className="mt-5 rounded-md bg-fuel-mist p-3 text-sm font-bold text-slate-700">
+          <p className="font-black text-fuel-ink">First login</p>
+          <p className="mt-1">Admin: admin / admin123</p>
+          <p>Staff: afridi, veera or viththi / staff123</p>
+        </div>
+      </section>
+    </main>
+  );
+}

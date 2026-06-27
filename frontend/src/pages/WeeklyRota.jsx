@@ -5,7 +5,7 @@ import { Status } from "../components/Status.jsx";
 import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappGroupShareUrl } from "../whatsapp.js";
 
-export function WeeklyRota() {
+export function WeeklyRota({ currentUser }) {
   const [startDate, setStartDate] = React.useState(toDateInputValue(getMonday()));
   const [shifts, setShifts] = React.useState([]);
   const [editingNoteId, setEditingNoteId] = React.useState(null);
@@ -65,6 +65,7 @@ export function WeeklyRota() {
     formatDay: formatDayLabel,
     formatRange: formatShiftRange
   });
+  const isAdmin = currentUser?.role === "admin";
 
   return (
     <div className="space-y-5">
@@ -152,13 +153,15 @@ export function WeeklyRota() {
                             <p className="mt-2 text-xs font-bold text-slate-600">Cover for {shift.coverForStaffName}</p>
                           )}
                         </div>
-                        <button
-                          className="shrink-0 rounded-md bg-fuel-mist p-2 text-slate-500"
-                          onClick={() => removeShift(shift.id)}
-                          title="Delete shift"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            className="shrink-0 rounded-md bg-fuel-mist p-2 text-slate-500"
+                            onClick={() => removeShift(shift.id)}
+                            title="Delete shift"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        )}
                       </div>
                       <div className="mt-3 text-sm text-fuel-ink">
                         <p><span className="font-bold">{shift.totalHours}</span> hrs</p>
@@ -198,14 +201,16 @@ export function WeeklyRota() {
                             ) : (
                               <p className="text-sm font-bold text-slate-400">No note</p>
                             )}
-                            <button
-                              type="button"
-                              className="shrink-0 rounded-md bg-fuel-mist p-2 text-fuel-green"
-                              title="Edit note"
-                              onClick={() => startNoteEdit(shift)}
-                            >
-                              <Pencil size={15} />
-                            </button>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                className="shrink-0 rounded-md bg-fuel-mist p-2 text-fuel-green"
+                                title="Edit note"
+                                onClick={() => startNoteEdit(shift)}
+                              >
+                                <Pencil size={15} />
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
