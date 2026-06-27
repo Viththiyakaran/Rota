@@ -1,9 +1,15 @@
 import cors from "cors";
 import express from "express";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { all, calculateReminderTime, decorateShift, get, initDb, run } from "./db.js";
 
 const app = express();
 const port = process.env.PORT || 4000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendDist = path.join(__dirname, "..", "..", "frontend", "dist");
 
 app.use(cors());
 app.use(express.json());
@@ -203,6 +209,23 @@ app.get("/api/reminders/upcoming", async (_req, res, next) => {
     next(error);
   }
 });
+
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    res.sendFile(path.join(frontendDist, "index.html"));
+  });
+} else {
+  app.get("/", (_req, res) => {
+    res.json({
+      ok: true,
+      name: "FuelOps Rota API",
+      message: "Frontend build not found. Use the frontend service URL, or build the frontend before starting this service."
+    });
+  });
+}
 
 app.use((error, _req, res, _next) => {
   console.error(error);

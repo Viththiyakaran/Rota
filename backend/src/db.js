@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = path.join(__dirname, "..", "fuelops.sqlite");
+const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "fuelops.sqlite");
 
 export const db = new DatabaseSync(dbPath);
 

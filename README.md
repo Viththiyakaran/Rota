@@ -71,3 +71,35 @@ http://localhost:5173
 The SQLite database file is created automatically at `backend/fuelops.sqlite`. If the database is empty, the backend seeds sample staff and shifts on startup.
 
 Node 22.5 or newer is recommended because the backend uses Node's built-in SQLite support.
+
+## Railway Hosting
+
+For a single Railway service, use:
+
+```bash
+npm install && npm run build
+```
+
+Start command:
+
+```bash
+npm start
+```
+
+Add a Railway volume mounted at:
+
+```text
+/data
+```
+
+Add this backend environment variable so SQLite data survives redeploys:
+
+```text
+DB_PATH=/data/fuelops.sqlite
+```
+
+If frontend and backend are deployed as separate Railway services, add this variable to the frontend service:
+
+```text
+VITE_API_BASE=https://your-backend-url.up.railway.app
+```
