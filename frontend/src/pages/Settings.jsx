@@ -10,7 +10,7 @@ export function Settings({ branding, onBrandingSaved }) {
   const [users, setUsers] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00" });
-  const [userForm, setUserForm] = React.useState({ username: "", password: "staff123", role: "staff", staffId: "", active: true });
+  const [adminForm, setAdminForm] = React.useState({ username: "", password: "admin123" });
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -27,7 +27,6 @@ export function Settings({ branding, onBrandingSaved }) {
         setUsers(userRows);
         setOpeningHours(hours);
         setAudit(auditRows);
-        setUserForm((current) => ({ ...current, staffId: current.staffId || activeStaff[0]?.id || "" }));
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -87,14 +86,14 @@ export function Settings({ branding, onBrandingSaved }) {
     }
   };
 
-  const createUser = async (event) => {
+  const createAdmin = async (event) => {
     event.preventDefault();
     setError("");
     setMessage("");
     try {
-      await api.createUser({ ...userForm, staffId: userForm.role === "staff" ? userForm.staffId : null });
-      setUserForm({ username: "", password: "staff123", role: "staff", staffId: staff[0]?.id || "", active: true });
-      setMessage("Login created.");
+      await api.createUser({ username: adminForm.username, password: adminForm.password, role: "admin", staffId: null, active: true });
+      setAdminForm({ username: "", password: "admin123" });
+      setMessage("Admin login created.");
       loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -188,29 +187,23 @@ export function Settings({ branding, onBrandingSaved }) {
       </Card>
 
       <Card>
-        <h3 className="mb-3 text-xl font-black">Admin User Management</h3>
-        <form className="grid gap-3 md:grid-cols-5" onSubmit={createUser}>
+        <h3 className="text-xl font-black">Login Access</h3>
+        <p className="mt-1 text-sm font-bold text-slate-600">
+          Staff logins are created automatically when staff are added. Manage staff details in Staff List.
+        </p>
+
+        <form className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={createAdmin}>
           <Field label="Username">
-            <input className={inputClass} value={userForm.username} onChange={(e) => setUserForm({ ...userForm, username: e.target.value })} />
+            <input className={inputClass} value={adminForm.username} onChange={(e) => setAdminForm({ ...adminForm, username: e.target.value })} />
           </Field>
           <Field label="Password">
-            <input className={inputClass} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
+            <input className={inputClass} value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} />
           </Field>
-          <Field label="Role">
-            <select className={inputClass} value={userForm.role} onChange={(e) => setUserForm({ ...userForm, role: e.target.value })}>
-              <option value="staff">Staff</option>
-              <option value="admin">Admin</option>
-            </select>
-          </Field>
-          <Field label="Staff link">
-            <select className={inputClass} value={userForm.staffId} onChange={(e) => setUserForm({ ...userForm, staffId: e.target.value })} disabled={userForm.role === "admin"}>
-              {staff.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}
-            </select>
-          </Field>
-          <button className="self-end rounded-md bg-fuel-ink px-5 py-4 font-black text-white">Create</button>
+          <button className="self-end rounded-md bg-fuel-ink px-5 py-4 font-black text-white">Create Admin</button>
         </form>
 
         <div className="mt-4 space-y-2">
+          <p className="text-sm font-black uppercase tracking-[0.12em] text-fuel-green">Existing logins</p>
           {users.map((user) => (
             <div key={user.id} className="grid gap-2 rounded-md border border-fuel-line bg-white p-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
               <div>

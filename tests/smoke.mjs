@@ -69,7 +69,7 @@ async function runSmoke() {
   await request("/api/users", {
     token: admin.token,
     method: "POST",
-    body: { username: "smokeadmin", password: "admin123", role: "admin", active: true }
+    body: { username: "smokeadmin", password: "admin123", role: "admin", staffId: null, active: true }
   });
 
   await expectStatus("/api/users", 403, { token: staff.token });

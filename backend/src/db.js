@@ -151,6 +151,7 @@ export async function initDb() {
   await ensureShiftColumn("coverForStaffId", "INTEGER");
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
+  await replaceLegacySeedEmails();
 
   const staffCount = await get("SELECT COUNT(*) AS count FROM staff");
   if (staffCount.count === 0) {
@@ -511,6 +512,10 @@ async function ensureDefaultSetting(key, value) {
   if (!existing) {
     await run("INSERT INTO settings (key, value) VALUES (?, ?)", [key, value]);
   }
+}
+
+async function replaceLegacySeedEmails() {
+  await run("UPDATE staff SET email = replace(email, '@fuelops.local', '@example.local') WHERE email LIKE ?", ["%@fuelops.local"]);
 }
 
 function toUsername(name) {
