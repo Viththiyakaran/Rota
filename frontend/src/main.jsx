@@ -1,24 +1,30 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Bell, CalendarDays, Home, LogOut, PlusCircle, Settings as SettingsIcon, Users } from "lucide-react";
+import { Bell, CalendarDays, Clock, Home, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { AddShift } from "./pages/AddShift.jsx";
 import { AddStaff } from "./pages/AddStaff.jsx";
+import { Account } from "./pages/Account.jsx";
 import { Dashboard } from "./pages/Dashboard.jsx";
 import { Login } from "./pages/Login.jsx";
+import { MyShifts } from "./pages/MyShifts.jsx";
 import { Reminders } from "./pages/Reminders.jsx";
 import { Settings } from "./pages/Settings.jsx";
 import { StaffList } from "./pages/StaffList.jsx";
+import { TimeOff } from "./pages/TimeOff.jsx";
 import { WeeklyRota } from "./pages/WeeklyRota.jsx";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home, roles: ["admin", "staff"] },
+  { id: "my-shifts", label: "My Shifts", icon: Clock, roles: ["staff"] },
   { id: "staff", label: "Staff", icon: Users, roles: ["admin"] },
   { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"] },
   { id: "rota", label: "Rota", icon: CalendarDays, roles: ["admin", "staff"] },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"] },
+  { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
   { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"] },
+  { id: "account", label: "Account", icon: UserRound, roles: ["admin", "staff"] },
   { id: "settings", label: "Settings", icon: SettingsIcon, roles: ["admin"] }
 ];
 
@@ -123,16 +129,19 @@ function App() {
 
       <main className="mx-auto max-w-7xl px-4 pb-28 pt-5">
         {page === "dashboard" && <Dashboard {...pageProps} />}
+        {page === "my-shifts" && <MyShifts />}
         {page === "staff" && isAdmin && <StaffList />}
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
         {page === "rota" && <WeeklyRota currentUser={currentUser} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
+        {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders />}
+        {page === "account" && <Account currentUser={currentUser} />}
         {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/95 backdrop-blur-xl">
-        <div className={`mx-auto grid max-w-7xl gap-1 px-2 py-2 ${isAdmin ? "grid-cols-7" : "grid-cols-3"}`}>
+        <div className={`mx-auto grid max-w-7xl gap-1 overflow-x-auto px-2 py-2 ${isAdmin ? "grid-cols-8" : "grid-cols-6"}`}>
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
@@ -157,6 +166,12 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
 
 function buildRotaTitle(businessName) {
   const name = String(businessName || "Your Business").trim();

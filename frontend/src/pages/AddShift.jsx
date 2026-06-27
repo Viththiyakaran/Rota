@@ -15,6 +15,9 @@ const quickRanges = [
 
 export function AddShift({ onSaved }) {
   const [staff, setStaff] = React.useState([]);
+  const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00" });
+  const [availability, setAvailability] = React.useState([]);
+  const [timeOff, setTimeOff] = React.useState([]);
   const [error, setError] = React.useState("");
   const [form, setForm] = React.useState({
     staffId: "",
@@ -29,14 +32,24 @@ export function AddShift({ onSaved }) {
   });
 
   React.useEffect(() => {
-    api.staff().then((rows) => {
+    Promise.all([api.staff(), api.openingHours(), api.availability(), api.timeOff()]).then(([rows, hours, availabilityRows, timeOffRows]) => {
       const active = rows.filter((person) => person.active);
       setStaff(active);
-      setForm((current) => ({ ...current, staffId: active[0]?.id || "" }));
+      setOpeningHours(hours);
+      setAvailability(availabilityRows);
+      setTimeOff(timeOffRows);
+      setForm((current) => ({
+        ...current,
+        staffId: active[0]?.id || "",
+        startTime: hours.openingStart,
+        endTime: hours.openingEnd
+      }));
     });
   }, []);
 
   const selectedStaff = staff.find((person) => String(person.id) === String(form.staffId));
+  const dynamicRanges = buildRanges(openingHours);
+  const conflict = findConflict(form, availability, timeOff);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -72,6 +85,11 @@ export function AddShift({ onSaved }) {
               <p className="text-sm font-bold text-fuel-green">{selectedStaff.role}</p>
             </div>
           )}
+          {conflict && (
+            <p className="rounded-md bg-amber-50 p-3 text-sm font-black text-amber-800">
+              Warning: {conflict}
+            </p>
+          )}
           <label className="flex items-center gap-3 rounded-md border border-fuel-line bg-fuel-mist p-3 font-bold">
             <input
               type="checkbox"
@@ -103,7 +121,7 @@ export function AddShift({ onSaved }) {
           <div className="rounded-md border border-fuel-line bg-fuel-mist p-3">
             <p className="mb-3 text-sm font-black text-fuel-ink">Hour range</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {quickRanges.map((range) => {
+              {dynamicRanges.map((range) => {
                 const isSelected = form.startTime === range.startTime && form.endTime === range.endTime;
                 return (
                   <button
@@ -130,4 +148,23 @@ export function AddShift({ onSaved }) {
       </Card>
     </div>
   );
+}
+
+function buildRanges(hours) {
+  const ranges = [
+    { label: `${hours.openingStart}-${hours.openingEnd}`, startTime: hours.openingStart, endTime: hours.openingEnd },
+    ...quickRanges
+  ];
+  return ranges.filter((range, index, list) => index === list.findIndex((item) => item.startTime === range.startTime && item.endTime === range.endTime));
+}
+
+function findConflict(form, availability, timeOff) {
+  const staffId = Number(form.staffId);
+  if (!staffId || !form.shiftDate) return "";
+  const weekday = new Date(`${form.shiftDate}T00:00:00`).getDay();
+  const unavailable = availability.find((item) => Number(item.staffId) === staffId && Number(item.weekday) === weekday);
+  if (unavailable) return `staff marked unavailable on this day${unavailable.note ? ` (${unavailable.note})` : ""}.`;
+  const approvedOff = timeOff.find((item) => Number(item.staffId) === staffId && item.status === "approved" && form.shiftDate >= item.startDate && form.shiftDate <= item.endDate);
+  if (approvedOff) return "staff has approved time off on this date.";
+  return "";
 }

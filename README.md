@@ -15,6 +15,12 @@ Rota App is a simple mobile-friendly rota planner for small businesses and SMEs.
 - Staff management with add, edit and deactivate actions
 - Login for admin and staff users
 - Admin branding settings for business name and logo
+- Change password for admin and staff
+- Admin user management with password reset and login disable
+- Business opening hours for shift planning
+- Staff availability and time-off requests
+- My Shifts view for staff
+- Copy week, print/PDF rota, PWA install support and audit log
 - Shift planner with break minutes, reminder minutes, notes and paid-hour calculations
 - Monday to Sunday weekly rota view
 - Upcoming reminders dashboard

@@ -1,0 +1,16 @@
+{
+  "name": "Rota App",
+  "short_name": "Rota",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f8f5",
+  "theme_color": "#006b4f",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

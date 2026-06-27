@@ -107,8 +107,50 @@ export async function initDb() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS availability (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      staffId INTEGER NOT NULL,
+      weekday INTEGER NOT NULL,
+      startTime TEXT NOT NULL DEFAULT '00:00',
+      endTime TEXT NOT NULL DEFAULT '23:59',
+      note TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staffId) REFERENCES staff(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS timeOffRequests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      staffId INTEGER NOT NULL,
+      startDate TEXT NOT NULL,
+      endDate TEXT NOT NULL,
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+      reviewedBy INTEGER,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staffId) REFERENCES staff(id),
+      FOREIGN KEY (reviewedBy) REFERENCES users(id)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS auditLog (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      userId INTEGER,
+      action TEXT NOT NULL,
+      details TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  `);
+
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
+  await ensureDefaultSetting("openingStart", "05:30");
+  await ensureDefaultSetting("openingEnd", "22:00");
 
   const staffCount = await get("SELECT COUNT(*) AS count FROM staff");
   if (staffCount.count === 0) {
@@ -326,6 +368,31 @@ export function getBranding() {
   };
 }
 
+export function getOpeningHours() {
+  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?)", ["openingStart", "openingEnd"]);
+  const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  return {
+    openingStart: values.openingStart || "05:30",
+    openingEnd: values.openingEnd || "22:00"
+  };
+}
+
+export function updateOpeningHours({ openingStart, openingEnd }) {
+  run(
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ["openingStart", openingStart || "05:30"]
+  );
+  run(
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ["openingEnd", openingEnd || "22:00"]
+  );
+  return getOpeningHours();
+}
+
 export function updateBranding({ businessName, logoDataUrl }) {
   if (businessName !== undefined) {
     run(
@@ -359,10 +426,91 @@ export function createStaffUser(staffId, name) {
   );
 }
 
-function hashPassword(password) {
+export function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
   const key = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256").toString("hex");
   return `${salt}:${key}`;
+}
+
+export function changePassword(userId, newPassword) {
+  return run("UPDATE users SET passwordHash = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [hashPassword(newPassword), userId]);
+}
+
+export function listUsers() {
+  return all(
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, staff.name AS staffName
+     FROM users
+     LEFT JOIN staff ON staff.id = users.staffId
+     ORDER BY users.active DESC, users.role ASC, users.username ASC`
+  ).map(publicUserWithActive);
+}
+
+export function createUser({ username, password, role, staffId, active = true }) {
+  const result = run(
+    "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
+    [username, hashPassword(password), role, staffId || null, active ? 1 : 0]
+  );
+  return getUser(result.id);
+}
+
+export function updateUser(id, { username, role, staffId, active }) {
+  const current = get("SELECT * FROM users WHERE id = ?", [id]);
+  if (!current) return null;
+  run(
+    `UPDATE users
+     SET username = ?, role = ?, staffId = ?, active = ?, updatedAt = CURRENT_TIMESTAMP
+     WHERE id = ?`,
+    [
+      username ?? current.username,
+      role ?? current.role,
+      staffId === undefined ? current.staffId : staffId || null,
+      active === undefined ? current.active : active ? 1 : 0,
+      id
+    ]
+  );
+  return getUser(id);
+}
+
+export function resetUserPassword(id, password) {
+  const result = changePassword(id, password);
+  return result.changes > 0;
+}
+
+export function addAudit(userId, action, details = "") {
+  return run("INSERT INTO auditLog (userId, action, details) VALUES (?, ?, ?)", [userId || null, action, details]);
+}
+
+export function listAudit() {
+  return all(
+    `SELECT auditLog.*, users.username
+     FROM auditLog
+     LEFT JOIN users ON users.id = auditLog.userId
+     ORDER BY auditLog.createdAt DESC
+     LIMIT 80`
+  );
+}
+
+export function getUser(id) {
+  const user = get(
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, staff.name AS staffName
+     FROM users
+     LEFT JOIN staff ON staff.id = users.staffId
+     WHERE users.id = ?`,
+    [id]
+  );
+  return publicUserWithActive(user);
+}
+
+function publicUserWithActive(user) {
+  if (!user) return null;
+  return { ...publicUser(user), active: Boolean(user.active) };
+}
+
+async function ensureDefaultSetting(key, value) {
+  const existing = await get("SELECT value FROM settings WHERE key = ?", [key]);
+  if (!existing) {
+    await run("INSERT INTO settings (key, value) VALUES (?, ?)", [key, value]);
+  }
 }
 
 function toUsername(name) {

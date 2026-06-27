@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, MessageCircle, Pencil, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
@@ -12,6 +12,7 @@ export function WeeklyRota({ currentUser }) {
   const [noteDraft, setNoteDraft] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+  const [message, setMessage] = React.useState("");
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -55,6 +56,13 @@ export function WeeklyRota({ currentUser }) {
   const moveWeek = (offset) => {
     const next = addDays(new Date(`${startDate}T00:00:00`), offset * 7);
     setStartDate(toDateInputValue(next));
+  };
+
+  const copyToNextWeek = async () => {
+    setMessage("");
+    const toStartDate = toDateInputValue(addDays(new Date(`${startDate}T00:00:00`), 7));
+    const result = await api.copyWeek({ fromStartDate: startDate, toStartDate });
+    setMessage(`${result.copied} shifts copied to next week.`);
   };
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
@@ -115,10 +123,29 @@ export function WeeklyRota({ currentUser }) {
             <MessageCircle size={18} />
             Share weekly rota to WhatsApp group
           </a>
+          <button
+            type="button"
+            className="flex items-center justify-center gap-2 rounded-md bg-fuel-ink px-4 py-3 font-black text-white sm:col-span-2"
+            onClick={() => window.print()}
+          >
+            <Printer size={18} />
+            Print / PDF
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className="flex items-center justify-center gap-2 rounded-md bg-fuel-lime px-4 py-3 font-black text-fuel-ink sm:col-span-2"
+              onClick={copyToNextWeek}
+            >
+              <Copy size={18} />
+              Copy to next week
+            </button>
+          )}
         </div>
       </div>
 
       <Status loading={loading} error={error}>
+        {message && <p className="rounded-md bg-fuel-mist p-3 font-black text-fuel-green">{message}</p>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
           {weekDays.map((day) => {
             const dayShifts = shifts.filter((shift) => shift.shiftDate === day);

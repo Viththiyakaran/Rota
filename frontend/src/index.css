@@ -30,3 +30,21 @@ textarea {
   background: #d7f75b;
   color: #17201b;
 }
+
+@media print {
+  header,
+  nav,
+  button,
+  a[href^="https://wa.me"] {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  main {
+    padding: 0 !important;
+    max-width: none !important;
+  }
+}

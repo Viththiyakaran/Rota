@@ -5,7 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   all,
+  addAudit,
   calculateReminderTime,
+  changePassword,
+  createUser,
   createSession,
   createStaffUser,
   decorateShift,
@@ -13,10 +16,17 @@ import {
   findUserByUsername,
   get,
   getBranding,
+  getOpeningHours,
   getSessionUser,
+  hashPassword,
   initDb,
+  listAudit,
+  listUsers,
   publicUser,
   run,
+  resetUserPassword,
+  updateOpeningHours,
+  updateUser,
   updateBranding,
   verifyPassword
 } from "./db.js";
@@ -63,7 +73,68 @@ app.post("/api/auth/logout", requireAuth, (req, res) => {
   res.status(204).send();
 });
 
+app.post("/api/auth/change-password", requireAuth, async (req, res, next) => {
+  try {
+    const { currentPassword = "", newPassword = "" } = req.body;
+    if (newPassword.length < 6) return res.status(400).json({ error: "New password must be at least 6 characters." });
+
+    const fullUser = await get("SELECT * FROM users WHERE id = ?", [req.user.id]);
+    if (!fullUser || !verifyPassword(currentPassword, fullUser.passwordHash)) {
+      return res.status(401).json({ error: "Current password is wrong." });
+    }
+
+    changePassword(req.user.id, newPassword);
+    addAudit(req.user.id, "change_password", `${req.user.username} changed password`);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.use("/api", requireAuth);
+
+app.get("/api/users", requireAdmin, (_req, res) => {
+  res.json(listUsers());
+});
+
+app.post("/api/users", requireAdmin, async (req, res, next) => {
+  try {
+    const { username, password = "staff123", role = "staff", staffId = null, active = true } = req.body;
+    if (!username || !["admin", "staff"].includes(role)) return res.status(400).json({ error: "Username and role are required." });
+    if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
+
+    const user = createUser({ username, password, role, staffId, active });
+    addAudit(req.user.id, "create_user", `Created login ${username}`);
+    res.status(201).json(user);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) return res.status(400).json({ error: "Username already exists." });
+    next(error);
+  }
+});
+
+app.put("/api/users/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const user = updateUser(req.params.id, req.body);
+    if (!user) return res.status(404).json({ error: "User not found." });
+    addAudit(req.user.id, "update_user", `Updated login ${user.username}`);
+    res.json(user);
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) return res.status(400).json({ error: "Username already exists." });
+    next(error);
+  }
+});
+
+app.post("/api/users/:id/reset-password", requireAdmin, async (req, res, next) => {
+  try {
+    const password = req.body.password || "staff123";
+    if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
+    if (!resetUserPassword(req.params.id, password)) return res.status(404).json({ error: "User not found." });
+    addAudit(req.user.id, "reset_password", `Reset password for user #${req.params.id}`);
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.put("/api/settings/branding", requireAdmin, async (req, res, next) => {
   try {
@@ -79,9 +150,125 @@ app.put("/api/settings/branding", requireAdmin, async (req, res, next) => {
     }
 
     res.json(updateBranding({ businessName, logoDataUrl }));
+    addAudit(req.user.id, "update_branding", "Updated business branding");
   } catch (error) {
     next(error);
   }
+});
+
+app.get("/api/settings/opening-hours", (_req, res) => {
+  res.json(getOpeningHours());
+});
+
+app.put("/api/settings/opening-hours", requireAdmin, async (req, res, next) => {
+  try {
+    const { openingStart, openingEnd } = req.body;
+    if (!isTime(openingStart) || !isTime(openingEnd)) return res.status(400).json({ error: "Opening hours must be valid times." });
+    const saved = updateOpeningHours({ openingStart, openingEnd });
+    addAudit(req.user.id, "update_opening_hours", `${openingStart}-${openingEnd}`);
+    res.json(saved);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/availability", async (req, res, next) => {
+  try {
+    const staffId = req.user.role === "admin" ? req.query.staffId : req.user.staffId;
+    const rows = staffId
+      ? await all("SELECT * FROM availability WHERE staffId = ? ORDER BY weekday ASC", [staffId])
+      : await all(
+          `SELECT availability.*, staff.name AS staffName
+           FROM availability
+           JOIN staff ON staff.id = availability.staffId
+           ORDER BY staff.name ASC, weekday ASC`
+        );
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/availability", async (req, res, next) => {
+  try {
+    const staffId = req.user.role === "admin" ? req.body.staffId : req.user.staffId;
+    const { weekday, startTime = "00:00", endTime = "23:59", note = "" } = req.body;
+    if (!staffId || weekday === undefined) return res.status(400).json({ error: "Staff and weekday are required." });
+    const result = await run(
+      "INSERT INTO availability (staffId, weekday, startTime, endTime, note) VALUES (?, ?, ?, ?, ?)",
+      [staffId, Number(weekday), startTime, endTime, note]
+    );
+    addAudit(req.user.id, "add_availability", `Staff #${staffId} unavailable on weekday ${weekday}`);
+    res.status(201).json(await get("SELECT * FROM availability WHERE id = ?", [result.id]));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/availability/:id", async (req, res, next) => {
+  try {
+    const row = await get("SELECT * FROM availability WHERE id = ?", [req.params.id]);
+    if (!row) return res.status(404).json({ error: "Availability item not found." });
+    if (req.user.role !== "admin" && Number(row.staffId) !== Number(req.user.staffId)) return res.status(403).json({ error: "Not allowed." });
+    await run("DELETE FROM availability WHERE id = ?", [req.params.id]);
+    addAudit(req.user.id, "delete_availability", `Deleted availability #${req.params.id}`);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/time-off", async (req, res, next) => {
+  try {
+    const rows = req.user.role === "admin"
+      ? await all(
+          `SELECT timeOffRequests.*, staff.name AS staffName
+           FROM timeOffRequests
+           JOIN staff ON staff.id = timeOffRequests.staffId
+           ORDER BY createdAt DESC`
+        )
+      : await all("SELECT * FROM timeOffRequests WHERE staffId = ? ORDER BY createdAt DESC", [req.user.staffId]);
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/time-off", async (req, res, next) => {
+  try {
+    const staffId = req.user.role === "admin" ? req.body.staffId : req.user.staffId;
+    const { startDate, endDate, reason = "" } = req.body;
+    if (!staffId || !startDate || !endDate) return res.status(400).json({ error: "Staff, start date and end date are required." });
+    const result = await run(
+      "INSERT INTO timeOffRequests (staffId, startDate, endDate, reason) VALUES (?, ?, ?, ?)",
+      [staffId, startDate, endDate, reason]
+    );
+    addAudit(req.user.id, "request_time_off", `Staff #${staffId} requested ${startDate} to ${endDate}`);
+    res.status(201).json(await get("SELECT * FROM timeOffRequests WHERE id = ?", [result.id]));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/time-off/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const { status } = req.body;
+    if (!["approved", "rejected", "pending"].includes(status)) return res.status(400).json({ error: "Invalid status." });
+    await run(
+      "UPDATE timeOffRequests SET status = ?, reviewedBy = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [status, req.user.id, req.params.id]
+    );
+    addAudit(req.user.id, "review_time_off", `Set request #${req.params.id} to ${status}`);
+    const row = await get("SELECT * FROM timeOffRequests WHERE id = ?", [req.params.id]);
+    if (!row) return res.status(404).json({ error: "Request not found." });
+    res.json(row);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/audit", requireAdmin, (_req, res) => {
+  res.json(listAudit());
 });
 
 app.get("/api/staff", async (_req, res, next) => {
@@ -104,6 +291,7 @@ app.post("/api/staff", requireAdmin, async (req, res, next) => {
     );
     createStaffUser(result.id, name);
     const row = await get("SELECT * FROM staff WHERE id = ?", [result.id]);
+    addAudit(req.user.id, "create_staff", `Created staff ${name}`);
     res.status(201).json({ ...row, active: Boolean(row.active) });
   } catch (error) {
     next(error);
@@ -131,6 +319,7 @@ app.put("/api/staff/:id", requireAdmin, async (req, res, next) => {
     );
     await run("UPDATE users SET active = ?, updatedAt = CURRENT_TIMESTAMP WHERE staffId = ?", [nextStaff.active, req.params.id]);
     const row = await get("SELECT * FROM staff WHERE id = ?", [req.params.id]);
+    addAudit(req.user.id, "update_staff", `Updated staff ${row.name}`);
     res.json({ ...row, active: Boolean(row.active) });
   } catch (error) {
     next(error);
@@ -154,6 +343,69 @@ app.get("/api/shifts/week", async (req, res, next) => {
       [startDate, endDate]
     );
     res.json(rows.map(decorateShift));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/shifts/my", async (req, res, next) => {
+  try {
+    if (!req.user.staffId) return res.json([]);
+    const today = new Date().toISOString().slice(0, 10);
+    const rows = await all(
+      `SELECT shifts.*, staff.name AS staffName, staff.role, staff.active,
+              coverStaff.name AS coverForStaffName
+       FROM shifts
+       JOIN staff ON staff.id = shifts.staffId
+       LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+       WHERE shifts.staffId = ? AND shiftDate >= ?
+       ORDER BY shiftDate ASC, startTime ASC
+       LIMIT 30`,
+      [req.user.staffId, today]
+    );
+    res.json(rows.map(decorateShift));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/shifts/copy-week", requireAdmin, async (req, res, next) => {
+  try {
+    const { fromStartDate, toStartDate } = req.body;
+    if (!fromStartDate || !toStartDate) return res.status(400).json({ error: "From and to week start dates are required." });
+    const fromEnd = addDays(fromStartDate, 6);
+    const rows = await all("SELECT * FROM shifts WHERE shiftDate BETWEEN ? AND ? ORDER BY shiftDate ASC", [fromStartDate, fromEnd]);
+    let copied = 0;
+    for (const shift of rows) {
+      const dayOffset = daysBetween(fromStartDate, shift.shiftDate);
+      const shiftDate = addDays(toStartDate, dayOffset);
+      const existing = await get(
+        "SELECT id FROM shifts WHERE staffId = ? AND shiftDate = ? AND startTime = ? AND endTime = ?",
+        [shift.staffId, shiftDate, shift.startTime, shift.endTime]
+      );
+      if (existing) continue;
+      await run(
+        `INSERT INTO shifts
+          (staffId, shiftDate, startTime, endTime, breakMinutes, reminderMinutes, reminderTime, notes, isExtra, coverForStaffId, googleCalendarEventId)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          shift.staffId,
+          shiftDate,
+          shift.startTime,
+          shift.endTime,
+          shift.breakMinutes,
+          shift.reminderMinutes,
+          calculateReminderTime(shiftDate, shift.startTime, shift.reminderMinutes),
+          shift.notes,
+          shift.isExtra,
+          shift.coverForStaffId,
+          null
+        ]
+      );
+      copied += 1;
+    }
+    addAudit(req.user.id, "copy_week", `Copied ${copied} shifts from ${fromStartDate} to ${toStartDate}`);
+    res.json({ copied });
   } catch (error) {
     next(error);
   }
@@ -196,6 +448,7 @@ app.post("/api/shifts", requireAdmin, async (req, res, next) => {
       ]
     );
     const row = await getShift(result.id);
+    addAudit(req.user.id, "create_shift", `Created shift #${result.id}`);
     res.status(201).json(decorateShift(row));
   } catch (error) {
     next(error);
@@ -242,6 +495,7 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
       ]
     );
     const row = await getShift(req.params.id);
+    addAudit(req.user.id, "update_shift", `Updated shift #${req.params.id}`);
     res.json(decorateShift(row));
   } catch (error) {
     next(error);
@@ -252,6 +506,7 @@ app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
   try {
     const result = await run("DELETE FROM shifts WHERE id = ?", [req.params.id]);
     if (result.changes === 0) return res.status(404).json({ error: "Shift not found." });
+    addAudit(req.user.id, "delete_shift", `Deleted shift #${req.params.id}`);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -261,6 +516,8 @@ app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
 app.get("/api/reminders/upcoming", async (_req, res, next) => {
   try {
     const now = new Date().toISOString();
+    const staffFilter = req.user.role === "staff" && req.user.staffId ? "AND staff.id = ?" : "";
+    const params = req.user.role === "staff" && req.user.staffId ? [now, req.user.staffId] : [now];
     const rows = await all(
       `SELECT shifts.*, staff.name AS staffName, staff.phone, staff.role,
               coverStaff.name AS coverForStaffName
@@ -268,9 +525,10 @@ app.get("/api/reminders/upcoming", async (_req, res, next) => {
        JOIN staff ON staff.id = shifts.staffId
        LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
        WHERE staff.active = 1 AND reminderTime >= ?
+       ${staffFilter}
        ORDER BY reminderTime ASC
        LIMIT 20`,
-      [now]
+      params
     );
     res.json(rows.map(decorateShift));
   } catch (error) {
@@ -330,6 +588,16 @@ function addDays(dateString, days) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function daysBetween(startDate, endDate) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  return Math.round((end - start) / 86400000);
+}
+
+function isTime(value) {
+  return /^\d{2}:\d{2}$/.test(String(value || ""));
 }
 
 function getShift(id) {
