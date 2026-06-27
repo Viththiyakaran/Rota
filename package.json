@@ -1,0 +1,16 @@
+{
+  "name": "fuelops-rota",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mobile-friendly rota and reminder app for a UK fuel station",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
+  "scripts": {
+    "start": "npm --workspace backend start",
+    "dev": "npm --workspace frontend run dev",
+    "backend": "npm --prefix backend start",
+    "frontend": "npm --prefix frontend run dev"
+  }
+}
