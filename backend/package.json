@@ -4,6 +4,9 @@
   "description": "Express and SQLite API for FuelOps Rota",
   "main": "src/server.js",
   "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node --no-warnings src/server.js",
     "dev": "node --no-warnings --watch src/server.js"
