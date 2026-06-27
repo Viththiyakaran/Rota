@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "description": "Mobile-friendly rota and reminder app for a UK fuel station",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "workspaces": [
     "backend",
     "frontend"
