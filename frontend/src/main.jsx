@@ -25,11 +25,12 @@ const navItems = [
 function App() {
   const [page, setPage] = React.useState("dashboard");
   const [currentUser, setCurrentUser] = React.useState(null);
-  const [branding, setBranding] = React.useState({ businessName: "FuelOps Rota", logoDataUrl: "" });
+  const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "" });
   const [checkingSession, setCheckingSession] = React.useState(true);
   const isAdmin = currentUser?.role === "admin";
   const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role));
-  const pageProps = { goTo: setPage, currentUser, branding };
+  const appTitle = buildRotaTitle(branding.businessName);
+  const pageProps = { goTo: setPage, currentUser, branding: { ...branding, appTitle } };
 
   React.useEffect(() => {
     Promise.allSettled([api.branding(), api.me()])
@@ -55,6 +56,10 @@ function App() {
     if (!allowed) setPage("dashboard");
   }, [currentUser, page]);
 
+  React.useEffect(() => {
+    document.title = appTitle;
+  }, [appTitle]);
+
   const logout = async () => {
     await api.logout().catch(() => {});
     setAuthToken("");
@@ -66,14 +71,14 @@ function App() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-fuel-cream px-4">
         <div className="rounded-md border border-fuel-line bg-white px-5 py-4 font-black text-fuel-green shadow-soft">
-          Loading FuelOps Rota...
+          Loading rota...
         </div>
       </div>
     );
   }
 
   if (!currentUser) {
-    return <Login branding={branding} onLogin={setCurrentUser} />;
+    return <Login branding={{ ...branding, appTitle }} onLogin={setCurrentUser} />;
   }
 
   return (
@@ -85,13 +90,12 @@ function App() {
               {branding.logoDataUrl ? (
                 <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
               ) : (
-                "F"
+                getBrandInitial(branding.businessName)
               )}
             </span>
             <span>
-              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-fuel-green">FuelOps</p>
               <h1 className="max-w-[180px] truncate text-2xl font-black leading-none text-fuel-ink sm:max-w-sm">
-                {branding.businessName}
+                {appTitle}
               </h1>
             </span>
           </button>
@@ -153,3 +157,12 @@ function App() {
 }
 
 createRoot(document.getElementById("root")).render(<App />);
+
+function buildRotaTitle(businessName) {
+  const name = String(businessName || "Your Business").trim();
+  return /\brota\b/i.test(name) ? name : `${name} Rota`;
+}
+
+function getBrandInitial(businessName) {
+  return String(businessName || "R").trim().charAt(0).toUpperCase();
+}

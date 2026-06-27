@@ -1,6 +1,6 @@
-# FuelOps Rota
+# Rota App
 
-FuelOps Rota is a simple mobile-friendly rota planner for a UK fuel station.
+Rota App is a simple mobile-friendly rota planner for small businesses and SMEs.
 
 ## Tech Stack
 

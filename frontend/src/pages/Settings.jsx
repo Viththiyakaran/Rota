@@ -79,7 +79,9 @@ export function Settings({ branding, onBrandingSaved }) {
                 {form.logoDataUrl ? (
                   <img src={form.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
                 ) : (
-                  <span className="text-2xl font-black text-fuel-green">F</span>
+                  <span className="text-2xl font-black text-fuel-green">
+                    {String(form.businessName || "R").trim().charAt(0).toUpperCase()}
+                  </span>
                 )}
               </div>
               <div className="space-y-2">

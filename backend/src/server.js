@@ -31,7 +31,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, name: "FuelOps Rota API" });
+  res.json({ ok: true, name: "Rota API" });
 });
 
 app.get("/api/settings/branding", (_req, res) => {
@@ -289,7 +289,7 @@ if (fs.existsSync(frontendDist)) {
   app.get("/", (_req, res) => {
     res.json({
       ok: true,
-      name: "FuelOps Rota API",
+      name: "Rota API",
       message: "Frontend build not found. Use the frontend service URL, or build the frontend before starting this service."
     });
   });
@@ -319,7 +319,7 @@ function requireAdmin(req, res, next) {
 
 initDb().then(() => {
   app.listen(port, () => {
-    console.log(`FuelOps Rota API running on http://localhost:${port}`);
+    console.log(`Rota API running on http://localhost:${port}`);
   });
 });
 

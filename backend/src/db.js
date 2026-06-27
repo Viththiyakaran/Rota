@@ -128,9 +128,9 @@ async function ensureShiftColumn(name, definition) {
 
 async function seedData() {
   const staff = [
-    ["VITHTHI", "07123 456780", "viththi@fuelops.local", "Manager", 1],
-    ["Afridi", "07123 456781", "afridi@fuelops.local", "Fuel Attendant", 1],
-    ["Veera", "07123 456782", "veera@fuelops.local", "Cashier", 1]
+    ["VITHTHI", "07123 456780", "viththi@example.local", "Manager", 1],
+    ["Afridi", "07123 456781", "afridi@example.local", "Fuel Attendant", 1],
+    ["Veera", "07123 456782", "veera@example.local", "Cashier", 1]
   ];
 
   for (const person of staff) {
@@ -321,7 +321,7 @@ export function getBranding() {
   const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?)", ["businessName", "logoDataUrl"]);
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
-    businessName: values.businessName || "FuelOps Rota",
+    businessName: values.businessName || "Your Business",
     logoDataUrl: values.logoDataUrl || ""
   };
 }
@@ -332,7 +332,7 @@ export function updateBranding({ businessName, logoDataUrl }) {
       `INSERT INTO settings (key, value)
        VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-      ["businessName", String(businessName || "FuelOps Rota").trim()]
+      ["businessName", String(businessName || "Your Business").trim()]
     );
   }
 

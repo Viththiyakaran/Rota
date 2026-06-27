@@ -33,12 +33,11 @@ export function Login({ branding, onLogin }) {
             {branding.logoDataUrl ? (
               <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
             ) : (
-              "F"
+              String(branding.businessName || "R").trim().charAt(0).toUpperCase()
             )}
           </span>
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.18em] text-fuel-green">FuelOps</p>
-            <h1 className="text-3xl font-black leading-none text-fuel-ink">{branding.businessName}</h1>
+            <h1 className="text-3xl font-black leading-none text-fuel-ink">{branding.appTitle}</h1>
             <p className="mt-1 text-sm font-bold text-slate-500">Rota Login</p>
           </div>
         </div>
