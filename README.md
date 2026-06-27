@@ -14,6 +14,7 @@ FuelOps Rota is a simple mobile-friendly rota planner for a UK fuel station.
 
 - Staff management with add, edit and deactivate actions
 - Login for admin and staff users
+- Admin branding settings for business name and logo
 - Shift planner with break minutes, reminder minutes, notes and paid-hour calculations
 - Monday to Sunday weekly rota view
 - Upcoming reminders dashboard

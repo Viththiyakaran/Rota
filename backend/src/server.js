@@ -12,10 +12,12 @@ import {
   deleteSession,
   findUserByUsername,
   get,
+  getBranding,
   getSessionUser,
   initDb,
   publicUser,
   run,
+  updateBranding,
   verifyPassword
 } from "./db.js";
 
@@ -30,6 +32,10 @@ app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, name: "FuelOps Rota API" });
+});
+
+app.get("/api/settings/branding", (_req, res) => {
+  res.json(getBranding());
 });
 
 app.post("/api/auth/login", async (req, res, next) => {
@@ -58,6 +64,25 @@ app.post("/api/auth/logout", requireAuth, (req, res) => {
 });
 
 app.use("/api", requireAuth);
+
+app.put("/api/settings/branding", requireAdmin, async (req, res, next) => {
+  try {
+    const { businessName, logoDataUrl } = req.body;
+    if (businessName !== undefined && String(businessName).trim().length < 2) {
+      return res.status(400).json({ error: "Business name is required." });
+    }
+    if (logoDataUrl && !String(logoDataUrl).startsWith("data:image/")) {
+      return res.status(400).json({ error: "Logo must be an image file." });
+    }
+    if (logoDataUrl && String(logoDataUrl).length > 700000) {
+      return res.status(400).json({ error: "Logo image is too large. Use an image under 500KB." });
+    }
+
+    res.json(updateBranding({ businessName, logoDataUrl }));
+  } catch (error) {
+    next(error);
+  }
+});
 
 app.get("/api/staff", async (_req, res, next) => {
   try {

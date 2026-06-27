@@ -3,7 +3,7 @@ import { LockKeyhole, UserRound } from "lucide-react";
 import { api, setAuthToken } from "../api.js";
 import { Field, inputClass } from "../components/Field.jsx";
 
-export function Login({ onLogin }) {
+export function Login({ branding, onLogin }) {
   const [form, setForm] = React.useState({ username: "admin", password: "admin123" });
   const [error, setError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -30,11 +30,16 @@ export function Login({ onLogin }) {
       <section className="w-full max-w-md rounded-md border border-fuel-line bg-white p-5 shadow-lift">
         <div className="mb-6 flex items-center gap-3">
           <span className="flex h-12 w-12 items-center justify-center rounded-md bg-fuel-deep text-xl font-black text-fuel-lime">
-            F
+            {branding.logoDataUrl ? (
+              <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
+            ) : (
+              "F"
+            )}
           </span>
           <div>
             <p className="text-[11px] font-black uppercase tracking-[0.18em] text-fuel-green">FuelOps</p>
-            <h1 className="text-3xl font-black leading-none text-fuel-ink">Rota Login</h1>
+            <h1 className="text-3xl font-black leading-none text-fuel-ink">{branding.businessName}</h1>
+            <p className="mt-1 text-sm font-bold text-slate-500">Rota Login</p>
           </div>
         </div>
 

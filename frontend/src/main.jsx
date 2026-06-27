@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { CalendarDays, Home, PlusCircle, Users, Bell, LogOut } from "lucide-react";
+import { Bell, CalendarDays, Home, LogOut, PlusCircle, Settings as SettingsIcon, Users } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { AddShift } from "./pages/AddShift.jsx";
@@ -8,6 +8,7 @@ import { AddStaff } from "./pages/AddStaff.jsx";
 import { Dashboard } from "./pages/Dashboard.jsx";
 import { Login } from "./pages/Login.jsx";
 import { Reminders } from "./pages/Reminders.jsx";
+import { Settings } from "./pages/Settings.jsx";
 import { StaffList } from "./pages/StaffList.jsx";
 import { WeeklyRota } from "./pages/WeeklyRota.jsx";
 
@@ -17,20 +18,30 @@ const navItems = [
   { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"] },
   { id: "rota", label: "Rota", icon: CalendarDays, roles: ["admin", "staff"] },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"] },
-  { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"] }
+  { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"] },
+  { id: "settings", label: "Settings", icon: SettingsIcon, roles: ["admin"] }
 ];
 
 function App() {
   const [page, setPage] = React.useState("dashboard");
   const [currentUser, setCurrentUser] = React.useState(null);
+  const [branding, setBranding] = React.useState({ businessName: "FuelOps Rota", logoDataUrl: "" });
   const [checkingSession, setCheckingSession] = React.useState(true);
   const isAdmin = currentUser?.role === "admin";
   const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role));
-  const pageProps = { goTo: setPage, currentUser };
+  const pageProps = { goTo: setPage, currentUser, branding };
 
   React.useEffect(() => {
-    api.me()
-      .then((result) => setCurrentUser(result.user))
+    Promise.allSettled([api.branding(), api.me()])
+      .then(([brandingResult, meResult]) => {
+        if (brandingResult.status === "fulfilled") setBranding(brandingResult.value);
+        if (meResult.status === "fulfilled") {
+          setCurrentUser(meResult.value.user);
+        } else {
+          setAuthToken("");
+          setCurrentUser(null);
+        }
+      })
       .catch(() => {
         setAuthToken("");
         setCurrentUser(null);
@@ -62,7 +73,7 @@ function App() {
   }
 
   if (!currentUser) {
-    return <Login onLogin={setCurrentUser} />;
+    return <Login branding={branding} onLogin={setCurrentUser} />;
   }
 
   return (
@@ -71,11 +82,17 @@ function App() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <button className="flex items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
             <span className="flex h-11 w-11 items-center justify-center rounded-md bg-fuel-deep text-lg font-black text-fuel-lime">
-              F
+              {branding.logoDataUrl ? (
+                <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
+              ) : (
+                "F"
+              )}
             </span>
             <span>
               <p className="text-[11px] font-black uppercase tracking-[0.18em] text-fuel-green">FuelOps</p>
-              <h1 className="text-2xl font-black leading-none text-fuel-ink">Rota</h1>
+              <h1 className="max-w-[180px] truncate text-2xl font-black leading-none text-fuel-ink sm:max-w-sm">
+                {branding.businessName}
+              </h1>
             </span>
           </button>
           <button
@@ -107,10 +124,11 @@ function App() {
         {page === "rota" && <WeeklyRota currentUser={currentUser} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
         {page === "reminders" && <Reminders />}
+        {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/95 backdrop-blur-xl">
-        <div className={`mx-auto grid max-w-7xl gap-1 px-2 py-2 ${isAdmin ? "grid-cols-6" : "grid-cols-3"}`}>
+        <div className={`mx-auto grid max-w-7xl gap-1 px-2 py-2 ${isAdmin ? "grid-cols-7" : "grid-cols-3"}`}>
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;

@@ -317,6 +317,37 @@ export function publicUser(user) {
   };
 }
 
+export function getBranding() {
+  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?)", ["businessName", "logoDataUrl"]);
+  const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  return {
+    businessName: values.businessName || "FuelOps Rota",
+    logoDataUrl: values.logoDataUrl || ""
+  };
+}
+
+export function updateBranding({ businessName, logoDataUrl }) {
+  if (businessName !== undefined) {
+    run(
+      `INSERT INTO settings (key, value)
+       VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ["businessName", String(businessName || "FuelOps Rota").trim()]
+    );
+  }
+
+  if (logoDataUrl !== undefined) {
+    run(
+      `INSERT INTO settings (key, value)
+       VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ["logoDataUrl", String(logoDataUrl || "")]
+    );
+  }
+
+  return getBranding();
+}
+
 export function createStaffUser(staffId, name) {
   const username = toUsername(name);
   const existing = get("SELECT id FROM users WHERE username = ?", [username]);

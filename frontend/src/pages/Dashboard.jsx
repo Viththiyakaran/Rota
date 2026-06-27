@@ -6,7 +6,7 @@ import { Status } from "../components/Status.jsx";
 import { addDays, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
 
-export function Dashboard({ goTo, currentUser }) {
+export function Dashboard({ goTo, currentUser, branding }) {
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
   const [reminders, setReminders] = React.useState([]);
@@ -37,7 +37,7 @@ export function Dashboard({ goTo, currentUser }) {
     <div className="space-y-5">
       <div className="rounded-md border border-fuel-line bg-white p-5 shadow-soft">
         <p className="text-sm font-black uppercase tracking-[0.16em] text-fuel-green">Today</p>
-        <h2 className="mt-1 text-3xl font-black text-fuel-ink">FuelOps Rota</h2>
+        <h2 className="mt-1 text-3xl font-black text-fuel-ink">{branding.businessName}</h2>
         <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-600">
           Weekly rota, cover shifts, and reminders in one place.
         </p>
