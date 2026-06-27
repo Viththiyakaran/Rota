@@ -1,9 +1,9 @@
 import React from "react";
-import { CalendarDays, MessageCircle, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, MessageCircle, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
-import { addDays, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
+import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
 
 export function Dashboard({ goTo, currentUser, branding }) {
@@ -13,11 +13,14 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [timeOff, setTimeOff] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+  const [dashboardWeekStart, setDashboardWeekStart] = React.useState(toDateInputValue(getMonday()));
 
   React.useEffect(() => {
+    setLoading(true);
+    setError("");
     Promise.allSettled([
       api.staff(),
-      api.week(toDateInputValue(getMonday())),
+      api.week(dashboardWeekStart),
       api.reminders(),
       api.timeOff()
     ])
@@ -31,12 +34,16 @@ export function Dashboard({ goTo, currentUser, branding }) {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [dashboardWeekStart]);
 
   const activeStaff = staff.filter((person) => person.active).length;
   const isAdmin = currentUser?.role === "admin";
-  const weekStart = getMonday();
+  const weekStart = new Date(`${dashboardWeekStart}T00:00:00`);
   const weekDays = Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index)));
+  const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
+  const moveDashboardWeek = (weeks) => {
+    setDashboardWeekStart(toDateInputValue(addDays(weekStart, weeks * 7)));
+  };
 
   return (
     <div className="space-y-5">
@@ -84,12 +91,36 @@ export function Dashboard({ goTo, currentUser, branding }) {
         </div>
 
         <Card>
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="text-lg font-black">Rota calendar</h3>
-            <button className="text-sm font-bold text-fuel-green" onClick={() => goTo("rota")}>
-              Open week
-            </button>
+          <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h3 className="text-lg font-black">Rota calendar</h3>
+              <p className="mt-1 text-sm font-bold text-slate-600">{weekRange}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-ink"
+                onClick={() => moveDashboardWeek(-1)}
+              >
+                <ChevronLeft size={16} />
+                Prev
+              </button>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-ink"
+                onClick={() => moveDashboardWeek(1)}
+              >
+                Next
+                <ChevronRight size={16} />
+              </button>
+              <button className="rounded-md px-3 py-2 text-sm font-bold text-fuel-green" onClick={() => goTo("rota")}>
+                Open week
+              </button>
+            </div>
           </div>
+          <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm font-bold text-red-700">
+            Approved time off appears in red inside the staff member's day cell.
+          </p>
           <div className="overflow-x-auto">
             <table className="min-w-[720px] w-full border-collapse text-left">
               <thead>
