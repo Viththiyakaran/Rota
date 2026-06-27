@@ -239,6 +239,7 @@ app.post("/api/time-off", async (req, res, next) => {
     const staffId = req.user.role === "admin" ? req.body.staffId : req.user.staffId;
     const { startDate, endDate, reason = "" } = req.body;
     if (!staffId || !startDate || !endDate) return res.status(400).json({ error: "Staff, start date and end date are required." });
+    if (endDate < startDate) return res.status(400).json({ error: "End date cannot be before start date." });
     const result = await run(
       "INSERT INTO timeOffRequests (staffId, startDate, endDate, reason) VALUES (?, ?, ?, ?)",
       [staffId, startDate, endDate, reason]

@@ -112,6 +112,12 @@ async function runSmoke() {
   });
   assert(timeOff.id, "staff time off create");
 
+  await expectStatus("/api/time-off", 400, {
+    token: staff.token,
+    method: "POST",
+    body: { startDate: "2026-07-12", endDate: "2026-07-10", reason: "Bad range" }
+  });
+
   const reviewed = await request(`/api/time-off/${timeOff.id}`, {
     token: admin.token,
     method: "PUT",
@@ -162,7 +168,11 @@ async function request(route, options = {}) {
 async function expectStatus(route, status, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
-  const response = await fetch(`${base}${route}`, { headers });
+  const response = await fetch(`${base}${route}`, {
+    method: options.method || "GET",
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
   assert(response.status === status, `${route} returns ${status}`);
 }
 

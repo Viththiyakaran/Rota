@@ -10,6 +10,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
   const [reminders, setReminders] = React.useState([]);
+  const [timeOff, setTimeOff] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
 
@@ -17,13 +18,15 @@ export function Dashboard({ goTo, currentUser, branding }) {
     Promise.allSettled([
       api.staff(),
       api.week(toDateInputValue(getMonday())),
-      api.reminders()
+      api.reminders(),
+      api.timeOff()
     ])
-      .then(([staffResult, shiftResult, reminderResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
-        const failed = [staffResult, shiftResult, reminderResult].find((result) => result.status === "rejected");
+        if (timeOffResult.status === "fulfilled") setTimeOff(timeOffResult.value);
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult].find((result) => result.status === "rejected");
         if (failed) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
@@ -103,16 +106,28 @@ export function Dashboard({ goTo, currentUser, branding }) {
               <tbody>
                 {weekDays.map((day) => {
                   const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
-                  const dayNotes = [...new Set(dayShifts.map((shift) => shift.notes).filter(Boolean))];
+                  const dayTimeOff = approvedTimeOffForDay(timeOff, day);
+                  const dayNotes = [
+                    ...new Set([
+                      ...dayShifts.map((shift) => shift.notes).filter(Boolean),
+                      ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
+                    ])
+                  ];
                   return (
                     <tr key={day}>
                       <td className="border border-fuel-line px-3 py-3 font-bold">{formatWeekday(day)}</td>
                       {staff.filter((person) => person.active).map((person) => {
                         const personShifts = dayShifts.filter((shift) => shift.staffId === person.id);
+                        const personTimeOff = dayTimeOff.filter((item) => item.staffId === person.id);
                         return (
                           <td key={person.id} className="border border-fuel-line px-3 py-3">
-                            {personShifts.length > 0 ? (
-                              <div className="space-y-1">
+                            {personShifts.length > 0 || personTimeOff.length > 0 ? (
+                              <div className="space-y-2">
+                                {personTimeOff.length > 0 && (
+                                  <p className="rounded-md bg-red-50 px-2 py-1 text-xs font-black uppercase text-red-700">
+                                    Approved time off
+                                  </p>
+                                )}
                                 {personShifts.map((personShift) => (
                                   <div key={personShift.id} className="space-y-1">
                                     <p className="font-bold text-fuel-green">
@@ -210,4 +225,13 @@ function Metric({ icon: Icon, label, value }) {
 
 function formatWeekday(dateString) {
   return new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(new Date(`${dateString}T00:00:00`));
+}
+
+function approvedTimeOffForDay(requests, day) {
+  return requests.filter((request) =>
+    request.status === "approved" &&
+    request.endDate >= request.startDate &&
+    day >= request.startDate &&
+    day <= request.endDate
+  );
 }

@@ -8,6 +8,7 @@ import { whatsappGroupShareUrl } from "../whatsapp.js";
 export function WeeklyRota({ currentUser }) {
   const [startDate, setStartDate] = React.useState(toDateInputValue(getMonday()));
   const [shifts, setShifts] = React.useState([]);
+  const [timeOff, setTimeOff] = React.useState([]);
   const [editingNoteId, setEditingNoteId] = React.useState(null);
   const [noteDraft, setNoteDraft] = React.useState("");
   const [loading, setLoading] = React.useState(true);
@@ -16,8 +17,11 @@ export function WeeklyRota({ currentUser }) {
 
   const load = React.useCallback(() => {
     setLoading(true);
-    api.week(startDate)
-      .then(setShifts)
+    Promise.all([api.week(startDate), api.timeOff()])
+      .then(([shiftRows, timeOffRows]) => {
+        setShifts(shiftRows);
+        setTimeOff(timeOffRows);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [startDate]);
@@ -149,6 +153,7 @@ export function WeeklyRota({ currentUser }) {
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
           {weekDays.map((day) => {
             const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
+            const dayTimeOff = approvedTimeOffForDay(timeOff, day);
             return (
               <section key={day} className="flex min-h-[280px] flex-col rounded-md border border-fuel-line bg-white shadow-soft">
                 <div className="border-b border-fuel-line bg-fuel-mist px-4 py-3">
@@ -156,11 +161,18 @@ export function WeeklyRota({ currentUser }) {
                   <p className="text-xs font-bold text-slate-500">{day}</p>
                 </div>
                 <div className="flex flex-1 flex-col gap-3 p-3">
-                  {dayShifts.length === 0 && (
+                  {dayShifts.length === 0 && dayTimeOff.length === 0 && (
                     <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-fuel-line bg-white p-4 text-sm font-bold text-slate-400">
                       No shifts
                     </div>
                   )}
+                  {dayTimeOff.map((request) => (
+                    <div key={`time-off-${request.id}`} className="rounded-md border border-red-100 bg-red-50 p-3">
+                      <p className="text-sm font-black uppercase text-red-700">Approved time off</p>
+                      <p className="font-black text-fuel-ink">{request.staffName || currentUser.staffName || "Staff"}</p>
+                      {request.reason && <p className="text-sm font-bold text-slate-600">{request.reason}</p>}
+                    </div>
+                  ))}
                   {dayShifts.map((shift) => (
                     <article key={shift.id} className="rounded-md border border-fuel-line bg-white p-3">
                       <div className="flex items-start justify-between gap-3">
@@ -250,5 +262,14 @@ export function WeeklyRota({ currentUser }) {
         </div>
       </Status>
     </div>
+  );
+}
+
+function approvedTimeOffForDay(requests, day) {
+  return requests.filter((request) =>
+    request.status === "approved" &&
+    request.endDate >= request.startDate &&
+    day >= request.startDate &&
+    day <= request.endDate
   );
 }

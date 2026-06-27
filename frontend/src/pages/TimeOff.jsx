@@ -50,9 +50,18 @@ export function TimeOff({ currentUser }) {
 
   const requestTimeOff = async (event) => {
     event.preventDefault();
-    await api.createTimeOff(timeOffForm);
-    setTimeOffForm((current) => ({ ...current, reason: "" }));
-    load();
+    setError("");
+    if (timeOffForm.endDate < timeOffForm.startDate) {
+      setError("End date cannot be before start date.");
+      return;
+    }
+    try {
+      await api.createTimeOff(timeOffForm);
+      setTimeOffForm((current) => ({ ...current, reason: "" }));
+      load();
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const addAvailability = async (event) => {
@@ -89,10 +98,25 @@ export function TimeOff({ currentUser }) {
               )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="Start date">
-                  <input type="date" className={inputClass} value={timeOffForm.startDate} onChange={(e) => setTimeOffForm({ ...timeOffForm, startDate: e.target.value })} />
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={timeOffForm.startDate}
+                    onChange={(e) => setTimeOffForm({
+                      ...timeOffForm,
+                      startDate: e.target.value,
+                      endDate: timeOffForm.endDate < e.target.value ? e.target.value : timeOffForm.endDate
+                    })}
+                  />
                 </Field>
                 <Field label="End date">
-                  <input type="date" className={inputClass} value={timeOffForm.endDate} onChange={(e) => setTimeOffForm({ ...timeOffForm, endDate: e.target.value })} />
+                  <input
+                    type="date"
+                    min={timeOffForm.startDate}
+                    className={inputClass}
+                    value={timeOffForm.endDate}
+                    onChange={(e) => setTimeOffForm({ ...timeOffForm, endDate: e.target.value })}
+                  />
                 </Field>
               </div>
               <Field label="Reason">
@@ -140,6 +164,11 @@ export function TimeOff({ currentUser }) {
               <div key={request.id} className="rounded-md border border-fuel-line bg-white p-3">
                 <p className="font-black">{request.staffName || currentUser.staffName || "Staff"}</p>
                 <p className="text-sm font-bold text-slate-600">{request.startDate} to {request.endDate}</p>
+                {request.endDate < request.startDate && (
+                  <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-xs font-black uppercase text-red-700">
+                    Invalid date range
+                  </p>
+                )}
                 <p className="text-sm">{request.reason}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-black uppercase text-fuel-green">{request.status}</span>
