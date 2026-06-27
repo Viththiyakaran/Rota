@@ -13,6 +13,7 @@
   "scripts": {
     "start": "npm --workspace backend start",
     "build": "npm --workspace frontend run build",
+    "smoke": "node --no-warnings tests/smoke.mjs",
     "dev": "npm --workspace frontend run dev",
     "backend": "npm --prefix backend start",
     "frontend": "npm --prefix frontend run dev"
