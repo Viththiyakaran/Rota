@@ -11,7 +11,7 @@ const base = `http://127.0.0.1:${port}`;
 
 const server = spawn(process.execPath, ["--no-warnings", "src/server.js"], {
   cwd: path.join(root, "backend"),
-  env: { ...process.env, PORT: port, DB_PATH: dbPath },
+  env: { ...process.env, PORT: port, DB_PATH: dbPath, ADMIN_RESET_TOKEN: "smoke-reset-token" },
   stdio: ["ignore", "pipe", "pipe"]
 });
 
@@ -49,7 +49,7 @@ async function runSmoke() {
   const publicBranding = await request("/api/settings/branding");
   assert(publicBranding.businessName, "public branding works");
 
-  const admin = await login("admin", "admin123");
+  let admin = await login("admin", "admin123");
   const staff = await login("afridi", "staff123");
 
   const changedAdmin = await request("/api/auth/change-password", {
@@ -58,6 +58,24 @@ async function runSmoke() {
     body: { currentPassword: "admin123", newPassword: "admin456" }
   });
   assert(changedAdmin.user?.mustChangePassword === false, "admin first password change");
+
+  await expectStatus("/api/auth/recover-admin", 403, {
+    method: "POST",
+    body: { token: "wrong-token", username: "admin", newPassword: "admin789" }
+  });
+  const recoveredAdmin = await request("/api/auth/recover-admin", {
+    method: "POST",
+    body: { token: "smoke-reset-token", username: "admin", newPassword: "admin789" }
+  });
+  assert(recoveredAdmin.ok, "admin recovery reset works");
+  admin = await login("admin", "admin789");
+  assert(admin.user.mustChangePassword === true, "admin recovery forces password change");
+  const changedRecoveredAdmin = await request("/api/auth/change-password", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: { currentPassword: "admin789", newPassword: "admin456" }
+  });
+  assert(changedRecoveredAdmin.user?.mustChangePassword === false, "admin recovered password changed");
 
   const changedStaff = await request("/api/auth/change-password", {
     cookie: staff.cookie,

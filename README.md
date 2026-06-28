@@ -133,6 +133,7 @@ PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url
 DB_PATH=/data/fuelops.sqlite
+ADMIN_RESET_TOKEN=use-only-temporarily-for-admin-recovery
 ```
 
 This app currently uses SQLite through `DB_PATH`. If you later move to a hosted SQL database, add `DATABASE_URL` support before setting that variable. Authentication uses server-side sessions and HTTP-only cookies, so there is no `JWT_SECRET` requirement in the current code.
@@ -156,3 +157,15 @@ VITE_API_BASE=https://your-backend-url.up.railway.app
 ```
 
 Also set `FRONTEND_URL` on the backend service to the deployed frontend URL so CORS allows browser requests with cookies.
+
+## Forgotten Admin Password
+
+For production recovery, set a temporary `ADMIN_RESET_TOKEN` on the backend service, redeploy, then call:
+
+```bash
+curl -X POST https://your-backend-url/api/auth/recover-admin \
+  -H "Content-Type: application/json" \
+  -d "{\"token\":\"YOUR_RESET_TOKEN\",\"username\":\"admin\",\"newPassword\":\"NewPassword123\"}"
+```
+
+Log in with the new password. The app will force a password change immediately. Remove `ADMIN_RESET_TOKEN` from Railway after recovery.

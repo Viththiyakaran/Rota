@@ -101,6 +101,7 @@ app.get("/api", (_req, res) => {
       "GET /api/health",
       "GET /api/settings/branding",
       "POST /api/auth/login",
+      "POST /api/auth/recover-admin",
       "GET /api/auth/me",
       "POST /api/auth/logout",
       "POST /api/auth/change-password",
@@ -129,6 +130,26 @@ app.get("/api", (_req, res) => {
 
 app.get("/api/settings/branding", (_req, res) => {
   res.json(getBranding());
+});
+
+app.post("/api/auth/recover-admin", async (req, res, next) => {
+  try {
+    const recoveryToken = process.env.ADMIN_RESET_TOKEN;
+    if (!recoveryToken) return res.status(404).json({ error: "Admin recovery is not enabled." });
+
+    const { token = "", username = "admin", newPassword = "" } = req.body;
+    if (token !== recoveryToken) return res.status(403).json({ error: "Invalid recovery token." });
+    if (newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters." });
+
+    const user = findUserByUsername(String(username).trim());
+    if (!user || user.role !== "admin") return res.status(404).json({ error: "Admin user not found." });
+
+    resetUserPassword(user.id, newPassword);
+    addAudit(user.id, "recover_admin_password", `Recovered admin login ${user.username}`);
+    res.json({ ok: true, username: user.username, mustChangePassword: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/auth/login", async (req, res, next) => {
