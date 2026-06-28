@@ -1,5 +1,4 @@
 import React from "react";
-import { Button, Chip, IconButton, Typography } from "@material-tailwind/react";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { Status } from "../components/Status.jsx";
@@ -97,16 +96,14 @@ export function WeeklyRota({ currentUser }) {
       <div className="screen-only flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.16em] text-fuel-green">Monday to Sunday</p>
-          <Typography as="h2" variant="h3" className="font-black text-fuel-ink">
+          <h2 className="text-4xl font-black text-fuel-ink">
             Weekly Rota
-          </Typography>
+          </h2>
           <p className="mt-1 text-sm font-bold text-slate-500">{weekRange}</p>
         </div>
-        <Chip
-          size="lg"
-          value={`${visibleShifts.length} shifts`}
-          className="w-fit rounded-full border border-fuel-line bg-white px-4 py-3 font-black normal-case text-fuel-green shadow-sm"
-        />
+        <div className="w-fit rounded-full border border-fuel-line bg-white px-4 py-3 font-black text-fuel-green shadow-sm">
+          {visibleShifts.length} shifts
+        </div>
       </div>
 
       <div className="screen-only rounded-lg border border-fuel-line bg-white p-4 shadow-md">
@@ -122,25 +119,25 @@ export function WeeklyRota({ currentUser }) {
             onChange={(event) => setStartDate(event.target.value)}
           />
           <div className="flex items-center gap-2">
-            <IconButton
-              variant="filled"
+            <button
+              type="button"
               className="rounded-lg bg-fuel-mist text-fuel-green shadow-none hover:bg-fuel-line"
               onClick={() => moveWeek(-1)}
               title="Previous week"
             >
               <ChevronLeft size={18} />
-            </IconButton>
-            <Button
+            </button>
+            <button
+              type="button"
               className="rounded-lg bg-fuel-green px-5 py-3 font-black normal-case text-white shadow-md"
               onClick={() => moveWeek(1)}
             >
               Next
               <ChevronRight size={18} className="ml-1 inline" />
-            </Button>
+            </button>
           </div>
           <div className="flex flex-col gap-2 lg:col-span-3 lg:flex-row">
-            <Button
-              as="a"
+            <a
               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-3 font-black normal-case text-white shadow-md"
               href={groupShareUrl}
               target="_blank"
@@ -148,24 +145,24 @@ export function WeeklyRota({ currentUser }) {
             >
               <MessageCircle size={18} />
               WhatsApp group
-            </Button>
-            <Button
+            </a>
+            <button
               type="button"
               className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-fuel-ink px-4 py-3 font-black normal-case text-white shadow-md"
               onClick={() => window.print()}
             >
               <Printer size={18} />
               Print / PDF
-            </Button>
+            </button>
             {isAdmin && (
-              <Button
+              <button
                 type="button"
                 className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-fuel-lime px-4 py-3 font-black normal-case text-fuel-ink shadow-md"
                 onClick={copyToNextWeek}
               >
                 <Copy size={18} />
                 Copy next week
-              </Button>
+              </button>
             )}
           </div>
         </div>

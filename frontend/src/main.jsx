@@ -1,6 +1,5 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Button, IconButton, ThemeProvider, Typography } from "@material-tailwind/react";
 import { Bell, CalendarDays, Clock, Home, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
@@ -101,31 +100,29 @@ function App() {
               )}
             </span>
             <span>
-              <Typography as="h1" variant="h4" className="max-w-[180px] truncate font-black leading-none text-fuel-ink sm:max-w-sm">
+              <h1 className="max-w-[180px] truncate text-2xl font-black leading-none text-fuel-ink sm:max-w-sm">
                 {appTitle}
-              </Typography>
+              </h1>
             </span>
           </button>
-          <Button
-            size="lg"
+          <button
             onClick={() => setPage("add-shift")}
             className={`hidden rounded-lg bg-fuel-green px-5 py-3 text-sm font-black normal-case text-white shadow-md transition hover:bg-fuel-deep lg:block ${isAdmin ? "" : "lg:hidden"}`}
           >
             Add Shift
-          </Button>
+          </button>
           <div className="flex items-center justify-end gap-2">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-black uppercase text-fuel-green">{currentUser.role}</p>
               <p className="text-sm font-bold text-slate-600">{currentUser.staffName || currentUser.username}</p>
             </div>
-            <IconButton
-              variant="filled"
+            <button
               onClick={logout}
               title="Log out"
-              className="rounded-lg bg-fuel-mist text-fuel-green shadow-none transition hover:bg-fuel-line"
+              className="flex h-12 w-12 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green transition hover:bg-fuel-line"
             >
               <LogOut size={20} />
-            </IconButton>
+            </button>
           </div>
         </div>
       </header>
@@ -149,9 +146,8 @@ function App() {
             const Icon = item.icon;
             const active = page === item.id;
             return (
-              <Button
+              <button
                 key={item.id}
-                variant={active ? "filled" : "text"}
                 onClick={() => setPage(item.id)}
                 title={item.label}
                 className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black normal-case transition sm:min-w-24 ${
@@ -160,7 +156,7 @@ function App() {
               >
                 <Icon size={20} />
                 <span className="mt-1 truncate">{item.label.replace("Add ", "+ ")}</span>
-              </Button>
+              </button>
             );
           })}
         </div>
@@ -169,11 +165,7 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(
-  <ThemeProvider>
-    <App />
-  </ThemeProvider>
-);
+createRoot(document.getElementById("root")).render(<App />);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
