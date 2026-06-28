@@ -16,7 +16,6 @@ import {
   findUserByUsername,
   get,
   getBranding,
-  getAuthDiagnostics,
   getOpeningHours,
   getSessionUser,
   hashPassword,
@@ -43,36 +42,6 @@ app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, name: "Rota API", authMigration: 3 });
-});
-
-app.get("/api/debug/auth", (_req, res) => {
-  res.json(getAuthDiagnostics());
-});
-
-app.get("/api/debug/login-admin", (_req, res) => {
-  const report = [];
-  try {
-    report.push("lookup");
-    const user = findUserByUsername("admin");
-    report.push(user ? `user:${user.id}` : "no-user");
-    if (!user) return res.json({ ok: false, report });
-
-    report.push("verify");
-    const passwordOk = verifyPassword("admin123", user.passwordHash);
-    report.push(`password:${passwordOk}`);
-    if (!passwordOk) return res.json({ ok: false, report });
-
-    report.push("session-create");
-    const session = createSession(user.id);
-    report.push("session-created");
-
-    report.push("session-read");
-    const sessionUser = getSessionUser(session.token);
-    report.push(sessionUser ? `session-user:${sessionUser.id}` : "no-session-user");
-    res.json({ ok: Boolean(sessionUser), report });
-  } catch (error) {
-    res.json({ ok: false, report, error: error.message });
-  }
 });
 
 app.get("/api/settings/branding", (_req, res) => {
@@ -593,6 +562,10 @@ if (fs.existsSync(frontendDist)) {
 }
 
 app.use((error, _req, res, _next) => {
+  if (error instanceof SyntaxError && "body" in error) {
+    return res.status(400).json({ error: "Invalid JSON body." });
+  }
+
   console.error(error);
   res.status(500).json({ error: "Something went wrong." });
 });
