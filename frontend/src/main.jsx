@@ -187,13 +187,13 @@ function App() {
 
       <main className="mx-auto max-w-7xl px-4 pb-28 pt-5">
         {page === "dashboard" && <Dashboard {...pageProps} />}
-        {page === "my-shifts" && <MyShifts />}
+        {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
         {page === "rota" && <WeeklyRota currentUser={currentUser} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
-        {page === "reminders" && <Reminders />}
+        {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} />}
         {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} />}
         {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>

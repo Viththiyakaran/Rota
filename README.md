@@ -30,6 +30,7 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 - Approved time off removes affected staff shifts from rota totals
 - Staff-only My Shifts page
 - Upcoming reminders, rota change notifications, and PWA push notifications
+- Google Calendar links and phone calendar `.ics` sync
 - WhatsApp reminder/share buttons
 - Print/PDF weekly rota
 - Copy week to next week
@@ -385,6 +386,8 @@ Authenticated routes:
 - `GET /api/push/status`
 - `POST /api/push/subscribe`
 - `POST /api/push/test`
+- `GET /api/calendar/my-feed`
+- `GET /calendar/:token.ics`
 - `GET /api/notifications`
 - `POST /api/notifications/read-all`
 - `GET /api/time-off`
@@ -430,6 +433,23 @@ Notes:
 - The app must be served over HTTPS in production for push notifications to work.
 - Reminders are checked by the backend every minute.
 - If the browser is closed, the phone/browser can still receive the push reminder after notifications are enabled.
+
+### Calendar Sync
+
+Staff can use calendar sync in three ways:
+
+1. Open My Shifts or Reminders.
+2. Press Google to add one shift to Google Calendar.
+3. Press Phone calendar to download one `.ics` event for Apple Calendar, Outlook, or a phone calendar.
+4. Open Account and use Calendar Sync for a private subscription feed of upcoming shifts.
+
+Notes:
+
+- The calendar feed is private per staff login.
+- The feed includes upcoming shifts and excludes approved time off.
+- Calendar events use `Europe/London` time.
+- Each event includes the rota reminder as a calendar alarm.
+- Keep the feed URL private because calendar apps use the link without the normal app login cookie.
 
 ### Time Off
 

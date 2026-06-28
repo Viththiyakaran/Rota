@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, KeyRound } from "lucide-react";
+import { Bell, CalendarDays, Copy, ExternalLink, KeyRound } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -13,6 +13,8 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
   const [pushMessage, setPushMessage] = React.useState("");
   const [pushError, setPushError] = React.useState("");
   const [savingPush, setSavingPush] = React.useState(false);
+  const [calendarFeed, setCalendarFeed] = React.useState(null);
+  const [calendarMessage, setCalendarMessage] = React.useState("");
 
   React.useEffect(() => {
     if (!currentUser.staffId) return;
@@ -21,6 +23,13 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
       .then(setPushStatus)
       .catch(() => {});
   }, [currentUser.staffId]);
+
+  React.useEffect(() => {
+    if (!currentUser.staffId || forced) return;
+    api.calendarFeed()
+      .then(setCalendarFeed)
+      .catch(() => {});
+  }, [currentUser.staffId, forced]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -58,6 +67,16 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
     }
   };
 
+  const copyCalendarFeed = async () => {
+    if (!calendarFeed?.feedUrl) return;
+    try {
+      await navigator.clipboard.writeText(calendarFeed.feedUrl);
+      setCalendarMessage("Calendar feed link copied.");
+    } catch (_error) {
+      setCalendarMessage("Copy blocked by browser. Long-press the link above to copy it.");
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div>
@@ -85,36 +104,85 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
         </form>
       </Card>
       {!forced && currentUser.staffId && (
-        <Card>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h3 className="text-xl font-black">Phone Notifications</h3>
-              <p className="mt-1 text-sm font-bold text-slate-600">
-                Get shift reminders even when this app is closed.
-              </p>
-              {pushStatus.enabled && (
-                <p className="mt-2 text-sm font-black text-fuel-green">
-                  Enabled on {pushStatus.subscriptions} device{pushStatus.subscriptions === 1 ? "" : "s"}.
+        <>
+          <Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-xl font-black">Phone Notifications</h3>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  Get shift reminders even when this app is closed.
                 </p>
+                {pushStatus.enabled && (
+                  <p className="mt-2 text-sm font-black text-fuel-green">
+                    Enabled on {pushStatus.subscriptions} device{pushStatus.subscriptions === 1 ? "" : "s"}.
+                  </p>
+                )}
+              </div>
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-5 py-4 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                disabled={savingPush || !canUsePushNotifications()}
+                onClick={enablePush}
+              >
+                <Bell size={18} />
+                {savingPush ? "Enabling..." : "Enable Notifications"}
+              </button>
+            </div>
+            {!canUsePushNotifications() && (
+              <p className="mt-3 rounded-md bg-red-50 p-3 text-sm font-bold text-red-700">
+                This browser does not support push notifications. On iPhone, install the app to the home screen first.
+              </p>
+            )}
+            {pushMessage && <p className="mt-3 rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{pushMessage}</p>}
+            {pushError && <p className="mt-3 rounded-md bg-red-50 p-3 font-bold text-red-700">{pushError}</p>}
+          </Card>
+
+          <Card>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <h3 className="text-xl font-black">Calendar Sync</h3>
+                <p className="mt-1 text-sm font-bold text-slate-600">
+                  Subscribe from Apple Calendar, Google Calendar, Outlook, or your phone calendar.
+                </p>
+                {calendarFeed?.feedUrl && (
+                  <p className="mt-2 truncate rounded-md bg-fuel-mist px-3 py-2 text-sm font-bold text-slate-700">
+                    {calendarFeed.feedUrl}
+                  </p>
+                )}
+              </div>
+              {calendarFeed?.feedUrl && (
+                <div className="flex flex-wrap gap-2">
+                  <a
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white"
+                    href={calendarFeed.appleCalendarUrl || calendarFeed.feedUrl}
+                  >
+                    <CalendarDays size={18} />
+                    Phone sync
+                  </a>
+                  <button
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 font-black text-fuel-green"
+                    onClick={copyCalendarFeed}
+                  >
+                    <Copy size={18} />
+                    Copy link
+                  </button>
+                  <a
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 font-black text-fuel-green"
+                    href={calendarFeed.feedUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <ExternalLink size={18} />
+                    Open
+                  </a>
+                </div>
               )}
             </div>
-            <button
-              className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-5 py-4 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
-              disabled={savingPush || !canUsePushNotifications()}
-              onClick={enablePush}
-            >
-              <Bell size={18} />
-              {savingPush ? "Enabling..." : "Enable Notifications"}
-            </button>
-          </div>
-          {!canUsePushNotifications() && (
-            <p className="mt-3 rounded-md bg-red-50 p-3 text-sm font-bold text-red-700">
-              This browser does not support push notifications. On iPhone, install the app to the home screen first.
+            {calendarMessage && <p className="mt-3 rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{calendarMessage}</p>}
+            <p className="mt-3 text-sm font-bold text-slate-500">
+              Keep this link private. It lets a calendar app read your upcoming shifts.
             </p>
-          )}
-          {pushMessage && <p className="mt-3 rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{pushMessage}</p>}
-          {pushError && <p className="mt-3 rounded-md bg-red-50 p-3 font-bold text-red-700">{pushError}</p>}
-        </Card>
+          </Card>
+        </>
       )}
     </div>
   );

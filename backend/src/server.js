@@ -14,6 +14,7 @@ import {
   createStaffUser,
   decorateShift,
   deleteSession,
+  ensureUserCalendarToken,
   findUserByUsername,
   get,
   getBranding,
@@ -121,6 +122,8 @@ app.get("/api", (_req, res) => {
       "GET /api/push/status",
       "POST /api/push/subscribe",
       "POST /api/push/test",
+      "GET /api/calendar/my-feed",
+      "GET /calendar/:token.ics",
       "GET /api/notifications",
       "POST /api/notifications/read-all",
       "GET /api/time-off",
@@ -136,6 +139,57 @@ app.get("/api", (_req, res) => {
 
 app.get("/api/settings/branding", (_req, res) => {
   res.json(getBranding());
+});
+
+app.get("/calendar/:token.ics", async (req, res, next) => {
+  try {
+    const token = String(req.params.token || "").replace(/\.ics$/, "");
+    const user = await get(
+      `SELECT users.id, users.staffId, users.username, staff.name AS staffName
+       FROM users
+       JOIN staff ON staff.id = users.staffId
+       WHERE users.calendarToken = ? AND users.active = 1 AND staff.active = 1`,
+      [token]
+    );
+    if (!user?.staffId) return res.status(404).type("text/plain").send("Calendar not found");
+
+    const today = new Date().toISOString().slice(0, 10);
+    const until = addDays(today, 180);
+    const rows = await all(
+      `SELECT shifts.*, staff.name AS staffName, staff.role, staff.active,
+              coverStaff.name AS coverForStaffName
+       FROM shifts
+       JOIN staff ON staff.id = shifts.staffId
+       LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+       LEFT JOIN timeOffRequests
+         ON timeOffRequests.staffId = shifts.staffId
+        AND timeOffRequests.status = 'approved'
+        AND timeOffRequests.endDate >= timeOffRequests.startDate
+        AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
+       WHERE shifts.staffId = ?
+         AND shifts.shiftDate BETWEEN ? AND ?
+         AND timeOffRequests.id IS NULL
+       ORDER BY shifts.shiftDate ASC, shifts.startTime ASC`,
+      [user.staffId, today, until]
+    );
+
+    const branding = getBranding();
+    const calendar = buildIcsCalendar({
+      name: `${branding.businessName || "Business"} Rota - ${user.staffName || user.username}`,
+      shifts: rows.map(decorateShift)
+    });
+
+    res
+      .status(200)
+      .set({
+        "Content-Type": "text/calendar; charset=utf-8",
+        "Content-Disposition": `inline; filename="${safeFilename(user.staffName || "my-shifts")}-rota.ics"`,
+        "Cache-Control": "private, max-age=300"
+      })
+      .send(calendar);
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/auth/recover-admin", async (req, res, next) => {
@@ -482,6 +536,21 @@ app.post("/api/push/test", async (req, res, next) => {
       type: "push_test"
     });
     res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/calendar/my-feed", async (req, res, next) => {
+  try {
+    if (!req.user.staffId) return res.status(400).json({ error: "Only staff-linked users have a calendar feed." });
+    const token = ensureUserCalendarToken(req.user.id);
+    const feedUrl = `${getRequestOrigin(req)}/calendar/${token}.ics`;
+    res.json({
+      feedUrl,
+      appleCalendarUrl: `webcal://${feedUrl.replace(/^https?:\/\//, "")}`,
+      note: "Use this private URL only for your own calendar app."
+    });
   } catch (error) {
     next(error);
   }
@@ -1041,6 +1110,79 @@ async function processDueReminderPushes() {
     });
     await run("UPDATE shifts SET reminderSentAt = ? WHERE id = ?", [now, decorated.id]);
   }
+}
+
+function buildIcsCalendar({ name, shifts }) {
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//FuelOps Rota//Rota Calendar//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "X-WR-CALNAME:" + escapeIcsText(name),
+    "X-WR-TIMEZONE:Europe/London",
+    "X-PUBLISHED-TTL:PT30M"
+  ];
+
+  for (const shift of shifts) {
+    lines.push(...buildShiftEvent(shift));
+  }
+
+  lines.push("END:VCALENDAR");
+  return `${lines.join("\r\n")}\r\n`;
+}
+
+function buildShiftEvent(shift) {
+  const endDate = shift.endTime <= shift.startTime ? addDays(shift.shiftDate, 1) : shift.shiftDate;
+  const summary = shift.isExtra
+    ? `Extra shift - ${shift.staffName}`
+    : `Shift - ${shift.staffName}`;
+  const description = [
+    shift.isExtra && shift.coverForStaffName ? `Extra cover for ${shift.coverForStaffName}` : "",
+    shift.notes ? `Note: ${shift.notes}` : "",
+    `Hours: ${shift.totalHours}`
+  ].filter(Boolean).join("\\n");
+
+  return [
+    "BEGIN:VEVENT",
+    `UID:fuelops-shift-${shift.id}@fuelops-rota`,
+    `DTSTAMP:${toUtcIcsDate(new Date())}`,
+    `DTSTART;TZID=Europe/London:${toLocalIcsDateTime(shift.shiftDate, shift.startTime)}`,
+    `DTEND;TZID=Europe/London:${toLocalIcsDateTime(endDate, shift.endTime)}`,
+    `SUMMARY:${escapeIcsText(summary)}`,
+    `DESCRIPTION:${escapeIcsText(description)}`,
+    "BEGIN:VALARM",
+    `TRIGGER:-PT${Math.max(Number(shift.reminderMinutes || 60), 0)}M`,
+    "ACTION:DISPLAY",
+    `DESCRIPTION:${escapeIcsText(shift.reminderMessage || "Your shift starts soon")}`,
+    "END:VALARM",
+    "END:VEVENT"
+  ];
+}
+
+function toLocalIcsDateTime(dateString, timeString) {
+  return `${dateString.replaceAll("-", "")}T${String(timeString || "00:00").replace(":", "")}00`;
+}
+
+function toUtcIcsDate(date) {
+  return date.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+}
+
+function escapeIcsText(value) {
+  return String(value || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+function safeFilename(value) {
+  return String(value || "rota").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "rota";
+}
+
+function getRequestOrigin(req) {
+  const protocol = req.get("x-forwarded-proto") || req.protocol || "http";
+  return `${protocol}://${req.get("host")}`;
 }
 
 function parseCookies(req) {

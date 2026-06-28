@@ -1,12 +1,13 @@
 import React from "react";
-import { Bell, CheckCheck, MessageCircle } from "lucide-react";
+import { Bell, CheckCheck, Download, ExternalLink, MessageCircle } from "lucide-react";
 import { api } from "../api.js";
+import { googleCalendarUrl, phoneCalendarDataUrl, phoneCalendarFilename } from "../calendarLinks.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
 import { formatDateLabel, formatReminder } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
 
-export function Reminders() {
+export function Reminders({ branding = {} }) {
   const [reminders, setReminders] = React.useState([]);
   const [notifications, setNotifications] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -94,19 +95,36 @@ export function Reminders() {
                     )}
                     <p className="text-sm text-slate-600">Reminder: {formatReminder(reminder.reminderTime)}</p>
                     <p className="text-sm text-slate-600">Shift: {formatDateLabel(reminder.shiftDate)}, {reminder.startTime} - {reminder.endTime}</p>
-                    {whatsappReminderUrl(reminder) ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {whatsappReminderUrl(reminder) ? (
+                        <a
+                          className="inline-flex items-center gap-2 rounded-md bg-[#25D366] px-3 py-2 text-sm font-black text-white"
+                          href={whatsappReminderUrl(reminder)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <MessageCircle size={16} />
+                          WhatsApp
+                        </a>
+                      ) : null}
                       <a
-                        className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#25D366] px-4 py-3 text-sm font-black text-white"
-                        href={whatsappReminderUrl(reminder)}
+                        className="inline-flex items-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white"
+                        href={googleCalendarUrl(reminder, branding.appTitle)}
                         target="_blank"
                         rel="noreferrer"
                       >
-                        <MessageCircle size={18} />
-                        WhatsApp
+                        <ExternalLink size={16} />
+                        Google
                       </a>
-                    ) : (
-                      <p className="mt-3 text-sm font-bold text-slate-500">No WhatsApp number</p>
-                    )}
+                      <a
+                        className="inline-flex items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green"
+                        href={phoneCalendarDataUrl(reminder, branding.appTitle)}
+                        download={phoneCalendarFilename(reminder)}
+                      >
+                        <Download size={16} />
+                        Phone
+                      </a>
+                    </div>
                   </div>
                 </div>
               </Card>

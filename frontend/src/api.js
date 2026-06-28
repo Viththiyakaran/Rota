@@ -64,5 +64,6 @@ export const api = {
   pushPublicKey: () => request("/api/push/public-key"),
   pushStatus: () => request("/api/push/status"),
   subscribePush: (payload) => request("/api/push/subscribe", { method: "POST", body: JSON.stringify(payload) }),
-  testPush: () => request("/api/push/test", { method: "POST" })
+  testPush: () => request("/api/push/test", { method: "POST" }),
+  calendarFeed: () => request("/api/calendar/my-feed")
 };

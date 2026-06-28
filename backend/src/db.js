@@ -92,6 +92,7 @@ export async function initDb() {
       staffId INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
       mustChangePassword INTEGER NOT NULL DEFAULT 1,
+      calendarToken TEXT UNIQUE,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
@@ -190,6 +191,7 @@ export async function initDb() {
   await ensureTableColumn("users", "staffId", "INTEGER");
   await ensureTableColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
   await ensureTableColumn("users", "mustChangePassword", "INTEGER NOT NULL DEFAULT 1");
+  await ensureTableColumn("users", "calendarToken", "TEXT");
   await ensureTableColumn("users", "createdAt", "TEXT");
   await ensureTableColumn("users", "updatedAt", "TEXT");
   await ensureTableColumn("sessions", "userId", "INTEGER");
@@ -235,6 +237,7 @@ async function ensureUsersTableShape() {
       staffId INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
       mustChangePassword INTEGER NOT NULL DEFAULT 1,
+      calendarToken TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
@@ -590,6 +593,16 @@ export function resetUserPassword(id, password) {
     run("UPDATE users SET mustChangePassword = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [id]);
   }
   return result.changes > 0;
+}
+
+export function ensureUserCalendarToken(userId) {
+  const user = get("SELECT id, calendarToken FROM users WHERE id = ?", [userId]);
+  if (!user) return "";
+  if (user.calendarToken) return user.calendarToken;
+
+  const token = crypto.randomBytes(32).toString("hex");
+  run("UPDATE users SET calendarToken = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [token, userId]);
+  return token;
 }
 
 export function addAudit(userId, action, details = "") {
