@@ -1,7 +1,7 @@
 {
   "name": "fuelops-rota-backend",
   "version": "1.0.0",
-  "description": "Express, SQLite, print-ready bundled web app service for the rota app",
+  "description": "Express, SQLite, print-ready bundled web app service with refreshed frontend assets",
   "main": "src/server.js",
   "type": "module",
   "engines": {
