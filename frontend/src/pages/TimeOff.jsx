@@ -4,9 +4,18 @@ import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { Status } from "../components/Status.jsx";
-import { toDateInputValue } from "../dateUtils.js";
+import { formatDateLabel, toDateInputValue } from "../dateUtils.js";
 
 const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const ukWeekdays = [
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+  { value: 0, label: "Sunday" }
+];
 
 export function TimeOff({ currentUser }) {
   const isAdmin = currentUser.role === "admin";
@@ -138,7 +147,7 @@ export function TimeOff({ currentUser }) {
               )}
               <Field label="Day">
                 <select className={inputClass} value={availabilityForm.weekday} onChange={(e) => setAvailabilityForm({ ...availabilityForm, weekday: Number(e.target.value) })}>
-                  {weekdays.map((day, index) => <option key={day} value={index}>{day}</option>)}
+                  {ukWeekdays.map((day) => <option key={day.value} value={day.value}>{day.label}</option>)}
                 </select>
               </Field>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -163,7 +172,7 @@ export function TimeOff({ currentUser }) {
             {requests.map((request) => (
               <div key={request.id} className="rounded-md border border-fuel-line bg-white p-3">
                 <p className="font-black">{request.staffName || currentUser.staffName || "Staff"}</p>
-                <p className="text-sm font-bold text-slate-600">{request.startDate} to {request.endDate}</p>
+                <p className="text-sm font-bold text-slate-600">{formatDateLabel(request.startDate)} to {formatDateLabel(request.endDate)}</p>
                 {request.endDate < request.startDate && (
                   <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-xs font-black uppercase text-red-700">
                     Invalid date range

@@ -1,9 +1,11 @@
+import { formatDateLabel } from "./dateUtils.js";
+
 export function whatsappReminderUrl(reminder) {
   const phone = normalisePhone(reminder.phone);
   const message = [
     `Hi ${reminder.staffName},`,
     reminder.reminderMessage,
-    `Shift: ${reminder.shiftDate}, ${reminder.startTime} - ${reminder.endTime}`,
+    `Shift: ${formatDateLabel(reminder.shiftDate)}, ${reminder.startTime} - ${reminder.endTime}`,
     reminder.isExtra && reminder.coverForStaffName ? `Extra cover for ${reminder.coverForStaffName}` : "",
     reminder.notes ? `Note: ${reminder.notes}` : ""
   ].filter(Boolean).join("\n");

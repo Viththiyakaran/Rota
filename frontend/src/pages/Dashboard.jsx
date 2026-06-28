@@ -104,7 +104,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
                     <Info size={16} />
                   </button>
                   <span className="pointer-events-none absolute left-1/2 top-9 z-20 hidden w-64 -translate-x-1/2 rounded-md bg-fuel-ink px-3 py-2 text-xs font-bold text-white shadow-lift group-hover:block group-focus-within:block">
-                    Approved time off appears in red inside the staff member's day cell.
+                    Hover a day cell to review rota notes, extra cover, and approved time off.
                   </span>
                 </span>
               </div>

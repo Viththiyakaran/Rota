@@ -63,7 +63,7 @@ export function StaffList({ goTo }) {
                     <input className={inputClass} value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                   </Field>
                   <Field label="Phone">
-                    <input className={inputClass} value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                    <input className={inputClass} inputMode="tel" placeholder="07123 456789" value={form.phone || ""} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
                   </Field>
                   <Field label="Email">
                     <input className={inputClass} value={form.email || ""} onChange={(e) => setForm({ ...form, email: e.target.value })} />

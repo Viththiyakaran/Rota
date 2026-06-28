@@ -2,7 +2,7 @@ import React from "react";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { Status } from "../components/Status.jsx";
-import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
+import { addDays, formatDateLabel, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappGroupShareUrl } from "../whatsapp.js";
 
 export function WeeklyRota({ currentUser }) {
@@ -191,7 +191,7 @@ export function WeeklyRota({ currentUser }) {
               <section key={day} className="flex min-h-[280px] flex-col rounded-md border border-fuel-line bg-white shadow-soft">
                 <div className="border-b border-fuel-line bg-fuel-mist px-4 py-3">
                   <p className="text-lg font-black text-fuel-ink">{formatDayLabel(day)}</p>
-                  <p className="text-xs font-bold text-slate-500">{day}</p>
+                  <p className="text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
                 </div>
                 <div className="flex flex-1 flex-col gap-3 p-3">
                   {dayShifts.length === 0 && dayTimeOff.length === 0 && (
@@ -337,7 +337,7 @@ function PrintWeeklyRota({ activeStaff, timeOff, visibleShifts, weekDays, weekRa
               <tr key={day}>
                 <td>
                   <strong>{formatPrintWeekday(day)}</strong>
-                  <span>{day}</span>
+                  <span>{formatDateLabel(day)}</span>
                 </td>
                 {activeStaff.map((person) => {
                   const personTimeOff = dayTimeOff.filter((item) => sameStaff(item.staffId, person.id));

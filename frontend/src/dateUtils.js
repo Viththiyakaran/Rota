@@ -28,13 +28,23 @@ export function formatDayLabel(dateString) {
   }).format(new Date(`${dateString}T00:00:00`));
 }
 
+export function formatDateLabel(dateString) {
+  if (!dateString) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric"
+  }).format(new Date(`${dateString}T00:00:00`));
+}
+
 export function formatReminder(isoString) {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "short",
     day: "numeric",
     month: "short",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    hour12: false
   }).format(new Date(isoString));
 }
 

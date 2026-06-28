@@ -3,7 +3,7 @@ import { Bell, CheckCheck, MessageCircle } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
-import { formatReminder } from "../dateUtils.js";
+import { formatDateLabel, formatReminder } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
 
 export function Reminders() {
@@ -66,7 +66,7 @@ export function Reminders() {
                     <p className="text-lg font-black">{notification.title}</p>
                     <p className="font-bold text-fuel-green">{notification.message}</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {notification.staffName} · {formatNotificationDate(notification.createdAt)}
+                      {notification.staffName} - {formatNotificationDate(notification.createdAt)}
                     </p>
                   </div>
                 </div>
@@ -77,41 +77,41 @@ export function Reminders() {
 
         <section className="space-y-3">
           <h3 className="text-xl font-black">Upcoming shift reminders</h3>
-        <div className="space-y-3">
-          {reminders.map((reminder) => (
-            <Card key={reminder.id}>
-              <div className="flex gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-fuel-lime">
-                  <Bell size={24} />
+          <div className="space-y-3">
+            {reminders.map((reminder) => (
+              <Card key={reminder.id}>
+                <div className="flex gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-fuel-lime">
+                    <Bell size={24} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-black">{reminder.staffName}</p>
+                    <p className="font-bold text-fuel-green">{reminder.reminderMessage}</p>
+                    {reminder.isExtra && (
+                      <p className="text-sm font-black text-fuel-ink">
+                        Extra cover{reminder.coverForStaffName ? ` for ${reminder.coverForStaffName}` : ""}
+                      </p>
+                    )}
+                    <p className="text-sm text-slate-600">Reminder: {formatReminder(reminder.reminderTime)}</p>
+                    <p className="text-sm text-slate-600">Shift: {formatDateLabel(reminder.shiftDate)}, {reminder.startTime} - {reminder.endTime}</p>
+                    {whatsappReminderUrl(reminder) ? (
+                      <a
+                        className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#25D366] px-4 py-3 text-sm font-black text-white"
+                        href={whatsappReminderUrl(reminder)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <MessageCircle size={18} />
+                        WhatsApp
+                      </a>
+                    ) : (
+                      <p className="mt-3 text-sm font-bold text-slate-500">No WhatsApp number</p>
+                    )}
+                  </div>
                 </div>
-                <div className="min-w-0">
-                  <p className="text-lg font-black">{reminder.staffName}</p>
-                  <p className="font-bold text-fuel-green">{reminder.reminderMessage}</p>
-                  {reminder.isExtra && (
-                    <p className="text-sm font-black text-fuel-ink">
-                      Extra cover{reminder.coverForStaffName ? ` for ${reminder.coverForStaffName}` : ""}
-                    </p>
-                  )}
-                  <p className="text-sm text-slate-600">Reminder: {formatReminder(reminder.reminderTime)}</p>
-                  <p className="text-sm text-slate-600">Shift: {reminder.shiftDate}, {reminder.startTime} - {reminder.endTime}</p>
-                  {whatsappReminderUrl(reminder) ? (
-                    <a
-                      className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#25D366] px-4 py-3 text-sm font-black text-white"
-                      href={whatsappReminderUrl(reminder)}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <MessageCircle size={18} />
-                      WhatsApp
-                    </a>
-                  ) : (
-                    <p className="mt-3 text-sm font-bold text-slate-500">No WhatsApp number</p>
-                  )}
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+              </Card>
+            ))}
+          </div>
         </section>
       </Status>
     </div>
@@ -124,6 +124,7 @@ function formatNotificationDate(value) {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    hour12: false
   }).format(new Date(`${value.replace(" ", "T")}Z`));
 }
