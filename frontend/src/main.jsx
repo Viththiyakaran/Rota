@@ -21,7 +21,7 @@ const navItems = [
   { id: "staff", label: "Staff", icon: Users, roles: ["admin"] },
   { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "rota", label: "Rota", icon: CalendarDays, roles: ["admin", "staff"] },
-  { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"] },
+  { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
   { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"] },
   { id: "account", label: "Account", icon: UserRound, roles: ["admin", "staff"] },
