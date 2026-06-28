@@ -199,17 +199,17 @@ function App() {
       </main>
 
       {popupNotification && (
-        <div className="fixed right-4 top-24 z-40 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-fuel-green bg-white p-4 text-fuel-ink shadow-lift">
+        <div className="fixed bottom-24 right-3 z-40 w-[calc(100vw-1.5rem)] max-w-xs rounded-xl border border-fuel-line bg-white p-3 text-fuel-ink shadow-lift sm:bottom-6 sm:right-6">
           <div className="flex gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-lime">
-              <Bell size={22} />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-fuel-lime">
+              <Bell size={20} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-black uppercase tracking-[0.12em] text-fuel-green">New notification</p>
-              <p className="mt-1 text-lg font-black">{popupNotification.title}</p>
-              <p className="mt-1 text-sm font-bold text-slate-700">{popupNotification.message}</p>
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-fuel-green">New notification</p>
+              <p className="mt-1 truncate text-base font-black">{popupNotification.title}</p>
+              <p className="mt-1 line-clamp-2 text-sm font-bold text-slate-700">{popupNotification.message}</p>
               <button
-                className="mt-3 rounded-md bg-fuel-green px-4 py-2 text-sm font-black text-white"
+                className="mt-3 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white"
                 onClick={() => {
                   setPage("reminders");
                   dismissPopupNotification();
@@ -219,7 +219,7 @@ function App() {
               </button>
             </div>
             <button
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-fuel-mist text-fuel-green"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-fuel-mist text-fuel-green hover:bg-fuel-line"
               onClick={dismissPopupNotification}
               title="Close notification"
             >

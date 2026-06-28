@@ -90,9 +90,21 @@ export function TimeOff({ currentUser }) {
     load();
   };
 
+  const validRequests = [...requests].sort((a, b) => {
+    const aPending = a.status === "pending" && a.endDate >= a.startDate ? 0 : 1;
+    const bPending = b.status === "pending" && b.endDate >= b.startDate ? 0 : 1;
+    if (aPending !== bPending) return aPending - bPending;
+    return String(b.createdAt || b.startDate).localeCompare(String(a.createdAt || a.startDate));
+  });
+
+  const pendingCount = validRequests.filter((request) => request.status === "pending" && request.endDate >= request.startDate).length;
+
   return (
     <div className="space-y-4">
-      <h2 className="text-3xl font-black">Time Off & Availability</h2>
+      <div>
+        <p className="text-sm font-black uppercase tracking-[0.12em] text-fuel-green">Holiday and availability</p>
+        <h2 className="text-3xl font-black">Time Off</h2>
+      </div>
       <Status loading={loading} error={error}>
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -167,30 +179,44 @@ export function TimeOff({ currentUser }) {
         </div>
 
         <Card>
-          <h3 className="mb-3 text-xl font-black">Time-Off Requests</h3>
-          <div className="space-y-2">
-            {requests.map((request) => (
-              <div key={request.id} className="rounded-md border border-fuel-line bg-white p-3">
-                <p className="font-black">{request.staffName || currentUser.staffName || "Staff"}</p>
-                <p className="text-sm font-bold text-slate-600">{formatDateLabel(request.startDate)} to {formatDateLabel(request.endDate)}</p>
-                {request.endDate < request.startDate && (
-                  <p className="mt-1 rounded-md bg-red-50 px-2 py-1 text-xs font-black uppercase text-red-700">
-                    Invalid date range
-                  </p>
-                )}
-                <p className="text-sm">{request.reason}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-black uppercase text-fuel-green">{request.status}</span>
-                  {isAdmin && (
-                    <>
-                      <button className="rounded-md bg-fuel-green p-2 text-white" onClick={() => review(request.id, "approved")} title="Approve"><Check size={16} /></button>
-                      <button className="rounded-md bg-red-100 p-2 text-red-700" onClick={() => review(request.id, "rejected")} title="Reject"><X size={16} /></button>
-                    </>
-                  )}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-xl font-black">Time-Off Requests</h3>
+              <p className="text-sm font-bold text-slate-500">{pendingCount} request{pendingCount === 1 ? "" : "s"} waiting for review</p>
+            </div>
+            <span className="rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green">{requests.length} total</span>
+          </div>
+          <div className="overflow-hidden rounded-md border border-fuel-line">
+            {validRequests.map((request) => {
+              const invalidRange = request.endDate < request.startDate;
+              const canReview = isAdmin && request.status === "pending" && !invalidRange;
+              return (
+                <div key={request.id} className="grid gap-3 border-b border-fuel-line bg-white p-3 last:border-b-0 md:grid-cols-[1.3fr_1.2fr_1fr_auto] md:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate font-black">{request.staffName || currentUser.staffName || "Staff"}</p>
+                    <p className="text-sm font-bold text-slate-600">{formatDateLabel(request.startDate)} to {formatDateLabel(request.endDate)}</p>
+                  </div>
+                  <p className="min-w-0 text-sm font-bold text-slate-700">{request.reason || "No reason added"}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={statusClass(request.status)}>{request.status}</span>
+                    {invalidRange && (
+                      <span className="rounded-md bg-red-50 px-2 py-1 text-xs font-black uppercase text-red-700">Invalid range</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2 md:justify-end">
+                    {canReview ? (
+                      <>
+                        <button className="rounded-md bg-fuel-green p-2 text-white" onClick={() => review(request.id, "approved")} title="Approve"><Check size={16} /></button>
+                        <button className="rounded-md bg-red-100 p-2 text-red-700" onClick={() => review(request.id, "rejected")} title="Reject"><X size={16} /></button>
+                      </>
+                    ) : (
+                      <span className="text-xs font-black uppercase text-slate-400">{invalidRange ? "Fix dates" : "Reviewed"}</span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {requests.length === 0 && <p className="text-sm font-bold text-slate-500">No time-off requests yet.</p>}
+              );
+            })}
+            {requests.length === 0 && <p className="bg-white p-4 text-sm font-bold text-slate-500">No time-off requests yet.</p>}
           </div>
         </Card>
 
@@ -213,4 +239,11 @@ export function TimeOff({ currentUser }) {
       </Status>
     </div>
   );
+}
+
+function statusClass(status) {
+  const base = "rounded-md px-2 py-1 text-xs font-black uppercase";
+  if (status === "approved") return `${base} bg-fuel-mist text-fuel-green`;
+  if (status === "rejected") return `${base} bg-slate-100 text-slate-600`;
+  return `${base} bg-fuel-lime text-fuel-ink`;
 }
