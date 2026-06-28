@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Bell, CalendarDays, Clock, Home, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users } from "lucide-react";
+import { Bell, CalendarDays, Clock, Home, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { AddShift } from "./pages/AddShift.jsx";
@@ -33,6 +33,7 @@ function App() {
   const [currentUser, setCurrentUser] = React.useState(null);
   const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "" });
   const [checkingSession, setCheckingSession] = React.useState(true);
+  const [popupNotification, setPopupNotification] = React.useState(null);
   const isAdmin = currentUser?.role === "admin";
   const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && !item.hidden);
   const appTitle = buildRotaTitle(branding.businessName);
@@ -65,6 +66,38 @@ function App() {
   React.useEffect(() => {
     document.title = appTitle;
   }, [appTitle]);
+
+  React.useEffect(() => {
+    if (!currentUser) {
+      setPopupNotification(null);
+      return undefined;
+    }
+
+    const dismissedKey = `fuelopsDismissedNotifications:${currentUser.id}`;
+    const dismissed = new Set(JSON.parse(localStorage.getItem(dismissedKey) || "[]"));
+
+    const checkNotifications = () => {
+      api.notifications()
+        .then((rows) => {
+          const latestUnread = rows.find((notification) => notification.unread && !dismissed.has(String(notification.id)));
+          if (latestUnread) setPopupNotification(latestUnread);
+        })
+        .catch(() => {});
+    };
+
+    checkNotifications();
+    const timer = window.setInterval(checkNotifications, 30000);
+    return () => window.clearInterval(timer);
+  }, [currentUser]);
+
+  const dismissPopupNotification = () => {
+    if (!currentUser || !popupNotification) return;
+    const dismissedKey = `fuelopsDismissedNotifications:${currentUser.id}`;
+    const dismissed = new Set(JSON.parse(localStorage.getItem(dismissedKey) || "[]"));
+    dismissed.add(String(popupNotification.id));
+    localStorage.setItem(dismissedKey, JSON.stringify([...dismissed].slice(-80)));
+    setPopupNotification(null);
+  };
 
   const logout = async () => {
     await api.logout().catch(() => {});
@@ -133,6 +166,37 @@ function App() {
         {page === "account" && <Account currentUser={currentUser} />}
         {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>
+
+      {popupNotification && (
+        <div className="fixed right-4 top-24 z-40 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-fuel-green bg-white p-4 text-fuel-ink shadow-lift">
+          <div className="flex gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-lime">
+              <Bell size={22} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-black uppercase tracking-[0.12em] text-fuel-green">New notification</p>
+              <p className="mt-1 text-lg font-black">{popupNotification.title}</p>
+              <p className="mt-1 text-sm font-bold text-slate-700">{popupNotification.message}</p>
+              <button
+                className="mt-3 rounded-md bg-fuel-green px-4 py-2 text-sm font-black text-white"
+                onClick={() => {
+                  setPage("reminders");
+                  dismissPopupNotification();
+                }}
+              >
+                View
+              </button>
+            </div>
+            <button
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-fuel-mist text-fuel-green"
+              onClick={dismissPopupNotification}
+              title="Close notification"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+      )}
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/90 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-2 py-2">
