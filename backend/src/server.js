@@ -41,7 +41,7 @@ app.use(cors());
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, name: "Rota API" });
+  res.json({ ok: true, name: "Rota API", authMigration: 2 });
 });
 
 app.get("/api/settings/branding", (_req, res) => {

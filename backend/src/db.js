@@ -149,6 +149,7 @@ export async function initDb() {
 
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
+  await ensureSessionsTableShape();
   await ensureTableColumn("users", "passwordHash", "TEXT");
   await ensureTableColumn("users", "role", "TEXT NOT NULL DEFAULT 'staff'");
   await ensureTableColumn("users", "staffId", "INTEGER");
@@ -180,6 +181,23 @@ async function ensureTableColumn(tableName, name, definition) {
   if (!columns.some((column) => column.name === name)) {
     await run(`ALTER TABLE ${tableName} ADD COLUMN ${name} ${definition}`);
   }
+}
+
+async function ensureSessionsTableShape() {
+  const columns = await all("PRAGMA table_info(sessions)");
+  const columnNames = new Set(columns.map((column) => column.name));
+  if (columnNames.has("token") && columnNames.has("userId") && columnNames.has("expiresAt")) return;
+
+  await run("DROP TABLE IF EXISTS sessions");
+  await run(`
+    CREATE TABLE sessions (
+      token TEXT PRIMARY KEY,
+      userId INTEGER NOT NULL,
+      expiresAt TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (userId) REFERENCES users(id)
+    )
+  `);
 }
 
 async function seedData() {
