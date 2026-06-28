@@ -183,46 +183,49 @@ export function WeeklyRota({ currentUser }) {
 
       <Status loading={loading} error={error}>
         {message && <p className="rounded-md bg-fuel-mist p-3 font-black text-fuel-green">{message}</p>}
-        <div className="screen-only grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+        <div className="screen-only grid gap-3 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
           {weekDays.map((day) => {
             const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
             const dayTimeOff = approvedTimeOffForDay(timeOff, day);
             return (
-              <section key={day} className="flex min-h-[280px] flex-col rounded-md border border-fuel-line bg-white shadow-soft">
-                <div className="border-b border-fuel-line bg-fuel-mist px-4 py-3">
-                  <p className="text-lg font-black text-fuel-ink">{formatDayLabel(day)}</p>
-                  <p className="text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
+              <section key={day} className="flex min-h-[220px] flex-col overflow-hidden rounded-lg border border-fuel-line bg-white shadow-sm">
+                <div className="border-b border-fuel-line bg-fuel-mist/70 px-4 py-3">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-lg font-black leading-tight text-fuel-ink">{formatDayLabel(day)}</p>
+                    <p className="text-xs font-black text-slate-500">{dayShifts.length}</p>
+                  </div>
+                  <p className="mt-0.5 text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
                 </div>
-                <div className="flex flex-1 flex-col gap-3 p-3">
+                <div className="flex flex-1 flex-col gap-2 p-3">
                   {dayShifts.length === 0 && dayTimeOff.length === 0 && (
-                    <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-fuel-line bg-white p-4 text-sm font-bold text-slate-400">
+                    <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-fuel-line bg-fuel-mist/30 p-4 text-sm font-bold text-slate-400">
                       No shifts
                     </div>
                   )}
                   {dayTimeOff.map((request) => (
-                    <div key={`time-off-${request.id}`} className="rounded-md border border-red-100 bg-red-50 p-3">
-                      <p className="text-sm font-black uppercase text-red-700">Approved time off</p>
-                      <p className="font-black text-fuel-ink">{request.staffName || currentUser.staffName || "Staff"}</p>
-                      {request.reason && <p className="text-sm font-bold text-slate-600">{request.reason}</p>}
+                    <div key={`time-off-${request.id}`} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                      <p className="text-xs font-black uppercase text-amber-800">Time off approved</p>
+                      <p className="text-sm font-black text-fuel-ink">{request.staffName || currentUser.staffName || "Staff"}</p>
+                      {request.reason && <p className="truncate text-xs font-bold text-slate-600">{request.reason}</p>}
                     </div>
                   ))}
                   {dayShifts.map((shift) => (
-                    <article key={shift.id} className="rounded-md border border-fuel-line bg-white p-3">
-                      <div className="flex items-start justify-between gap-3">
+                    <article key={shift.id} className={`rounded-md border bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)] ${shift.isExtra ? "border-fuel-lime" : "border-fuel-line"}`}>
+                      <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-lg font-black text-fuel-ink">{shift.staffName}</p>
+                            <p className="truncate text-base font-black leading-tight text-fuel-ink">{shift.staffName}</p>
                             {shift.isExtra && (
-                              <span className="rounded-md bg-fuel-lime px-2 py-1 text-xs font-black text-fuel-ink">
+                              <span className="rounded-full bg-fuel-lime px-2 py-0.5 text-[11px] font-black text-fuel-ink">
                                 Extra
                               </span>
                             )}
                           </div>
-                          <p className="mt-2 inline-flex rounded-md bg-fuel-mist px-2 py-1 text-sm font-black text-fuel-green">
+                          <p className="mt-2 inline-flex rounded-md bg-fuel-mist px-2 py-1 text-sm font-black leading-none text-fuel-green">
                             {formatShiftRange(shift.startTime, shift.endTime)}
                           </p>
                           {shift.isExtra && shift.coverForStaffName && (
-                            <p className="mt-2 text-xs font-bold text-slate-600">Cover for {shift.coverForStaffName}</p>
+                            <p className="mt-2 truncate text-xs font-bold text-slate-600">Cover for {shift.coverForStaffName}</p>
                           )}
                         </div>
                         {isAdmin && (
@@ -235,10 +238,10 @@ export function WeeklyRota({ currentUser }) {
                           </button>
                         )}
                       </div>
-                      <div className="mt-3 text-sm text-fuel-ink">
-                        <p><span className="font-bold">{shift.totalHours}</span> hrs</p>
+                      <div className="mt-2 text-xs font-bold text-slate-600">
+                        {shift.totalHours} hrs
                       </div>
-                      <div className="mt-3">
+                      <div className="mt-2">
                         {editingNoteId === shift.id ? (
                           <div className="space-y-2">
                             <textarea
@@ -272,9 +275,9 @@ export function WeeklyRota({ currentUser }) {
                         ) : (
                           <div className="flex items-start justify-between gap-2">
                             {shift.notes ? (
-                              <p className="rounded-md bg-fuel-mist px-2 py-1 text-sm font-bold text-slate-700">{shift.notes}</p>
+                              <p className="min-w-0 truncate rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-slate-700">{shift.notes}</p>
                             ) : (
-                              <p className="text-sm font-bold text-slate-400">No note</p>
+                              <p className="text-xs font-bold text-slate-400">No note</p>
                             )}
                             {isAdmin && (
                               <button
