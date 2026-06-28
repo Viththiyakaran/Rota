@@ -153,11 +153,11 @@ export async function initDb() {
   await ensureTableColumn("users", "role", "TEXT NOT NULL DEFAULT 'staff'");
   await ensureTableColumn("users", "staffId", "INTEGER");
   await ensureTableColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
-  await ensureTableColumn("users", "createdAt", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
-  await ensureTableColumn("users", "updatedAt", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
+  await ensureTableColumn("users", "createdAt", "TEXT");
+  await ensureTableColumn("users", "updatedAt", "TEXT");
   await ensureTableColumn("sessions", "userId", "INTEGER");
   await ensureTableColumn("sessions", "expiresAt", "TEXT");
-  await ensureTableColumn("sessions", "createdAt", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
+  await ensureTableColumn("sessions", "createdAt", "TEXT");
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
   await replaceLegacySeedEmails();
