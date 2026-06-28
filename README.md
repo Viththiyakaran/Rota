@@ -29,7 +29,7 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 - Time-off requests with admin approval/rejection
 - Approved time off removes affected staff shifts from rota totals
 - Staff-only My Shifts page
-- Upcoming reminders and rota change notifications
+- Upcoming reminders, rota change notifications, and PWA push notifications
 - WhatsApp reminder/share buttons
 - Print/PDF weekly rota
 - Copy week to next week
@@ -200,6 +200,9 @@ NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url
 DB_PATH=/data/fuelops.sqlite
 ADMIN_RESET_TOKEN=temporary-secret-for-admin-recovery
+VAPID_PUBLIC_KEY=optional-fixed-web-push-public-key
+VAPID_PRIVATE_KEY=optional-fixed-web-push-private-key
+VAPID_SUBJECT=mailto:admin@example.com
 ```
 
 Frontend:
@@ -213,6 +216,8 @@ Notes:
 - Railway provides `PORT` automatically.
 - `DB_PATH` should point to a Railway volume path in production.
 - `ADMIN_RESET_TOKEN` should only be added temporarily when recovering admin access.
+- `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` are optional. If they are not set, the app generates and saves free Web Push keys in SQLite.
+- For long-term production, fixed VAPID keys are better because existing phone/browser subscriptions remain valid after database restore or migration.
 - This app uses server-side sessions, not JWT, so `JWT_SECRET` is not required.
 - `DATABASE_URL` is not used unless the app is later migrated from SQLite to a hosted SQL database.
 
@@ -376,6 +381,10 @@ Authenticated routes:
 - `DELETE /api/shifts/:id`
 - `POST /api/shifts/copy-week`
 - `GET /api/reminders/upcoming`
+- `GET /api/push/public-key`
+- `GET /api/push/status`
+- `POST /api/push/subscribe`
+- `POST /api/push/test`
 - `GET /api/notifications`
 - `POST /api/notifications/read-all`
 - `GET /api/time-off`
@@ -404,6 +413,23 @@ Authenticated routes:
 2. Select staff, date, time range, break, reminder, and notes.
 3. The system calculates hours and creates a reminder time.
 4. The staff member receives an in-app notification.
+5. If the staff member enabled phone notifications, the backend sends a push reminder when the reminder time is due.
+
+### Enable Phone Notifications
+
+1. Staff logs in on their phone.
+2. On iPhone, install the PWA to the home screen first.
+3. Open Account.
+4. Press Enable Notifications.
+5. Allow browser notifications.
+6. A test notification confirms that this device is registered.
+
+Notes:
+
+- Push notifications are free and do not require WhatsApp or paid services.
+- The app must be served over HTTPS in production for push notifications to work.
+- Reminders are checked by the backend every minute.
+- If the browser is closed, the phone/browser can still receive the push reminder after notifications are enabled.
 
 ### Time Off
 

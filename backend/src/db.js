@@ -163,8 +163,23 @@ export async function initDb() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS pushSubscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      staffId INTEGER NOT NULL,
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      userAgent TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staffId) REFERENCES staff(id)
+    )
+  `);
+
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
+  await ensureShiftColumn("reminderSentAt", "TEXT");
   await ensureUsersTableShape();
   await ensureSessionsTableShape();
   await ensureTableColumn("notifications", "shiftId", "INTEGER");

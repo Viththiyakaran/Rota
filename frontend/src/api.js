@@ -60,5 +60,9 @@ export const api = {
   deleteShift: (id) => request(`/api/shifts/${id}`, { method: "DELETE" }),
   notifications: () => request("/api/notifications"),
   readNotifications: () => request("/api/notifications/read-all", { method: "POST" }),
-  reminders: () => request("/api/reminders/upcoming")
+  reminders: () => request("/api/reminders/upcoming"),
+  pushPublicKey: () => request("/api/push/public-key"),
+  pushStatus: () => request("/api/push/status"),
+  subscribePush: (payload) => request("/api/push/subscribe", { method: "POST", body: JSON.stringify(payload) }),
+  testPush: () => request("/api/push/test", { method: "POST" })
 };

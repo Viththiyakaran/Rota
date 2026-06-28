@@ -3,6 +3,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import webpush from "web-push";
 import {
   all,
   addAudit,
@@ -40,6 +41,7 @@ const frontendDist = path.join(__dirname, "..", "..", "frontend", "dist");
 const loginAttempts = new Map();
 const loginWindowMs = 15 * 60 * 1000;
 const maxLoginAttempts = 5;
+let pushConfigured = false;
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
@@ -115,6 +117,10 @@ app.get("/api", (_req, res) => {
       "PUT /api/shifts/:id",
       "DELETE /api/shifts/:id",
       "GET /api/reminders/upcoming",
+      "GET /api/push/public-key",
+      "GET /api/push/status",
+      "POST /api/push/subscribe",
+      "POST /api/push/test",
       "GET /api/notifications",
       "POST /api/notifications/read-all",
       "GET /api/time-off",
@@ -424,6 +430,63 @@ app.post("/api/notifications/read-all", async (req, res, next) => {
   }
 });
 
+app.get("/api/push/public-key", (_req, res) => {
+  const key = getPushPublicKey();
+  res.json({ publicKey: key, enabled: Boolean(key && pushConfigured) });
+});
+
+app.get("/api/push/status", async (req, res, next) => {
+  try {
+    if (!req.user.staffId) return res.json({ enabled: false, subscriptions: 0, available: pushConfigured });
+    const count = await get("SELECT COUNT(*) AS count FROM pushSubscriptions WHERE staffId = ?", [req.user.staffId]);
+    res.json({ enabled: Number(count.count || 0) > 0, subscriptions: Number(count.count || 0), available: pushConfigured });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/push/subscribe", async (req, res, next) => {
+  try {
+    if (!pushConfigured) return res.status(503).json({ error: "Push notifications are not configured." });
+    if (!req.user.staffId) return res.status(400).json({ error: "Only staff-linked users can enable push notifications." });
+
+    const { endpoint, keys } = req.body || {};
+    const p256dh = keys?.p256dh;
+    const auth = keys?.auth;
+    if (!endpoint || !p256dh || !auth) return res.status(400).json({ error: "Invalid push subscription." });
+
+    await run(
+      `INSERT INTO pushSubscriptions (staffId, endpoint, p256dh, auth, userAgent)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(endpoint) DO UPDATE SET
+         staffId = excluded.staffId,
+         p256dh = excluded.p256dh,
+         auth = excluded.auth,
+         userAgent = excluded.userAgent,
+         updatedAt = CURRENT_TIMESTAMP`,
+      [req.user.staffId, endpoint, p256dh, auth, req.get("user-agent") || ""]
+    );
+    addAudit(req.user.id, "enable_push", `${req.user.username} enabled push notifications`);
+    res.status(201).json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/push/test", async (req, res, next) => {
+  try {
+    if (!req.user.staffId) return res.status(400).json({ error: "Only staff-linked users can test push notifications." });
+    await sendPushToStaff(req.user.staffId, {
+      title: "Notifications enabled",
+      message: "You will receive rota reminders on this device.",
+      type: "push_test"
+    });
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/staff", async (_req, res, next) => {
   try {
     const rows = await all("SELECT * FROM staff ORDER BY active DESC, id ASC");
@@ -646,6 +709,11 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
     const previousNotes = String(current.notes || "").trim();
     const nextNotes = String(nextShift.notes || "").trim();
     const notesChanged = previousNotes !== nextNotes;
+    const reminderChanged =
+      Number(current.staffId) !== Number(nextShift.staffId) ||
+      current.shiftDate !== nextShift.shiftDate ||
+      current.startTime !== nextShift.startTime ||
+      Number(current.reminderMinutes) !== Number(nextShift.reminderMinutes);
     const rotaChanged =
       Number(current.staffId) !== Number(nextShift.staffId) ||
       current.shiftDate !== nextShift.shiftDate ||
@@ -660,7 +728,7 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
       `UPDATE shifts
        SET staffId = ?, shiftDate = ?, startTime = ?, endTime = ?, breakMinutes = ?,
            reminderMinutes = ?, reminderTime = ?, notes = ?, isExtra = ?, coverForStaffId = ?, googleCalendarEventId = ?,
-           updatedAt = CURRENT_TIMESTAMP
+           reminderSentAt = ?, updatedAt = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         nextShift.staffId,
@@ -674,6 +742,7 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
         nextShift.isExtra,
         nextShift.coverForStaffId,
         nextShift.googleCalendarEventId,
+        reminderChanged ? null : current.reminderSentAt,
         req.params.id
       ]
     );
@@ -797,9 +866,11 @@ function requireAdmin(req, res, next) {
 }
 
 initDb().then(() => {
+  configurePushNotifications();
   app.listen(PORT, () => {
     console.log(`FuelOps Rota Backend running on port ${PORT}`);
   });
+  startReminderPushScheduler();
 });
 
 function addDays(dateString, days) {
@@ -840,6 +911,136 @@ function notifyStaff(staffId, title, message, { type = "rota_update", shiftId = 
      VALUES (?, ?, ?, ?, ?, ?)`,
     [staffId, type, title, message, shiftId, timeOffRequestId]
   );
+  sendPushToStaff(staffId, { title, message, type, shiftId, timeOffRequestId }).catch((error) => {
+    console.error("Push notification failed", error);
+  });
+}
+
+function configurePushNotifications() {
+  const keys = getOrCreateVapidKeys();
+  if (!keys?.publicKey || !keys?.privateKey) {
+    pushConfigured = false;
+    return;
+  }
+
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || "mailto:admin@example.com",
+    keys.publicKey,
+    keys.privateKey
+  );
+  pushConfigured = true;
+}
+
+function getOrCreateVapidKeys() {
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    return {
+      publicKey: process.env.VAPID_PUBLIC_KEY,
+      privateKey: process.env.VAPID_PRIVATE_KEY
+    };
+  }
+
+  const publicRow = get("SELECT value FROM settings WHERE key = ?", ["vapidPublicKey"]);
+  const privateRow = get("SELECT value FROM settings WHERE key = ?", ["vapidPrivateKey"]);
+  if (publicRow?.value && privateRow?.value) {
+    return { publicKey: publicRow.value, privateKey: privateRow.value };
+  }
+
+  const generated = webpush.generateVAPIDKeys();
+  run(
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ["vapidPublicKey", generated.publicKey]
+  );
+  run(
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ["vapidPrivateKey", generated.privateKey]
+  );
+  return generated;
+}
+
+function getPushPublicKey() {
+  return process.env.VAPID_PUBLIC_KEY || get("SELECT value FROM settings WHERE key = ?", ["vapidPublicKey"])?.value || "";
+}
+
+async function sendPushToStaff(staffId, { title, message, type = "rota_update", shiftId = null, timeOffRequestId = null } = {}) {
+  if (!pushConfigured || !staffId) return;
+  const subscriptions = await all("SELECT * FROM pushSubscriptions WHERE staffId = ?", [staffId]);
+  const payload = JSON.stringify({
+    title: title || "Rota notification",
+    body: message || "You have a rota update.",
+    type,
+    shiftId,
+    timeOffRequestId,
+    url: "/"
+  });
+
+  await Promise.all(subscriptions.map(async (row) => {
+    const subscription = {
+      endpoint: row.endpoint,
+      keys: {
+        p256dh: row.p256dh,
+        auth: row.auth
+      }
+    };
+
+    try {
+      await webpush.sendNotification(subscription, payload);
+    } catch (error) {
+      if (error.statusCode === 404 || error.statusCode === 410) {
+        await run("DELETE FROM pushSubscriptions WHERE id = ?", [row.id]);
+        return;
+      }
+      console.error("Push send failed", error.statusCode || "", error.message);
+    }
+  }));
+}
+
+function startReminderPushScheduler() {
+  processDueReminderPushes().catch((error) => console.error("Reminder push check failed", error));
+  setInterval(() => {
+    processDueReminderPushes().catch((error) => console.error("Reminder push check failed", error));
+  }, 60 * 1000);
+}
+
+async function processDueReminderPushes() {
+  if (!pushConfigured) return;
+  const now = new Date().toISOString();
+  const today = now.slice(0, 10);
+  const due = await all(
+    `SELECT shifts.*, staff.name AS staffName, staff.active,
+            coverStaff.name AS coverForStaffName
+     FROM shifts
+     JOIN staff ON staff.id = shifts.staffId
+     LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+     LEFT JOIN timeOffRequests
+       ON timeOffRequests.staffId = shifts.staffId
+      AND timeOffRequests.status = 'approved'
+      AND timeOffRequests.endDate >= timeOffRequests.startDate
+      AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
+     WHERE staff.active = 1
+       AND shifts.reminderSentAt IS NULL
+       AND shifts.reminderTime <= ?
+       AND shifts.shiftDate >= ?
+       AND timeOffRequests.id IS NULL
+     ORDER BY shifts.reminderTime ASC
+     LIMIT 25`,
+    [now, today]
+  );
+
+  for (const shift of due) {
+    const decorated = decorateShift(shift);
+    const coverText = decorated.isExtra && decorated.coverForStaffName ? ` Extra cover for ${decorated.coverForStaffName}.` : "";
+    const noteText = decorated.notes ? ` Note: ${decorated.notes}.` : "";
+    const message = `${decorated.reminderMessage}.${coverText}${noteText}`;
+    notifyStaff(decorated.staffId, "Shift reminder", message, {
+      type: "shift_reminder",
+      shiftId: decorated.id
+    });
+    await run("UPDATE shifts SET reminderSentAt = ? WHERE id = ?", [now, decorated.id]);
+  }
 }
 
 function parseCookies(req) {

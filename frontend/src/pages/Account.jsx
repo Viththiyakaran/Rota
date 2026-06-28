@@ -1,13 +1,26 @@
 import React from "react";
-import { KeyRound } from "lucide-react";
+import { Bell, KeyRound } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { canUsePushNotifications, enablePushNotifications } from "../pushNotifications.js";
 
 export function Account({ currentUser, forced = false, onPasswordChanged = () => {} }) {
   const [form, setForm] = React.useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [message, setMessage] = React.useState("");
   const [error, setError] = React.useState("");
+  const [pushStatus, setPushStatus] = React.useState({ available: false, enabled: false, subscriptions: 0 });
+  const [pushMessage, setPushMessage] = React.useState("");
+  const [pushError, setPushError] = React.useState("");
+  const [savingPush, setSavingPush] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!currentUser.staffId) return;
+    if (!canUsePushNotifications()) return;
+    api.pushStatus()
+      .then(setPushStatus)
+      .catch(() => {});
+  }, [currentUser.staffId]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -26,6 +39,22 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
       if (result.user) onPasswordChanged(result.user);
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const enablePush = async () => {
+    setSavingPush(true);
+    setPushMessage("");
+    setPushError("");
+    try {
+      await enablePushNotifications();
+      const status = await api.pushStatus();
+      setPushStatus(status);
+      setPushMessage("Notifications enabled on this device.");
+    } catch (err) {
+      setPushError(err.message);
+    } finally {
+      setSavingPush(false);
     }
   };
 
@@ -55,6 +84,38 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
           </button>
         </form>
       </Card>
+      {!forced && currentUser.staffId && (
+        <Card>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 className="text-xl font-black">Phone Notifications</h3>
+              <p className="mt-1 text-sm font-bold text-slate-600">
+                Get shift reminders even when this app is closed.
+              </p>
+              {pushStatus.enabled && (
+                <p className="mt-2 text-sm font-black text-fuel-green">
+                  Enabled on {pushStatus.subscriptions} device{pushStatus.subscriptions === 1 ? "" : "s"}.
+                </p>
+              )}
+            </div>
+            <button
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-5 py-4 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+              disabled={savingPush || !canUsePushNotifications()}
+              onClick={enablePush}
+            >
+              <Bell size={18} />
+              {savingPush ? "Enabling..." : "Enable Notifications"}
+            </button>
+          </div>
+          {!canUsePushNotifications() && (
+            <p className="mt-3 rounded-md bg-red-50 p-3 text-sm font-bold text-red-700">
+              This browser does not support push notifications. On iPhone, install the app to the home screen first.
+            </p>
+          )}
+          {pushMessage && <p className="mt-3 rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{pushMessage}</p>}
+          {pushError && <p className="mt-3 rounded-md bg-red-50 p-3 font-bold text-red-700">{pushError}</p>}
+        </Card>
+      )}
     </div>
   );
 }
