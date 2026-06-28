@@ -149,6 +149,15 @@ export async function initDb() {
 
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
+  await ensureTableColumn("users", "passwordHash", "TEXT");
+  await ensureTableColumn("users", "role", "TEXT NOT NULL DEFAULT 'staff'");
+  await ensureTableColumn("users", "staffId", "INTEGER");
+  await ensureTableColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
+  await ensureTableColumn("users", "createdAt", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
+  await ensureTableColumn("users", "updatedAt", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
+  await ensureTableColumn("sessions", "userId", "INTEGER");
+  await ensureTableColumn("sessions", "expiresAt", "TEXT");
+  await ensureTableColumn("sessions", "createdAt", "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP");
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
   await replaceLegacySeedEmails();
@@ -163,9 +172,13 @@ export async function initDb() {
 }
 
 async function ensureShiftColumn(name, definition) {
-  const columns = await all("PRAGMA table_info(shifts)");
+  return ensureTableColumn("shifts", name, definition);
+}
+
+async function ensureTableColumn(tableName, name, definition) {
+  const columns = await all(`PRAGMA table_info(${tableName})`);
   if (!columns.some((column) => column.name === name)) {
-    await run(`ALTER TABLE shifts ADD COLUMN ${name} ${definition}`);
+    await run(`ALTER TABLE ${tableName} ADD COLUMN ${name} ${definition}`);
   }
 }
 
@@ -187,20 +200,34 @@ async function seedData() {
 }
 
 async function seedUsers() {
-  const userCount = await get("SELECT COUNT(*) AS count FROM users");
-  if (userCount.count > 0) return;
-
-  await run(
-    "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
-    ["admin", hashPassword("admin123"), "admin", null, 1]
-  );
+  const admin = await get("SELECT * FROM users WHERE lower(username) = lower(?)", ["admin"]);
+  if (!admin) {
+    await run(
+      "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
+      ["admin", hashPassword("admin123"), "admin", null, 1]
+    );
+  } else if (!isPasswordHash(admin.passwordHash)) {
+    await run(
+      "UPDATE users SET passwordHash = ?, role = 'admin', active = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [hashPassword("admin123"), admin.id]
+    );
+  }
 
   const staffRows = await all("SELECT id, name FROM staff WHERE active = 1");
   for (const staff of staffRows) {
-    await run(
-      "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
-      [toUsername(staff.name), hashPassword("staff123"), "staff", staff.id, 1]
-    );
+    const username = toUsername(staff.name);
+    const existing = await get("SELECT * FROM users WHERE lower(username) = lower(?)", [username]);
+    if (!existing) {
+      await run(
+        "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
+        [username, hashPassword("staff123"), "staff", staff.id, 1]
+      );
+    } else if (!isPasswordHash(existing.passwordHash)) {
+      await run(
+        "UPDATE users SET passwordHash = ?, role = 'staff', staffId = ?, active = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+        [hashPassword("staff123"), staff.id, existing.id]
+      );
+    }
   }
 }
 
@@ -321,12 +348,16 @@ export function findUserByUsername(username) {
 }
 
 export function verifyPassword(password, storedHash) {
-  const [salt, key] = storedHash.split(":");
-  if (!salt || !key) return false;
+  if (!isPasswordHash(storedHash)) return false;
 
+  const [salt, key] = storedHash.split(":");
   const attempted = crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256").toString("hex");
   if (key.length !== attempted.length) return false;
   return crypto.timingSafeEqual(Buffer.from(key, "hex"), Buffer.from(attempted, "hex"));
+}
+
+function isPasswordHash(value) {
+  return typeof value === "string" && /^[a-f0-9]{32}:[a-f0-9]{64}$/i.test(value);
 }
 
 export function createSession(userId) {
