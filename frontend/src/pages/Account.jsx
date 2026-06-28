@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 
-export function Account({ currentUser }) {
+export function Account({ currentUser, forced = false, onPasswordChanged = () => {} }) {
   const [form, setForm] = React.useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [message, setMessage] = React.useState("");
   const [error, setError] = React.useState("");
@@ -20,9 +20,10 @@ export function Account({ currentUser }) {
     }
 
     try {
-      await api.changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
+      const result = await api.changePassword({ currentPassword: form.currentPassword, newPassword: form.newPassword });
       setForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
       setMessage("Password changed.");
+      if (result.user) onPasswordChanged(result.user);
     } catch (err) {
       setError(err.message);
     }
@@ -33,6 +34,7 @@ export function Account({ currentUser }) {
       <div>
         <p className="text-sm font-bold uppercase tracking-[0.16em] text-fuel-green">{currentUser.role}</p>
         <h2 className="text-3xl font-black">My Account</h2>
+        {forced && <p className="mt-2 font-bold text-red-700">Please change your temporary password before using the rota.</p>}
       </div>
       <Card>
         <form className="space-y-4" onSubmit={submit}>

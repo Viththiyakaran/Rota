@@ -91,6 +91,7 @@ export async function initDb() {
       role TEXT NOT NULL CHECK(role IN ('admin', 'staff')),
       staffId INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
+      mustChangePassword INTEGER NOT NULL DEFAULT 1,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
@@ -173,6 +174,7 @@ export async function initDb() {
   await ensureTableColumn("users", "role", "TEXT NOT NULL DEFAULT 'staff'");
   await ensureTableColumn("users", "staffId", "INTEGER");
   await ensureTableColumn("users", "active", "INTEGER NOT NULL DEFAULT 1");
+  await ensureTableColumn("users", "mustChangePassword", "INTEGER NOT NULL DEFAULT 1");
   await ensureTableColumn("users", "createdAt", "TEXT");
   await ensureTableColumn("users", "updatedAt", "TEXT");
   await ensureTableColumn("sessions", "userId", "INTEGER");
@@ -217,6 +219,7 @@ async function ensureUsersTableShape() {
       role TEXT NOT NULL DEFAULT 'staff',
       staffId INTEGER,
       active INTEGER NOT NULL DEFAULT 1,
+      mustChangePassword INTEGER NOT NULL DEFAULT 1,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
@@ -262,13 +265,13 @@ async function seedUsers() {
   const admin = await get("SELECT * FROM users WHERE lower(username) = lower(?)", ["admin"]);
   if (!admin) {
     await run(
-      "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
-      ["admin", hashPassword("admin123"), "admin", null, 1]
+      "INSERT INTO users (username, passwordHash, role, staffId, active, mustChangePassword) VALUES (?, ?, ?, ?, ?, ?)",
+      ["admin", hashPassword("admin123"), "admin", null, 1, 1]
     );
-  } else if (!isPasswordHash(admin.passwordHash)) {
+  } else if (!isPasswordHash(admin.passwordHash) || verifyPassword("admin123", admin.passwordHash)) {
     await run(
-      "UPDATE users SET passwordHash = ?, role = 'admin', active = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
-      [hashPassword("admin123"), admin.id]
+      "UPDATE users SET passwordHash = ?, role = 'admin', active = 1, mustChangePassword = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [isPasswordHash(admin.passwordHash) ? admin.passwordHash : hashPassword("admin123"), admin.id]
     );
   }
 
@@ -278,13 +281,13 @@ async function seedUsers() {
     const existing = await get("SELECT * FROM users WHERE lower(username) = lower(?)", [username]);
     if (!existing) {
       await run(
-        "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
-        [username, hashPassword("staff123"), "staff", staff.id, 1]
+        "INSERT INTO users (username, passwordHash, role, staffId, active, mustChangePassword) VALUES (?, ?, ?, ?, ?, ?)",
+        [username, hashPassword("staff123"), "staff", staff.id, 1, 1]
       );
-    } else if (!isPasswordHash(existing.passwordHash)) {
+    } else if (!isPasswordHash(existing.passwordHash) || verifyPassword("staff123", existing.passwordHash)) {
       await run(
-        "UPDATE users SET passwordHash = ?, role = 'staff', staffId = ?, active = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
-        [hashPassword("staff123"), staff.id, existing.id]
+        "UPDATE users SET passwordHash = ?, role = 'staff', staffId = ?, active = 1, mustChangePassword = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+        [isPasswordHash(existing.passwordHash) ? existing.passwordHash : hashPassword("staff123"), staff.id, existing.id]
       );
     }
   }
@@ -433,7 +436,7 @@ export function deleteSession(token) {
 export function getSessionUser(token) {
   if (!token) return null;
   return get(
-    `SELECT users.id, users.username, users.role, users.staffId, users.active, staff.name AS staffName
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
      FROM sessions
      JOIN users ON users.id = sessions.userId
      LEFT JOIN staff ON staff.id = users.staffId
@@ -449,7 +452,8 @@ export function publicUser(user) {
     username: user.username,
     role: user.role,
     staffId: user.staffId,
-    staffName: user.staffName
+    staffName: user.staffName,
+    mustChangePassword: Boolean(user.mustChangePassword)
   };
 }
 
@@ -515,8 +519,8 @@ export function createStaffUser(staffId, name) {
   if (existing) return existing;
 
   return run(
-    "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
-    [username, hashPassword("staff123"), "staff", staffId, 1]
+    "INSERT INTO users (username, passwordHash, role, staffId, active, mustChangePassword) VALUES (?, ?, ?, ?, ?, ?)",
+    [username, hashPassword("staff123"), "staff", staffId, 1, 1]
   );
 }
 
@@ -527,12 +531,12 @@ export function hashPassword(password) {
 }
 
 export function changePassword(userId, newPassword) {
-  return run("UPDATE users SET passwordHash = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [hashPassword(newPassword), userId]);
+  return run("UPDATE users SET passwordHash = ?, mustChangePassword = 0, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [hashPassword(newPassword), userId]);
 }
 
 export function listUsers() {
   return all(
-    `SELECT users.id, users.username, users.role, users.staffId, users.active, staff.name AS staffName
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
      FROM users
      LEFT JOIN staff ON staff.id = users.staffId
      ORDER BY users.active DESC, users.role ASC, users.username ASC`
@@ -541,8 +545,8 @@ export function listUsers() {
 
 export function createUser({ username, password, role, staffId, active = true }) {
   const result = run(
-    "INSERT INTO users (username, passwordHash, role, staffId, active) VALUES (?, ?, ?, ?, ?)",
-    [username, hashPassword(password), role, staffId || null, active ? 1 : 0]
+    "INSERT INTO users (username, passwordHash, role, staffId, active, mustChangePassword) VALUES (?, ?, ?, ?, ?, ?)",
+    [username, hashPassword(password), role, staffId || null, active ? 1 : 0, 1]
   );
   return getUser(result.id);
 }
@@ -567,6 +571,9 @@ export function updateUser(id, { username, role, staffId, active }) {
 
 export function resetUserPassword(id, password) {
   const result = changePassword(id, password);
+  if (result.changes > 0) {
+    run("UPDATE users SET mustChangePassword = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [id]);
+  }
   return result.changes > 0;
 }
 
@@ -586,7 +593,7 @@ export function listAudit() {
 
 export function getUser(id) {
   const user = get(
-    `SELECT users.id, users.username, users.role, users.staffId, users.active, staff.name AS staffName
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
      FROM users
      LEFT JOIN staff ON staff.id = users.staffId
      WHERE users.id = ?`,

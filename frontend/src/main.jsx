@@ -120,6 +120,37 @@ function App() {
     return <Login branding={{ ...branding, appTitle }} onLogin={setCurrentUser} />;
   }
 
+  if (currentUser.mustChangePassword) {
+    return (
+      <div className="min-h-screen bg-fuel-cream">
+        <header className="border-b border-fuel-line bg-white/95 shadow-sm">
+          <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
+            <button className="flex items-center gap-3 text-left">
+              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-fuel-deep text-lg font-black text-fuel-lime shadow-md">
+                {branding.logoDataUrl ? (
+                  <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-xl object-contain p-1" />
+                ) : (
+                  getBrandInitial(branding.businessName)
+                )}
+              </span>
+              <h1 className="max-w-[180px] truncate text-2xl font-black leading-none text-fuel-ink sm:max-w-sm">{appTitle}</h1>
+            </button>
+            <button
+              onClick={logout}
+              title="Log out"
+              className="flex h-12 w-12 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green transition hover:bg-fuel-line"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
+        </header>
+        <main className="mx-auto max-w-xl px-4 py-6">
+          <Account currentUser={currentUser} forced onPasswordChanged={setCurrentUser} />
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-fuel-cream">
       <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl">
@@ -163,7 +194,7 @@ function App() {
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders />}
-        {page === "account" && <Account currentUser={currentUser} />}
+        {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} />}
         {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>
 

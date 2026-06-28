@@ -36,8 +36,15 @@ const port = process.env.PORT || 4000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendDist = path.join(__dirname, "..", "..", "frontend", "dist");
+const loginAttempts = new Map();
+const loginWindowMs = 15 * 60 * 1000;
+const maxLoginAttempts = 5;
 
-app.use(cors());
+app.set("trust proxy", 1);
+app.use(cors({
+  origin: (origin, callback) => callback(null, origin || true),
+  credentials: true
+}));
 app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
@@ -51,14 +58,23 @@ app.get("/api/settings/branding", (_req, res) => {
 app.post("/api/auth/login", async (req, res, next) => {
   try {
     const { username = "", password = "" } = req.body;
+    const loginKey = getLoginRateKey(req, username);
+    if (isRateLimited(loginKey)) {
+      return res.status(429).json({ error: "Too many login attempts. Please try again in 15 minutes." });
+    }
+
     const user = findUserByUsername(username.trim());
     if (!user || !verifyPassword(password, user.passwordHash)) {
+      recordFailedLogin(loginKey);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
+    clearFailedLogin(loginKey);
     const session = createSession(user.id);
     const sessionUser = getSessionUser(session.token);
-    res.json({ token: session.token, expiresAt: session.expiresAt, user: publicUser(sessionUser) });
+    setSessionCookie(req, res, session);
+    addAudit(user.id, "login", `${user.username} logged in`);
+    res.json({ expiresAt: session.expiresAt, user: publicUser(sessionUser) });
   } catch (error) {
     next(error);
   }
@@ -70,6 +86,7 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
 
 app.post("/api/auth/logout", requireAuth, (req, res) => {
   deleteSession(req.token);
+  clearSessionCookie(req, res);
   res.status(204).send();
 });
 
@@ -85,13 +102,15 @@ app.post("/api/auth/change-password", requireAuth, async (req, res, next) => {
 
     changePassword(req.user.id, newPassword);
     addAudit(req.user.id, "change_password", `${req.user.username} changed password`);
-    res.json({ ok: true });
+    const user = getSessionUser(req.token);
+    res.json({ ok: true, user: publicUser(user) });
   } catch (error) {
     next(error);
   }
 });
 
 app.use("/api", requireAuth);
+app.use("/api", requirePasswordChange);
 
 app.get("/api/users", requireAdmin, (_req, res) => {
   res.json(listUsers());
@@ -667,7 +686,9 @@ app.use((error, _req, res, _next) => {
 
 function requireAuth(req, res, next) {
   const header = req.get("authorization") || "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const cookieToken = parseCookies(req).fuelops_session || "";
+  const bearerToken = header.startsWith("Bearer ") ? header.slice(7) : "";
+  const token = cookieToken || bearerToken;
   const user = getSessionUser(token);
 
   if (!user) return res.status(401).json({ error: "Please log in." });
@@ -675,6 +696,11 @@ function requireAuth(req, res, next) {
   req.token = token;
   req.user = user;
   next();
+}
+
+function requirePasswordChange(req, res, next) {
+  if (!req.user?.mustChangePassword) return next();
+  res.status(403).json({ error: "Please change your temporary password before using the rota." });
 }
 
 function requireAdmin(req, res, next) {
@@ -726,4 +752,80 @@ function notifyStaff(staffId, title, message, { type = "rota_update", shiftId = 
      VALUES (?, ?, ?, ?, ?, ?)`,
     [staffId, type, title, message, shiftId, timeOffRequestId]
   );
+}
+
+function parseCookies(req) {
+  const header = req.get("cookie") || "";
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((part) => {
+        const index = part.indexOf("=");
+        if (index === -1) return [part, ""];
+        return [part.slice(0, index), decodeURIComponent(part.slice(index + 1))];
+      })
+  );
+}
+
+function setSessionCookie(req, res, session) {
+  const secure = isSecureRequest(req);
+  const maxAgeSeconds = Math.max(1, Math.floor((new Date(session.expiresAt).getTime() - Date.now()) / 1000));
+  const parts = [
+    `fuelops_session=${encodeURIComponent(session.token)}`,
+    "HttpOnly",
+    "Path=/",
+    `Max-Age=${maxAgeSeconds}`,
+    secure ? "SameSite=None" : "SameSite=Lax"
+  ];
+  if (secure) parts.push("Secure");
+  res.setHeader("Set-Cookie", parts.join("; "));
+}
+
+function clearSessionCookie(req, res) {
+  const secure = isSecureRequest(req);
+  const parts = [
+    "fuelops_session=",
+    "HttpOnly",
+    "Path=/",
+    "Max-Age=0",
+    secure ? "SameSite=None" : "SameSite=Lax"
+  ];
+  if (secure) parts.push("Secure");
+  res.setHeader("Set-Cookie", parts.join("; "));
+}
+
+function isSecureRequest(req) {
+  return req.secure || req.get("x-forwarded-proto") === "https";
+}
+
+function getLoginRateKey(req, username) {
+  const forwarded = req.get("x-forwarded-for") || "";
+  const ip = forwarded.split(",")[0].trim() || req.ip || req.socket?.remoteAddress || "unknown";
+  return `${ip}:${String(username || "").trim().toLowerCase()}`;
+}
+
+function isRateLimited(key) {
+  const record = loginAttempts.get(key);
+  if (!record) return false;
+  if (Date.now() - record.firstAttemptAt > loginWindowMs) {
+    loginAttempts.delete(key);
+    return false;
+  }
+  return record.count >= maxLoginAttempts;
+}
+
+function recordFailedLogin(key) {
+  const now = Date.now();
+  const record = loginAttempts.get(key);
+  if (!record || now - record.firstAttemptAt > loginWindowMs) {
+    loginAttempts.set(key, { count: 1, firstAttemptAt: now });
+    return;
+  }
+  record.count += 1;
+}
+
+function clearFailedLogin(key) {
+  loginAttempts.delete(key);
 }

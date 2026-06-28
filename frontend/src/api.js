@@ -3,19 +3,15 @@ const API_BASE =
   import.meta.env.VITE_API_URL ||
   (import.meta.env.DEV ? "http://localhost:4000" : "");
 
-let authToken = localStorage.getItem("fuelopsToken") || "";
+let authToken = "";
 
 export function setAuthToken(token) {
   authToken = token || "";
-  if (authToken) {
-    localStorage.setItem("fuelopsToken", authToken);
-  } else {
-    localStorage.removeItem("fuelopsToken");
-  }
 }
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_BASE}${path}`, {
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),

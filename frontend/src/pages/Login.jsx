@@ -4,7 +4,7 @@ import { api, setAuthToken } from "../api.js";
 import { Field, inputClass } from "../components/Field.jsx";
 
 export function Login({ branding, onLogin }) {
-  const [form, setForm] = React.useState({ username: "admin", password: "admin123" });
+  const [form, setForm] = React.useState({ username: "", password: "" });
   const [error, setError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
 
@@ -15,7 +15,7 @@ export function Login({ branding, onLogin }) {
 
     try {
       const result = await api.login(form);
-      setAuthToken(result.token);
+      setAuthToken("");
       onLogin(result.user);
     } catch (err) {
       setAuthToken("");
@@ -77,12 +77,6 @@ export function Login({ branding, onLogin }) {
             {saving ? "Signing in..." : "Sign in"}
           </button>
         </form>
-
-        <div className="mt-5 rounded-md bg-fuel-mist p-3 text-sm font-bold text-slate-700">
-          <p className="font-black text-fuel-ink">First login</p>
-          <p className="mt-1">Admin: admin / admin123</p>
-          <p>Staff: afridi, veera or viththi / staff123</p>
-        </div>
       </section>
     </main>
   );

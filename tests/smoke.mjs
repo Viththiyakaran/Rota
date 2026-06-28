@@ -39,43 +39,57 @@ async function runSmoke() {
   const admin = await login("admin", "admin123");
   const staff = await login("afridi", "staff123");
 
-  const staffRows = await request("/api/staff", { token: admin.token });
+  const changedAdmin = await request("/api/auth/change-password", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: { currentPassword: "admin123", newPassword: "admin456" }
+  });
+  assert(changedAdmin.user?.mustChangePassword === false, "admin first password change");
+
+  const changedStaff = await request("/api/auth/change-password", {
+    cookie: staff.cookie,
+    method: "POST",
+    body: { currentPassword: "staff123", newPassword: "staff456" }
+  });
+  assert(changedStaff.user?.mustChangePassword === false, "staff first password change");
+
+  const staffRows = await request("/api/staff", { cookie: admin.cookie });
   assert(staffRows.length >= 3, "seed staff exists");
 
   await request("/api/settings/branding", {
-    token: admin.token,
+    cookie: admin.cookie,
     method: "PUT",
     body: { businessName: "Smoke Shop", logoDataUrl: "" }
   });
 
   await request("/api/settings/opening-hours", {
-    token: admin.token,
+    cookie: admin.cookie,
     method: "PUT",
     body: { openingStart: "06:00", openingEnd: "21:00" }
   });
-  const hours = await request("/api/settings/opening-hours", { token: admin.token });
+  const hours = await request("/api/settings/opening-hours", { cookie: admin.cookie });
   assert(hours.openingStart === "06:00", "opening hours save");
 
   const createdStaff = await request("/api/staff", {
-    token: admin.token,
+    cookie: admin.cookie,
     method: "POST",
     body: { name: "Smoke Staff", phone: "07123000000", email: "smoke@example.local", role: "Cashier", active: true }
   });
   assert(createdStaff.id, "create staff");
 
-  const users = await request("/api/users", { token: admin.token });
+  const users = await request("/api/users", { cookie: admin.cookie });
   assert(users.some((user) => user.username === "smokestaff"), "staff login auto-created");
 
   await request("/api/users", {
-    token: admin.token,
+    cookie: admin.cookie,
     method: "POST",
     body: { username: "smokeadmin", password: "admin123", role: "admin", staffId: null, active: true }
   });
 
-  await expectStatus("/api/users", 403, { token: staff.token });
+  await expectStatus("/api/users", 403, { cookie: staff.cookie });
 
   const shift = await request("/api/shifts", {
-    token: admin.token,
+    cookie: admin.cookie,
     method: "POST",
     body: {
       staffId: staffRows[0].id,
@@ -89,69 +103,71 @@ async function runSmoke() {
   });
   assert(shift.totalHours === 8, "shift hours calculated");
 
-  const week = await request("/api/shifts/week?startDate=2026-06-29", { token: admin.token });
+  const week = await request("/api/shifts/week?startDate=2026-06-29", { cookie: admin.cookie });
   assert(week.some((item) => item.id === shift.id), "week includes created shift");
 
-  const myShifts = await request("/api/shifts/my", { token: staff.token });
+  const myShifts = await request("/api/shifts/my", { cookie: staff.cookie });
   assert(Array.isArray(myShifts), "staff my shifts works");
 
-  const reminders = await request("/api/reminders/upcoming", { token: admin.token });
+  const reminders = await request("/api/reminders/upcoming", { cookie: admin.cookie });
   assert(Array.isArray(reminders), "reminders works");
 
   const availability = await request("/api/availability", {
-    token: staff.token,
+    cookie: staff.cookie,
     method: "POST",
     body: { weekday: 2, startTime: "09:00", endTime: "12:00", note: "College" }
   });
   assert(availability.id, "staff availability create");
 
   const timeOff = await request("/api/time-off", {
-    token: staff.token,
+    cookie: staff.cookie,
     method: "POST",
     body: { startDate: "2026-07-10", endDate: "2026-07-11", reason: "Holiday" }
   });
   assert(timeOff.id, "staff time off create");
 
   await expectStatus("/api/time-off", 400, {
-    token: staff.token,
+    cookie: staff.cookie,
     method: "POST",
     body: { startDate: "2026-07-12", endDate: "2026-07-10", reason: "Bad range" }
   });
 
   const reviewed = await request(`/api/time-off/${timeOff.id}`, {
-    token: admin.token,
+    cookie: admin.cookie,
     method: "PUT",
     body: { status: "approved" }
   });
   assert(reviewed.status === "approved", "admin approves time off");
 
   const copy = await request("/api/shifts/copy-week", {
-    token: admin.token,
+    cookie: admin.cookie,
     method: "POST",
     body: { fromStartDate: "2026-06-29", toStartDate: "2026-07-06" }
   });
   assert(Number.isInteger(copy.copied), "copy week works");
 
   await request("/api/auth/change-password", {
-    token: staff.token,
+    cookie: staff.cookie,
     method: "POST",
-    body: { currentPassword: "staff123", newPassword: "staff456" }
+    body: { currentPassword: "staff456", newPassword: "staff789" }
   });
-  await login("afridi", "staff456");
+  await login("afridi", "staff789");
 
-  const audit = await request("/api/audit", { token: admin.token });
+  const audit = await request("/api/audit", { cookie: admin.cookie });
   assert(audit.length > 0, "audit log works");
 }
 
 async function login(username, password) {
   const result = await request("/api/auth/login", { method: "POST", body: { username, password } });
-  assert(result.token, `login ${username}`);
+  assert(result.user, `login ${username}`);
+  assert(result.cookie, `login cookie ${username}`);
   return result;
 }
 
 async function request(route, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.cookie) headers.Cookie = options.cookie;
   const response = await fetch(`${base}${route}`, {
     method: options.method || "GET",
     headers,
@@ -162,18 +178,29 @@ async function request(route, options = {}) {
     throw new Error(`${route} failed ${response.status}: ${text}`);
   }
   if (response.status === 204) return null;
-  return response.json();
+  const result = await response.json();
+  const cookie = getResponseCookie(response);
+  return cookie ? { ...result, cookie } : result;
 }
 
 async function expectStatus(route, status, options = {}) {
   const headers = { "Content-Type": "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.cookie) headers.Cookie = options.cookie;
   const response = await fetch(`${base}${route}`, {
     method: options.method || "GET",
     headers,
     body: options.body ? JSON.stringify(options.body) : undefined
   });
   assert(response.status === status, `${route} returns ${status}`);
+}
+
+function getResponseCookie(response) {
+  const cookies = typeof response.headers.getSetCookie === "function"
+    ? response.headers.getSetCookie()
+    : [];
+  const setCookie = cookies[0] || response.headers.get("set-cookie") || "";
+  return setCookie.split(";")[0] || "";
 }
 
 async function waitForServer() {
