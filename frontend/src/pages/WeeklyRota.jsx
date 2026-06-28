@@ -8,6 +8,7 @@ import { whatsappGroupShareUrl } from "../whatsapp.js";
 
 export function WeeklyRota({ currentUser }) {
   const [startDate, setStartDate] = React.useState(toDateInputValue(getMonday()));
+  const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
   const [editingNoteId, setEditingNoteId] = React.useState(null);
@@ -18,10 +19,11 @@ export function WeeklyRota({ currentUser }) {
 
   const load = React.useCallback(() => {
     setLoading(true);
-    Promise.all([api.week(startDate), api.timeOff()])
-      .then(([shiftRows, timeOffRows]) => {
+    Promise.all([api.week(startDate), api.timeOff(), api.staff()])
+      .then(([shiftRows, timeOffRows, staffRows]) => {
         setShifts(shiftRows);
         setTimeOff(timeOffRows);
+        setStaff(staffRows);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -72,6 +74,7 @@ export function WeeklyRota({ currentUser }) {
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
+  const activeStaff = staff.filter((person) => person.active);
   const groupShareUrl = whatsappGroupShareUrl({
     weekRange,
     weekDays,
@@ -83,7 +86,15 @@ export function WeeklyRota({ currentUser }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <PrintWeeklyRota
+        activeStaff={activeStaff}
+        timeOff={timeOff}
+        visibleShifts={visibleShifts}
+        weekDays={weekDays}
+        weekRange={weekRange}
+      />
+
+      <div className="screen-only flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.16em] text-fuel-green">Monday to Sunday</p>
           <Typography as="h2" variant="h3" className="font-black text-fuel-ink">
@@ -98,7 +109,7 @@ export function WeeklyRota({ currentUser }) {
         />
       </div>
 
-      <div className="rounded-lg border border-fuel-line bg-white p-4 shadow-md">
+      <div className="screen-only rounded-lg border border-fuel-line bg-white p-4 shadow-md">
         <div className="grid gap-3 lg:grid-cols-[auto_1fr_auto] lg:items-center">
           <div className="flex items-center gap-2 font-black text-fuel-ink">
             <CalendarDays size={20} className="text-fuel-green" />
@@ -162,7 +173,7 @@ export function WeeklyRota({ currentUser }) {
 
       <Status loading={loading} error={error}>
         {message && <p className="rounded-md bg-fuel-mist p-3 font-black text-fuel-green">{message}</p>}
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+        <div className="screen-only grid gap-3 md:grid-cols-2 xl:grid-cols-7">
           {weekDays.map((day) => {
             const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
             const dayTimeOff = approvedTimeOffForDay(timeOff, day);
@@ -277,6 +288,87 @@ export function WeeklyRota({ currentUser }) {
   );
 }
 
+function PrintWeeklyRota({ activeStaff, timeOff, visibleShifts, weekDays, weekRange }) {
+  return (
+    <section className="print-only">
+      <div className="mb-3 flex items-end justify-between">
+        <div>
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-fuel-green">Weekly rota</p>
+          <h1 className="text-2xl font-black text-fuel-ink">Staff rota</h1>
+          <p className="text-xs font-bold text-slate-600">{weekRange}</p>
+        </div>
+        <p className="text-xs font-black text-fuel-green">{visibleShifts.length} shifts</p>
+      </div>
+      <table className="print-rota-table">
+        <thead>
+          <tr>
+            <th>Days</th>
+            {activeStaff.map((person) => (
+              <th key={person.id}>{person.name}</th>
+            ))}
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {weekDays.map((day) => {
+            const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
+            const dayTimeOff = approvedTimeOffForDay(timeOff, day);
+            const notes = [
+              ...new Set([
+                ...dayShifts.map((shift) => shift.notes).filter(Boolean),
+                ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
+              ])
+            ];
+
+            return (
+              <tr key={day}>
+                <td>
+                  <strong>{formatPrintWeekday(day)}</strong>
+                  <span>{day}</span>
+                </td>
+                {activeStaff.map((person) => {
+                  const personTimeOff = dayTimeOff.filter((item) => sameStaff(item.staffId, person.id));
+                  const personShifts = personTimeOff.length > 0
+                    ? []
+                    : dayShifts.filter((shift) => sameStaff(shift.staffId, person.id));
+
+                  return (
+                    <td key={person.id}>
+                      {personTimeOff.length > 0 ? (
+                        <strong className="print-off">Approved off</strong>
+                      ) : personShifts.length > 0 ? (
+                        personShifts.map((shift) => (
+                          <div key={shift.id} className="print-shift">
+                            <strong>{formatShiftRange(shift.startTime, shift.endTime)}</strong>
+                            {shift.isExtra && <span>Cover{shift.coverForStaffName ? ` for ${shift.coverForStaffName}` : ""}</span>}
+                          </div>
+                        ))
+                      ) : (
+                        <span className="print-muted">Off</span>
+                      )}
+                    </td>
+                  );
+                })}
+                <td>{notes.join(", ")}</td>
+              </tr>
+            );
+          })}
+          <tr className="print-total-row">
+            <td>Total Hours</td>
+            {activeStaff.map((person) => {
+              const total = visibleShifts
+                .filter((shift) => sameStaff(shift.staffId, person.id))
+                .reduce((sum, shift) => sum + shift.paidHours, 0);
+              return <td key={person.id}>{Number.isInteger(total) ? total : total.toFixed(2)}</td>;
+            })}
+            <td />
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  );
+}
+
 function approvedTimeOffForDay(requests, day) {
   return requests.filter((request) =>
     request.status === "approved" &&
@@ -302,4 +394,8 @@ function isApprovedOffShift(shift, requests, day) {
 
 function sameStaff(left, right) {
   return String(left) === String(right);
+}
+
+function formatPrintWeekday(dateString) {
+  return new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(new Date(`${dateString}T00:00:00`));
 }

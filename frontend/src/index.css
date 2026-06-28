@@ -26,25 +26,104 @@ textarea {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+.print-only {
+  display: none;
+}
+
 ::selection {
   background: #d7f75b;
   color: #17201b;
 }
 
 @media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
   header,
   nav,
   button,
-  a[href^="https://wa.me"] {
+  a[href^="https://wa.me"],
+  .screen-only {
     display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
   }
 
   body {
     background: white !important;
+    color: #111827 !important;
   }
 
   main {
     padding: 0 !important;
     max-width: none !important;
+  }
+
+  .print-rota-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 10px;
+    line-height: 1.25;
+  }
+
+  .print-rota-table th,
+  .print-rota-table td {
+    border: 1px solid #9ca3af;
+    padding: 6px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .print-rota-table th {
+    background: #eef7f1 !important;
+    font-weight: 900;
+  }
+
+  .print-rota-table td:first-child,
+  .print-rota-table th:first-child {
+    width: 13%;
+  }
+
+  .print-rota-table td:last-child,
+  .print-rota-table th:last-child {
+    width: 18%;
+  }
+
+  .print-rota-table td span {
+    display: block;
+    color: #475569;
+    font-size: 9px;
+    font-weight: 700;
+  }
+
+  .print-shift + .print-shift {
+    margin-top: 4px;
+    padding-top: 4px;
+    border-top: 1px solid #d1d5db;
+  }
+
+  .print-shift strong {
+    color: #00684a;
+  }
+
+  .print-muted {
+    color: #94a3b8 !important;
+    font-weight: 700;
+  }
+
+  .print-off {
+    color: #b91c1c;
+    font-size: 9px;
+    text-transform: uppercase;
+  }
+
+  .print-total-row td {
+    background: #eef7f1 !important;
+    font-weight: 900;
   }
 }
