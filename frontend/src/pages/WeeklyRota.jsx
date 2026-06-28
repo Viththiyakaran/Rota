@@ -277,10 +277,14 @@ function approvedTimeOffForDay(requests, day) {
 
 function hasApprovedTimeOff(requests, staffId, day) {
   return requests.some((request) =>
-    request.staffId === staffId &&
+    sameStaff(request.staffId, staffId) &&
     request.status === "approved" &&
     request.endDate >= request.startDate &&
     day >= request.startDate &&
     day <= request.endDate
   );
+}
+
+function sameStaff(left, right) {
+  return String(left) === String(right);
 }
