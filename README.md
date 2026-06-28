@@ -265,6 +265,57 @@ VITE_API_BASE=https://your-backend-url.up.railway.app
 
 Because login uses cookies, `FRONTEND_URL` must match the deployed frontend URL so CORS can allow credentialed requests.
 
+## Other Deployment Options
+
+This app currently uses a Node/Express backend and a SQLite database file. For production, choose a backend host that supports persistent storage, or migrate the database to a hosted database before using serverless hosting.
+
+| Platform | Best use | Current app fit | Notes |
+| --- | --- | --- | --- |
+| Railway | Full-stack single service | Yes | Easiest current setup. Use a volume mounted at `/data` and set `DB_PATH=/data/fuelops.sqlite`. |
+| Render | Full-stack web service | Yes, with persistent disk | Use a Node web service and attach a persistent disk. Set `DB_PATH` to the disk mount path. |
+| Fly.io | Full-stack app with volumes | Yes, with volume | Good if you are comfortable with CLI deployment. Create a volume and point `DB_PATH` to it. |
+| DigitalOcean Droplet/VPS | Long-term full control | Yes | Run Node with PM2 or systemd, use Nginx/Caddy, and back up the SQLite file. |
+| DigitalOcean App Platform | Managed app hosting | Possible | Use only if persistent storage or a managed database is configured. |
+| Netlify | Frontend only | Partial | Host the React frontend here, keep the backend on Railway/Render/Fly/VPS, and set `VITE_API_BASE`. |
+| Vercel | Frontend only | Partial | Same as Netlify. Do not rely on local SQLite inside serverless functions. |
+| Cloudflare Pages | Frontend only | Partial | Host the frontend only unless the backend and database are moved elsewhere. |
+
+### Recommended Hosting Order
+
+1. Railway for the simplest full app setup.
+2. Render with persistent disk if you want another managed Node host.
+3. Fly.io if you are comfortable with CLI deployment and volumes.
+4. VPS/Droplet if you want the most control and can manage backups.
+5. Netlify/Vercel only for the frontend unless you migrate the backend/database.
+
+### Split Frontend And Backend
+
+If the frontend is hosted separately, set this on the frontend host:
+
+```text
+VITE_API_BASE=https://your-backend-url
+```
+
+Set this on the backend host:
+
+```text
+FRONTEND_URL=https://your-frontend-url
+```
+
+The backend URL must use HTTPS in production because login uses secure cookies.
+
+### If You Want Serverless Hosting
+
+Move the database away from local SQLite first. Good future options include Postgres, Supabase, Neon, or Turso/libSQL. After that migration, the frontend can live on Netlify/Vercel and the API can be redesigned for serverless functions.
+
+Official references:
+
+- Railway volumes: https://docs.railway.com/guides/volumes
+- Render disks: https://render.com/docs/disks
+- Fly.io volumes: https://fly.io/docs/volumes/
+- Netlify functions: https://docs.netlify.com/functions/overview/
+- Vercel functions: https://vercel.com/docs/functions
+
 ## Forgotten Admin Password
 
 Use this only when you cannot log in as admin.
