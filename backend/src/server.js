@@ -346,6 +346,7 @@ app.get("/api/shifts/week", async (req, res, next) => {
         AND timeOffRequests.endDate >= timeOffRequests.startDate
         AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
        WHERE shiftDate BETWEEN ? AND ?
+         AND timeOffRequests.id IS NULL
        ORDER BY shiftDate ASC, isExtra ASC, startTime ASC`,
       [startDate, endDate]
     );
