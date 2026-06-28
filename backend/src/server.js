@@ -262,6 +262,10 @@ app.put("/api/time-off/:id", requireAdmin, async (req, res, next) => {
     addAudit(req.user.id, "review_time_off", `Set request #${req.params.id} to ${status}`);
     const row = await get("SELECT * FROM timeOffRequests WHERE id = ?", [req.params.id]);
     if (!row) return res.status(404).json({ error: "Request not found." });
+    notifyStaff(row.staffId, `Time off ${status}`, `Your time-off request for ${row.startDate} to ${row.endDate} was ${status}.`, {
+      type: "time_off_reviewed",
+      timeOffRequestId: row.id
+    });
     res.json(row);
   } catch (error) {
     next(error);
@@ -270,6 +274,38 @@ app.put("/api/time-off/:id", requireAdmin, async (req, res, next) => {
 
 app.get("/api/audit", requireAdmin, (_req, res) => {
   res.json(listAudit());
+});
+
+app.get("/api/notifications", async (req, res, next) => {
+  try {
+    const staffFilter = req.user.role === "staff" && req.user.staffId ? "WHERE notifications.staffId = ?" : "";
+    const params = req.user.role === "staff" && req.user.staffId ? [req.user.staffId] : [];
+    const rows = await all(
+      `SELECT notifications.*, staff.name AS staffName
+       FROM notifications
+       JOIN staff ON staff.id = notifications.staffId
+       ${staffFilter}
+       ORDER BY notifications.createdAt DESC
+       LIMIT 60`,
+      params
+    );
+    res.json(rows.map((row) => ({ ...row, unread: !row.readAt })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/notifications/read-all", async (req, res, next) => {
+  try {
+    if (req.user.role === "staff" && req.user.staffId) {
+      await run("UPDATE notifications SET readAt = CURRENT_TIMESTAMP WHERE staffId = ? AND readAt IS NULL", [req.user.staffId]);
+    } else {
+      await run("UPDATE notifications SET readAt = CURRENT_TIMESTAMP WHERE readAt IS NULL");
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/staff", async (_req, res, next) => {
@@ -321,6 +357,9 @@ app.put("/api/staff/:id", requireAdmin, async (req, res, next) => {
     await run("UPDATE users SET active = ?, updatedAt = CURRENT_TIMESTAMP WHERE staffId = ?", [nextStaff.active, req.params.id]);
     const row = await get("SELECT * FROM staff WHERE id = ?", [req.params.id]);
     addAudit(req.user.id, "update_staff", `Updated staff ${row.name}`);
+    notifyStaff(row.id, "Staff details updated", "Admin updated your staff profile.", {
+      type: "staff_updated"
+    });
     res.json({ ...row, active: Boolean(row.active) });
   } catch (error) {
     next(error);
@@ -392,7 +431,7 @@ app.post("/api/shifts/copy-week", requireAdmin, async (req, res, next) => {
         [shift.staffId, shiftDate, shift.startTime, shift.endTime]
       );
       if (existing) continue;
-      await run(
+      const copyResult = await run(
         `INSERT INTO shifts
           (staffId, shiftDate, startTime, endTime, breakMinutes, reminderMinutes, reminderTime, notes, isExtra, coverForStaffId, googleCalendarEventId)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -410,6 +449,10 @@ app.post("/api/shifts/copy-week", requireAdmin, async (req, res, next) => {
           null
         ]
       );
+      notifyStaff(shift.staffId, "Shift copied to next week", `You have a copied shift on ${shiftDate} from ${shift.startTime} to ${shift.endTime}.`, {
+        type: "shift_created",
+        shiftId: copyResult.id
+      });
       copied += 1;
     }
     addAudit(req.user.id, "copy_week", `Copied ${copied} shifts from ${fromStartDate} to ${toStartDate}`);
@@ -457,6 +500,10 @@ app.post("/api/shifts", requireAdmin, async (req, res, next) => {
     );
     const row = await getShift(result.id);
     addAudit(req.user.id, "create_shift", `Created shift #${result.id}`);
+    notifyStaff(row.staffId, "New shift assigned", `You have a shift on ${row.shiftDate} from ${row.startTime} to ${row.endTime}.`, {
+      type: "shift_created",
+      shiftId: row.id
+    });
     res.status(201).json(decorateShift(row));
   } catch (error) {
     next(error);
@@ -504,6 +551,16 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
     );
     const row = await getShift(req.params.id);
     addAudit(req.user.id, "update_shift", `Updated shift #${req.params.id}`);
+    notifyStaff(row.staffId, "Shift updated", `Your shift on ${row.shiftDate} is now ${row.startTime} to ${row.endTime}.`, {
+      type: "shift_updated",
+      shiftId: row.id
+    });
+    if (Number(current.staffId) !== Number(row.staffId)) {
+      notifyStaff(current.staffId, "Shift reassigned", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was reassigned.`, {
+        type: "shift_reassigned",
+        shiftId: row.id
+      });
+    }
     res.json(decorateShift(row));
   } catch (error) {
     next(error);
@@ -512,9 +569,15 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
 
 app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
   try {
+    const current = await getShift(req.params.id);
     const result = await run("DELETE FROM shifts WHERE id = ?", [req.params.id]);
     if (result.changes === 0) return res.status(404).json({ error: "Shift not found." });
     addAudit(req.user.id, "delete_shift", `Deleted shift #${req.params.id}`);
+    if (current) {
+      notifyStaff(current.staffId, "Shift removed", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was removed.`, {
+        type: "shift_deleted"
+      });
+    }
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -621,5 +684,14 @@ function getShift(id) {
      LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
      WHERE shifts.id = ?`,
     [id]
+  );
+}
+
+function notifyStaff(staffId, title, message, { type = "rota_update", shiftId = null, timeOffRequestId = null } = {}) {
+  if (!staffId) return;
+  run(
+    `INSERT INTO notifications (staffId, type, title, message, shiftId, timeOffRequestId)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [staffId, type, title, message, shiftId, timeOffRequestId]
   );
 }

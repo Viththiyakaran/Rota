@@ -62,5 +62,7 @@ export const api = {
   createShift: (payload) => request("/api/shifts", { method: "POST", body: JSON.stringify(payload) }),
   updateShift: (id, payload) => request(`/api/shifts/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteShift: (id) => request(`/api/shifts/${id}`, { method: "DELETE" }),
+  notifications: () => request("/api/notifications"),
+  readNotifications: () => request("/api/notifications/read-all", { method: "POST" }),
   reminders: () => request("/api/reminders/upcoming")
 };

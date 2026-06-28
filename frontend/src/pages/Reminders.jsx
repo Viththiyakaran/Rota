@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, MessageCircle } from "lucide-react";
+import { Bell, CheckCheck, MessageCircle } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -8,20 +8,75 @@ import { whatsappReminderUrl } from "../whatsapp.js";
 
 export function Reminders() {
   const [reminders, setReminders] = React.useState([]);
+  const [notifications, setNotifications] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
 
-  React.useEffect(() => {
-    api.reminders()
-      .then(setReminders)
+  const load = React.useCallback(() => {
+    setLoading(true);
+    Promise.all([api.notifications(), api.reminders()])
+      .then(([notificationRows, reminderRows]) => {
+        setNotifications(notificationRows);
+        setReminders(reminderRows);
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
+  React.useEffect(() => {
+    load();
+  }, [load]);
+
+  const markRead = async () => {
+    await api.readNotifications();
+    load();
+  };
+
+  const unreadCount = notifications.filter((notification) => notification.unread).length;
+
   return (
     <div className="space-y-4">
-      <h2 className="text-3xl font-black">Upcoming Reminders</h2>
-      <Status loading={loading} error={error} empty={reminders.length === 0}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-3xl font-black">Notifications</h2>
+          <p className="font-bold text-slate-600">Rota changes and upcoming shift reminders</p>
+        </div>
+        {unreadCount > 0 && (
+          <button className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white" onClick={markRead}>
+            <CheckCheck size={18} />
+            Mark all read
+          </button>
+        )}
+      </div>
+
+      <Status loading={loading} error={error} empty={notifications.length === 0 && reminders.length === 0}>
+        {notifications.length > 0 && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-black">Rota notifications</h3>
+              {unreadCount > 0 && <span className="rounded-full bg-fuel-lime px-3 py-1 text-sm font-black">{unreadCount} unread</span>}
+            </div>
+            {notifications.map((notification) => (
+              <Card key={notification.id} className={notification.unread ? "border-fuel-green bg-fuel-mist" : ""}>
+                <div className="flex gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-fuel-lime">
+                    <Bell size={24} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-black">{notification.title}</p>
+                    <p className="font-bold text-fuel-green">{notification.message}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {notification.staffName} · {formatNotificationDate(notification.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              </Card>
+            ))}
+          </section>
+        )}
+
+        <section className="space-y-3">
+          <h3 className="text-xl font-black">Upcoming shift reminders</h3>
         <div className="space-y-3">
           {reminders.map((reminder) => (
             <Card key={reminder.id}>
@@ -57,7 +112,18 @@ export function Reminders() {
             </Card>
           ))}
         </div>
+        </section>
       </Status>
     </div>
   );
+}
+
+function formatNotificationDate(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(`${value.replace(" ", "T")}Z`));
 }
