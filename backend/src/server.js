@@ -58,7 +58,12 @@ app.use(cors({
 }));
 app.use(express.json());
 
-app.get("/", (_req, res) => {
+app.get("/", (req, res) => {
+  const wantsHtml = String(req.get("accept") || "").includes("text/html");
+  if (wantsHtml && fs.existsSync(frontendDist)) {
+    return res.sendFile(path.join(frontendDist, "index.html"));
+  }
+
   res.json({
     app: "FuelOps Rota Backend",
     status: "running",

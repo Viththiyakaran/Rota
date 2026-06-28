@@ -36,6 +36,10 @@ async function runSmoke() {
   const rootStatus = await request("/");
   assert(rootStatus.status === "running", "root status works");
 
+  const rootPage = await fetch(`${base}/`, { headers: { Accept: "text/html" } });
+  assert(rootPage.ok, "root frontend route works");
+  assert((rootPage.headers.get("content-type") || "").includes("text/html"), "root serves frontend html for browsers");
+
   const health = await request("/health");
   assert(health.status === "ok", "health works");
 
