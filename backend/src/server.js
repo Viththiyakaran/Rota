@@ -49,6 +49,32 @@ app.get("/api/debug/auth", (_req, res) => {
   res.json(getAuthDiagnostics());
 });
 
+app.get("/api/debug/login-admin", (_req, res) => {
+  const report = [];
+  try {
+    report.push("lookup");
+    const user = findUserByUsername("admin");
+    report.push(user ? `user:${user.id}` : "no-user");
+    if (!user) return res.json({ ok: false, report });
+
+    report.push("verify");
+    const passwordOk = verifyPassword("admin123", user.passwordHash);
+    report.push(`password:${passwordOk}`);
+    if (!passwordOk) return res.json({ ok: false, report });
+
+    report.push("session-create");
+    const session = createSession(user.id);
+    report.push("session-created");
+
+    report.push("session-read");
+    const sessionUser = getSessionUser(session.token);
+    report.push(sessionUser ? `session-user:${sessionUser.id}` : "no-session-user");
+    res.json({ ok: Boolean(sessionUser), report });
+  } catch (error) {
+    res.json({ ok: false, report, error: error.message });
+  }
+});
+
 app.get("/api/settings/branding", (_req, res) => {
   res.json(getBranding());
 });
