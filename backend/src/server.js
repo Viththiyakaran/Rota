@@ -539,6 +539,18 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
       coverForStaffId: req.body.coverForStaffId === undefined ? current.coverForStaffId : req.body.coverForStaffId || null,
       googleCalendarEventId: req.body.googleCalendarEventId ?? current.googleCalendarEventId
     };
+    const previousNotes = String(current.notes || "").trim();
+    const nextNotes = String(nextShift.notes || "").trim();
+    const notesChanged = previousNotes !== nextNotes;
+    const rotaChanged =
+      Number(current.staffId) !== Number(nextShift.staffId) ||
+      current.shiftDate !== nextShift.shiftDate ||
+      current.startTime !== nextShift.startTime ||
+      current.endTime !== nextShift.endTime ||
+      Number(current.breakMinutes) !== Number(nextShift.breakMinutes) ||
+      Number(current.reminderMinutes) !== Number(nextShift.reminderMinutes) ||
+      Number(current.isExtra || 0) !== Number(nextShift.isExtra || 0) ||
+      Number(current.coverForStaffId || 0) !== Number(nextShift.coverForStaffId || 0);
 
     await run(
       `UPDATE shifts
