@@ -16,6 +16,7 @@ import {
   findUserByUsername,
   get,
   getBranding,
+  getAuthDiagnostics,
   getOpeningHours,
   getSessionUser,
   hashPassword,
@@ -42,6 +43,10 @@ app.use(express.json());
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, name: "Rota API", authMigration: 3 });
+});
+
+app.get("/api/debug/auth", (_req, res) => {
+  res.json(getAuthDiagnostics());
 });
 
 app.get("/api/settings/branding", (_req, res) => {

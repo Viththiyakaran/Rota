@@ -453,6 +453,43 @@ export function getOpeningHours() {
   };
 }
 
+export function getAuthDiagnostics() {
+  const diagnostics = {
+    usersColumns: [],
+    sessionsColumns: [],
+    userLookup: null,
+    sampleUsers: []
+  };
+
+  try {
+    diagnostics.usersColumns = all("PRAGMA table_info(users)").map((column) => column.name);
+  } catch (error) {
+    diagnostics.userLookup = `users schema error: ${error.message}`;
+  }
+
+  try {
+    diagnostics.sessionsColumns = all("PRAGMA table_info(sessions)").map((column) => column.name);
+  } catch (error) {
+    diagnostics.userLookup = `sessions schema error: ${error.message}`;
+  }
+
+  try {
+    diagnostics.userLookup = findUserByUsername("__diagnostic_no_user__") ? "unexpected_user_found" : "ok";
+  } catch (error) {
+    diagnostics.userLookup = error.message;
+  }
+
+  try {
+    diagnostics.sampleUsers = all(
+      "SELECT id, username, role, staffId, active, length(passwordHash) AS passwordHashLength FROM users ORDER BY id LIMIT 5"
+    );
+  } catch (error) {
+    diagnostics.sampleUsers = [{ error: error.message }];
+  }
+
+  return diagnostics;
+}
+
 export function updateOpeningHours({ openingStart, openingEnd }) {
   run(
     `INSERT INTO settings (key, value)
