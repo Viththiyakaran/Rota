@@ -149,6 +149,7 @@ export async function initDb() {
 
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
+  await ensureUsersTableShape();
   await ensureSessionsTableShape();
   await ensureTableColumn("users", "passwordHash", "TEXT");
   await ensureTableColumn("users", "role", "TEXT NOT NULL DEFAULT 'staff'");
@@ -181,6 +182,28 @@ async function ensureTableColumn(tableName, name, definition) {
   if (!columns.some((column) => column.name === name)) {
     await run(`ALTER TABLE ${tableName} ADD COLUMN ${name} ${definition}`);
   }
+}
+
+async function ensureUsersTableShape() {
+  const columns = await all("PRAGMA table_info(users)");
+  const columnNames = new Set(columns.map((column) => column.name));
+  if (columnNames.has("id") && columnNames.has("username")) return;
+
+  await run("DROP TABLE IF EXISTS sessions");
+  await run("DROP TABLE IF EXISTS users");
+  await run(`
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT NOT NULL UNIQUE,
+      passwordHash TEXT,
+      role TEXT NOT NULL DEFAULT 'staff',
+      staffId INTEGER,
+      active INTEGER NOT NULL DEFAULT 1,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staffId) REFERENCES staff(id)
+    )
+  `);
 }
 
 async function ensureSessionsTableShape() {
