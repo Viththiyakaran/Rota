@@ -1,9 +1,13 @@
 import React from "react";
+import { Card as MaterialCard, CardBody } from "@material-tailwind/react";
 
 export function Card({ children, className = "" }) {
   return (
-    <section className={`rounded-md border border-fuel-line bg-white/95 p-4 shadow-soft ${className}`}>
-      {children}
-    </section>
+    <MaterialCard
+      shadow={false}
+      className={`rounded-md border border-fuel-line bg-white/95 shadow-soft ${className}`}
+    >
+      <CardBody className="p-4 text-fuel-ink">{children}</CardBody>
+    </MaterialCard>
   );
 }

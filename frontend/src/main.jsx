@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import { ThemeProvider } from "@material-tailwind/react";
 import { Bell, CalendarDays, Clock, Home, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
@@ -165,7 +166,11 @@ function App() {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(
+  <ThemeProvider>
+    <App />
+  </ThemeProvider>
+);
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
