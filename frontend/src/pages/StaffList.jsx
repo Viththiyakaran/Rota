@@ -1,4 +1,5 @@
 import React from "react";
+import { Button, Chip, Typography } from "@material-tailwind/react";
 import { PlusCircle } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
@@ -41,15 +42,18 @@ export function StaffList({ goTo }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-3xl font-black">Staff List</h2>
-        <button
+        <Typography as="h2" variant="h3" className="font-black text-fuel-ink">
+          Staff List
+        </Typography>
+        <Button
           type="button"
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-5 py-3 font-black text-white shadow-lift transition hover:bg-fuel-deep"
+          size="lg"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-fuel-green px-5 py-3 font-black normal-case text-white shadow-md transition hover:bg-fuel-deep"
           onClick={() => goTo("add-staff")}
         >
           <PlusCircle size={18} />
           Add Staff
-        </button>
+        </Button>
       </div>
       <Status loading={loading} error={error} empty={staff.length === 0}>
         <div className="space-y-3">
@@ -93,13 +97,15 @@ export function StaffList({ goTo }) {
                       <p className="text-sm text-slate-600">{person.phone}</p>
                       <p className="text-sm text-slate-600">{person.email}</p>
                     </div>
-                    <span className={`rounded-md px-2 py-1 text-xs font-black ${person.active ? "bg-fuel-mist text-fuel-green" : "bg-slate-100 text-slate-500"}`}>
-                      {person.active ? "Active" : "Inactive"}
-                    </span>
+                    <Chip
+                      size="sm"
+                      value={person.active ? "Active" : "Inactive"}
+                      className={`rounded-full font-black normal-case ${person.active ? "bg-fuel-mist text-fuel-green" : "bg-slate-100 text-slate-500"}`}
+                    />
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <button className="rounded-md bg-fuel-ink py-3 font-black text-white" onClick={() => startEdit(person)}>Edit</button>
-                    <button className="rounded-md bg-slate-100 py-3 font-black" onClick={() => deactivate(person)}>Deactivate</button>
+                    <Button className="rounded-lg bg-fuel-ink py-3 font-black normal-case text-white shadow-md" onClick={() => startEdit(person)}>Edit</Button>
+                    <Button variant="filled" className="rounded-lg bg-slate-100 py-3 font-black normal-case text-fuel-ink shadow-none" onClick={() => deactivate(person)}>Deactivate</Button>
                   </div>
                 </div>
               )}

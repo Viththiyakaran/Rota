@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { ThemeProvider } from "@material-tailwind/react";
+import { Button, IconButton, ThemeProvider, Typography } from "@material-tailwind/react";
 import { Bell, CalendarDays, Clock, Home, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
@@ -90,40 +90,42 @@ function App() {
 
   return (
     <div className="min-h-screen bg-fuel-cream">
-      <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/90 backdrop-blur-xl">
+      <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 lg:grid-cols-[1fr_auto_1fr]">
           <button className="flex items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
-            <span className="flex h-11 w-11 items-center justify-center rounded-md bg-fuel-deep text-lg font-black text-fuel-lime">
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-fuel-deep text-lg font-black text-fuel-lime shadow-md">
               {branding.logoDataUrl ? (
-                <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
+                <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-xl object-contain p-1" />
               ) : (
                 getBrandInitial(branding.businessName)
               )}
             </span>
             <span>
-              <h1 className="max-w-[180px] truncate text-2xl font-black leading-none text-fuel-ink sm:max-w-sm">
+              <Typography as="h1" variant="h4" className="max-w-[180px] truncate font-black leading-none text-fuel-ink sm:max-w-sm">
                 {appTitle}
-              </h1>
+              </Typography>
             </span>
           </button>
-          <button
+          <Button
+            size="lg"
             onClick={() => setPage("add-shift")}
-            className={`hidden rounded-md bg-fuel-green px-5 py-3 text-sm font-black text-white shadow-lift transition hover:bg-fuel-deep lg:block ${isAdmin ? "" : "lg:hidden"}`}
+            className={`hidden rounded-lg bg-fuel-green px-5 py-3 text-sm font-black normal-case text-white shadow-md transition hover:bg-fuel-deep lg:block ${isAdmin ? "" : "lg:hidden"}`}
           >
             Add Shift
-          </button>
+          </Button>
           <div className="flex items-center justify-end gap-2">
             <div className="hidden text-right sm:block">
               <p className="text-xs font-black uppercase text-fuel-green">{currentUser.role}</p>
               <p className="text-sm font-bold text-slate-600">{currentUser.staffName || currentUser.username}</p>
             </div>
-            <button
+            <IconButton
+              variant="filled"
               onClick={logout}
               title="Log out"
-              className="rounded-md bg-fuel-mist p-3 text-fuel-green transition hover:bg-fuel-line"
+              className="rounded-lg bg-fuel-mist text-fuel-green shadow-none transition hover:bg-fuel-line"
             >
               <LogOut size={20} />
-            </button>
+            </IconButton>
           </div>
         </div>
       </header>
@@ -141,23 +143,24 @@ function App() {
         {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 py-2">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/90 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-2 py-2">
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
             return (
-              <button
+              <Button
                 key={item.id}
+                variant={active ? "filled" : "text"}
                 onClick={() => setPage(item.id)}
                 title={item.label}
-                className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center rounded-md px-2 text-[11px] font-black transition sm:min-w-24 ${
-                  active ? "bg-fuel-mist text-fuel-green shadow-soft" : "text-slate-500 hover:bg-slate-50"
+                className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black normal-case transition sm:min-w-24 ${
+                  active ? "bg-fuel-green text-white shadow-md" : "bg-transparent text-slate-500 shadow-none hover:bg-fuel-mist hover:text-fuel-green"
                 }`}
               >
                 <Icon size={20} />
                 <span className="mt-1 truncate">{item.label.replace("Add ", "+ ")}</span>
-              </button>
+              </Button>
             );
           })}
         </div>
