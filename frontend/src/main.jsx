@@ -90,7 +90,7 @@ function App() {
   return (
     <div className="min-h-screen bg-fuel-cream">
       <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl">
-        <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 lg:grid-cols-[1fr_auto_1fr]">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
           <button className="flex items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-fuel-deep text-lg font-black text-fuel-lime shadow-md">
               {branding.logoDataUrl ? (
@@ -104,12 +104,6 @@ function App() {
                 {appTitle}
               </h1>
             </span>
-          </button>
-          <button
-            onClick={() => setPage("add-shift")}
-            className={`hidden rounded-lg bg-fuel-green px-5 py-3 text-sm font-black normal-case text-white shadow-md transition hover:bg-fuel-deep lg:block ${isAdmin ? "" : "lg:hidden"}`}
-          >
-            Add Shift
           </button>
           <div className="flex items-center justify-end gap-2">
             <div className="hidden text-right sm:block">
