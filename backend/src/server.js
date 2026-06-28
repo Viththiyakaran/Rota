@@ -32,23 +32,94 @@ import {
 } from "./db.js";
 
 const app = express();
-const port = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
+const appVersion = "1.0.0";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendDist = path.join(__dirname, "..", "..", "frontend", "dist");
 const loginAttempts = new Map();
 const loginWindowMs = 15 * 60 * 1000;
 const maxLoginAttempts = 5;
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000",
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 app.set("trust proxy", 1);
 app.use(cors({
-  origin: (origin, callback) => callback(null, origin || true),
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(null, false);
+  },
   credentials: true
 }));
 app.use(express.json());
 
+app.get("/", (_req, res) => {
+  res.json({
+    app: "FuelOps Rota Backend",
+    status: "running",
+    version: appVersion,
+    message: "API is live"
+  });
+});
+
+app.get("/health", (_req, res) => {
+  res.json({
+    status: "ok",
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development"
+  });
+});
+
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, name: "Rota API", authMigration: 3 });
+  res.json({
+    status: "ok",
+    app: "FuelOps Rota Backend",
+    version: appVersion,
+    authMigration: 3
+  });
+});
+
+app.get("/api", (_req, res) => {
+  res.json({
+    app: "FuelOps Rota Backend",
+    version: appVersion,
+    endpoints: [
+      "GET /",
+      "GET /health",
+      "GET /api",
+      "GET /api/health",
+      "GET /api/settings/branding",
+      "POST /api/auth/login",
+      "GET /api/auth/me",
+      "POST /api/auth/logout",
+      "POST /api/auth/change-password",
+      "GET /api/staff",
+      "POST /api/staff",
+      "PUT /api/staff/:id",
+      "GET /api/shifts/week?startDate=yyyy-mm-dd",
+      "GET /api/shifts/my",
+      "POST /api/shifts/copy-week",
+      "POST /api/shifts",
+      "PUT /api/shifts/:id",
+      "DELETE /api/shifts/:id",
+      "GET /api/reminders/upcoming",
+      "GET /api/notifications",
+      "POST /api/notifications/read-all",
+      "GET /api/time-off",
+      "POST /api/time-off",
+      "PUT /api/time-off/:id",
+      "GET /api/availability",
+      "POST /api/availability",
+      "DELETE /api/availability/:id",
+      "GET /api/audit"
+    ]
+  });
 });
 
 app.get("/api/settings/branding", (_req, res) => {
@@ -366,18 +437,6 @@ app.put("/api/staff/:id", requireAdmin, async (req, res, next) => {
       role: req.body.role ?? current.role,
       active: req.body.active === undefined ? current.active : req.body.active ? 1 : 0
     };
-    const previousNotes = String(current.notes || "").trim();
-    const nextNotes = String(nextShift.notes || "").trim();
-    const notesChanged = previousNotes !== nextNotes;
-    const rotaChanged =
-      Number(current.staffId) !== Number(nextShift.staffId) ||
-      current.shiftDate !== nextShift.shiftDate ||
-      current.startTime !== nextShift.startTime ||
-      current.endTime !== nextShift.endTime ||
-      Number(current.breakMinutes) !== Number(nextShift.breakMinutes) ||
-      Number(current.reminderMinutes) !== Number(nextShift.reminderMinutes) ||
-      Number(current.isExtra || 0) !== Number(nextShift.isExtra || 0) ||
-      Number(current.coverForStaffId || 0) !== Number(nextShift.coverForStaffId || 0);
 
     await run(
       `UPDATE staff
@@ -663,17 +722,17 @@ if (fs.existsSync(frontendDist)) {
 
   app.get("*", (req, res, next) => {
     if (req.path.startsWith("/api/")) return next();
+    if (req.path === "/health") return next();
     res.sendFile(path.join(frontendDist, "index.html"));
   });
-} else {
-  app.get("/", (_req, res) => {
-    res.json({
-      ok: true,
-      name: "Rota API",
-      message: "Frontend build not found. Use the frontend service URL, or build the frontend before starting this service."
-    });
-  });
 }
+
+app.use((req, res) => {
+  res.status(404).json({
+    error: "Route not found",
+    path: req.originalUrl
+  });
+});
 
 app.use((error, _req, res, _next) => {
   if (error instanceof SyntaxError && "body" in error) {
@@ -681,7 +740,10 @@ app.use((error, _req, res, _next) => {
   }
 
   console.error(error);
-  res.status(500).json({ error: "Something went wrong." });
+  res.status(500).json({
+    error: "Internal server error",
+    ...(process.env.NODE_ENV === "development" ? { message: error.message } : {})
+  });
 });
 
 function requireAuth(req, res, next) {
@@ -709,8 +771,8 @@ function requireAdmin(req, res, next) {
 }
 
 initDb().then(() => {
-  app.listen(port, () => {
-    console.log(`Rota API running on http://localhost:${port}`);
+  app.listen(PORT, () => {
+    console.log(`FuelOps Rota Backend running on port ${PORT}`);
   });
 });
 

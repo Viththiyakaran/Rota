@@ -47,7 +47,7 @@ npm start
 The API runs on:
 
 ```text
-http://localhost:4000
+http://localhost:5000
 ```
 
 Run the frontend in a second terminal:
@@ -65,6 +65,10 @@ http://localhost:5173
 
 ## API Endpoints
 
+- `GET /`
+- `GET /health`
+- `GET /api`
+- `GET /api/health`
 - `GET /api/staff`
 - `POST /api/staff`
 - `PUT /api/staff/:id`
@@ -73,6 +77,16 @@ http://localhost:5173
 - `PUT /api/shifts/:id`
 - `DELETE /api/shifts/:id`
 - `GET /api/reminders/upcoming`
+- `GET /api/notifications`
+- `POST /api/notifications/read-all`
+
+Useful public checks:
+
+```text
+http://localhost:5000/
+http://localhost:5000/health
+http://localhost:5000/api
+```
 
 ## Notes
 
@@ -100,7 +114,7 @@ When a new staff member is added, the app creates a staff login automatically us
 
 ## Railway Hosting
 
-For a single Railway service, use:
+For a single Railway service that serves the built frontend from Express, use:
 
 ```bash
 npm install && npm run build
@@ -111,6 +125,17 @@ Start command:
 ```bash
 npm start
 ```
+
+Railway provides `PORT` automatically. The backend also supports:
+
+```text
+PORT=5000
+NODE_ENV=production
+FRONTEND_URL=https://your-frontend-url
+DB_PATH=/data/fuelops.sqlite
+```
+
+This app currently uses SQLite through `DB_PATH`. If you later move to a hosted SQL database, add `DATABASE_URL` support before setting that variable. Authentication uses server-side sessions and HTTP-only cookies, so there is no `JWT_SECRET` requirement in the current code.
 
 Add a Railway volume mounted at:
 
@@ -129,3 +154,5 @@ If frontend and backend are deployed as separate Railway services, add this vari
 ```text
 VITE_API_BASE=https://your-backend-url.up.railway.app
 ```
+
+Also set `FRONTEND_URL` on the backend service to the deployed frontend URL so CORS allows browser requests with cookies.

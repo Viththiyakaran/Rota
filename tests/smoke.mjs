@@ -33,6 +33,15 @@ try {
 }
 
 async function runSmoke() {
+  const rootStatus = await request("/");
+  assert(rootStatus.status === "running", "root status works");
+
+  const health = await request("/health");
+  assert(health.status === "ok", "health works");
+
+  const routeList = await request("/api");
+  assert(routeList.endpoints?.includes("GET /api/staff"), "api route list works");
+
   const publicBranding = await request("/api/settings/branding");
   assert(publicBranding.businessName, "public branding works");
 
