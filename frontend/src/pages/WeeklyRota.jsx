@@ -1,4 +1,5 @@
 import React from "react";
+import { Button, Chip, IconButton, Typography } from "@material-tailwind/react";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { Status } from "../components/Status.jsx";
@@ -85,16 +86,20 @@ export function WeeklyRota({ currentUser }) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-bold uppercase tracking-[0.16em] text-fuel-green">Monday to Sunday</p>
-          <h2 className="text-3xl font-black text-fuel-ink">Weekly Rota</h2>
+          <Typography as="h2" variant="h3" className="font-black text-fuel-ink">
+            Weekly Rota
+          </Typography>
           <p className="mt-1 text-sm font-bold text-slate-500">{weekRange}</p>
         </div>
-        <div className="rounded-md border border-fuel-line bg-white px-4 py-3 text-sm font-black text-fuel-green">
-          {visibleShifts.length} shifts
-        </div>
+        <Chip
+          size="lg"
+          value={`${visibleShifts.length} shifts`}
+          className="w-fit rounded-full border border-fuel-line bg-white px-4 py-3 font-black normal-case text-fuel-green shadow-sm"
+        />
       </div>
 
-      <div className="rounded-md border border-fuel-line bg-white p-3 shadow-soft">
-        <div className="grid gap-2 sm:grid-cols-[auto_1fr_auto_auto] sm:items-center">
+      <div className="rounded-lg border border-fuel-line bg-white p-4 shadow-md">
+        <div className="grid gap-3 lg:grid-cols-[auto_1fr_auto] lg:items-center">
           <div className="flex items-center gap-2 font-black text-fuel-ink">
             <CalendarDays size={20} className="text-fuel-green" />
             Week start
@@ -105,47 +110,53 @@ export function WeeklyRota({ currentUser }) {
             value={startDate}
             onChange={(event) => setStartDate(event.target.value)}
           />
-          <button
-            className="flex items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 font-black text-fuel-green"
-            onClick={() => moveWeek(-1)}
-          >
-            <ChevronLeft size={18} />
-            Prev
-          </button>
-          <button
-            className="flex items-center justify-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white"
-            onClick={() => moveWeek(1)}
-          >
-            Next
-            <ChevronRight size={18} />
-          </button>
-          <a
-            className="flex items-center justify-center gap-2 rounded-md bg-[#25D366] px-4 py-3 font-black text-white sm:col-span-4"
-            href={groupShareUrl}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <MessageCircle size={18} />
-            Share weekly rota to WhatsApp group
-          </a>
-          <button
-            type="button"
-            className="flex items-center justify-center gap-2 rounded-md bg-fuel-ink px-4 py-3 font-black text-white sm:col-span-2"
-            onClick={() => window.print()}
-          >
-            <Printer size={18} />
-            Print / PDF
-          </button>
-          {isAdmin && (
-            <button
-              type="button"
-              className="flex items-center justify-center gap-2 rounded-md bg-fuel-lime px-4 py-3 font-black text-fuel-ink sm:col-span-2"
-              onClick={copyToNextWeek}
+          <div className="flex items-center gap-2">
+            <IconButton
+              variant="filled"
+              className="rounded-lg bg-fuel-mist text-fuel-green shadow-none hover:bg-fuel-line"
+              onClick={() => moveWeek(-1)}
+              title="Previous week"
             >
-              <Copy size={18} />
-              Copy to next week
-            </button>
-          )}
+              <ChevronLeft size={18} />
+            </IconButton>
+            <Button
+              className="rounded-lg bg-fuel-green px-5 py-3 font-black normal-case text-white shadow-md"
+              onClick={() => moveWeek(1)}
+            >
+              Next
+              <ChevronRight size={18} className="ml-1 inline" />
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2 lg:col-span-3 lg:flex-row">
+            <Button
+              as="a"
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-3 font-black normal-case text-white shadow-md"
+              href={groupShareUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle size={18} />
+              WhatsApp group
+            </Button>
+            <Button
+              type="button"
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-fuel-ink px-4 py-3 font-black normal-case text-white shadow-md"
+              onClick={() => window.print()}
+            >
+              <Printer size={18} />
+              Print / PDF
+            </Button>
+            {isAdmin && (
+              <Button
+                type="button"
+                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-fuel-lime px-4 py-3 font-black normal-case text-fuel-ink shadow-md"
+                onClick={copyToNextWeek}
+              >
+                <Copy size={18} />
+                Copy next week
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
