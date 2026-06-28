@@ -137,10 +137,11 @@ export function Dashboard({ goTo, currentUser, branding }) {
               <tbody>
                 {weekDays.map((day) => {
                   const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
+                  const visibleDayShifts = dayShifts.filter((shift) => !hasApprovedTimeOff(timeOff, shift.staffId, day));
                   const dayTimeOff = approvedTimeOffForDay(timeOff, day);
                   const dayNotes = [
                     ...new Set([
-                      ...dayShifts.map((shift) => shift.notes).filter(Boolean),
+                      ...visibleDayShifts.map((shift) => shift.notes).filter(Boolean),
                       ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
                     ])
                   ];
@@ -148,8 +149,10 @@ export function Dashboard({ goTo, currentUser, branding }) {
                     <tr key={day}>
                       <td className="border border-fuel-line px-3 py-3 font-bold">{formatWeekday(day)}</td>
                       {staff.filter((person) => person.active).map((person) => {
-                        const personShifts = dayShifts.filter((shift) => shift.staffId === person.id);
                         const personTimeOff = dayTimeOff.filter((item) => item.staffId === person.id);
+                        const personShifts = personTimeOff.length > 0
+                          ? []
+                          : visibleDayShifts.filter((shift) => shift.staffId === person.id);
                         return (
                           <td key={person.id} className="border border-fuel-line px-3 py-3">
                             {personShifts.length > 0 || personTimeOff.length > 0 ? (
@@ -186,7 +189,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
                   <td className="border border-fuel-line bg-fuel-mist px-3 py-3 font-black">Total Hours</td>
                   {staff.filter((person) => person.active).map((person) => {
                     const total = shifts
-                      .filter((shift) => shift.staffId === person.id)
+                      .filter((shift) => shift.staffId === person.id && !hasApprovedTimeOff(timeOff, shift.staffId, shift.shiftDate))
                       .reduce((sum, shift) => sum + shift.paidHours, 0);
                     return (
                       <td key={person.id} className="border border-fuel-line bg-fuel-mist px-3 py-3 font-black">
@@ -260,6 +263,16 @@ function formatWeekday(dateString) {
 
 function approvedTimeOffForDay(requests, day) {
   return requests.filter((request) =>
+    request.status === "approved" &&
+    request.endDate >= request.startDate &&
+    day >= request.startDate &&
+    day <= request.endDate
+  );
+}
+
+function hasApprovedTimeOff(requests, staffId, day) {
+  return requests.some((request) =>
+    request.staffId === staffId &&
     request.status === "approved" &&
     request.endDate >= request.startDate &&
     day >= request.startDate &&

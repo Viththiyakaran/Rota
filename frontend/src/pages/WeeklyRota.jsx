@@ -70,10 +70,11 @@ export function WeeklyRota({ currentUser }) {
   };
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
+  const visibleShifts = shifts.filter((shift) => !hasApprovedTimeOff(timeOff, shift.staffId, shift.shiftDate));
   const groupShareUrl = whatsappGroupShareUrl({
     weekRange,
     weekDays,
-    shifts,
+    shifts: visibleShifts,
     formatDay: formatDayLabel,
     formatRange: formatShiftRange
   });
@@ -88,7 +89,7 @@ export function WeeklyRota({ currentUser }) {
           <p className="mt-1 text-sm font-bold text-slate-500">{weekRange}</p>
         </div>
         <div className="rounded-md border border-fuel-line bg-white px-4 py-3 text-sm font-black text-fuel-green">
-          {shifts.length} shifts
+          {visibleShifts.length} shifts
         </div>
       </div>
 
@@ -152,7 +153,7 @@ export function WeeklyRota({ currentUser }) {
         {message && <p className="rounded-md bg-fuel-mist p-3 font-black text-fuel-green">{message}</p>}
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
           {weekDays.map((day) => {
-            const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
+            const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
             const dayTimeOff = approvedTimeOffForDay(timeOff, day);
             return (
               <section key={day} className="flex min-h-[280px] flex-col rounded-md border border-fuel-line bg-white shadow-soft">
@@ -267,6 +268,16 @@ export function WeeklyRota({ currentUser }) {
 
 function approvedTimeOffForDay(requests, day) {
   return requests.filter((request) =>
+    request.status === "approved" &&
+    request.endDate >= request.startDate &&
+    day >= request.startDate &&
+    day <= request.endDate
+  );
+}
+
+function hasApprovedTimeOff(requests, staffId, day) {
+  return requests.some((request) =>
+    request.staffId === staffId &&
     request.status === "approved" &&
     request.endDate >= request.startDate &&
     day >= request.startDate &&
