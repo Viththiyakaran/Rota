@@ -137,7 +137,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
               <tbody>
                 {weekDays.map((day) => {
                   const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
-                  const visibleDayShifts = dayShifts.filter((shift) => !hasApprovedTimeOff(timeOff, shift.staffId, day));
+                  const visibleDayShifts = dayShifts.filter((shift) => !isApprovedOffShift(shift, timeOff, day));
                   const dayTimeOff = approvedTimeOffForDay(timeOff, day);
                   const dayNotes = [
                     ...new Set([
@@ -189,7 +189,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
                   <td className="border border-fuel-line bg-fuel-mist px-3 py-3 font-black">Total Hours</td>
                   {staff.filter((person) => person.active).map((person) => {
                     const total = shifts
-                      .filter((shift) => sameStaff(shift.staffId, person.id) && !hasApprovedTimeOff(timeOff, shift.staffId, shift.shiftDate))
+                      .filter((shift) => sameStaff(shift.staffId, person.id) && !isApprovedOffShift(shift, timeOff, shift.shiftDate))
                       .reduce((sum, shift) => sum + shift.paidHours, 0);
                     return (
                       <td key={person.id} className="border border-fuel-line bg-fuel-mist px-3 py-3 font-black">
@@ -278,6 +278,10 @@ function hasApprovedTimeOff(requests, staffId, day) {
     day >= request.startDate &&
     day <= request.endDate
   );
+}
+
+function isApprovedOffShift(shift, requests, day) {
+  return Boolean(shift.approvedTimeOff) || hasApprovedTimeOff(requests, shift.staffId, day);
 }
 
 function sameStaff(left, right) {

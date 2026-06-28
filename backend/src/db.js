@@ -302,11 +302,14 @@ export function calculateReminderTime(shiftDate, startTime, reminderMinutes = 60
 export function decorateShift(row) {
   if (!row) return row;
   const totalHours = calculateHours(row.shiftDate, row.startTime, row.endTime);
-  const paidHours = Math.max(totalHours - Number(row.breakMinutes || 0) / 60, 0);
+  const paidHours = row.approvedTimeOff
+    ? 0
+    : Math.max(totalHours - Number(row.breakMinutes || 0) / 60, 0);
   return {
     ...row,
     active: row.active === undefined ? undefined : Boolean(row.active),
     isExtra: Boolean(row.isExtra),
+    approvedTimeOff: Boolean(row.approvedTimeOff),
     totalHours: Number(totalHours.toFixed(2)),
     paidHours: Number(paidHours.toFixed(2)),
     reminderMessage: buildReminderMessage(row.shiftDate, row.startTime)

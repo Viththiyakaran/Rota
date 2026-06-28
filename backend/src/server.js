@@ -335,10 +335,16 @@ app.get("/api/shifts/week", async (req, res, next) => {
     const endDate = addDays(startDate, 6);
     const rows = await all(
       `SELECT shifts.*, staff.name AS staffName, staff.role, staff.active,
-              coverStaff.name AS coverForStaffName
+              coverStaff.name AS coverForStaffName,
+              CASE WHEN timeOffRequests.id IS NULL THEN 0 ELSE 1 END AS approvedTimeOff
        FROM shifts
        JOIN staff ON staff.id = shifts.staffId
        LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+       LEFT JOIN timeOffRequests
+         ON timeOffRequests.staffId = shifts.staffId
+        AND timeOffRequests.status = 'approved'
+        AND timeOffRequests.endDate >= timeOffRequests.startDate
+        AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
        WHERE shiftDate BETWEEN ? AND ?
        ORDER BY shiftDate ASC, isExtra ASC, startTime ASC`,
       [startDate, endDate]

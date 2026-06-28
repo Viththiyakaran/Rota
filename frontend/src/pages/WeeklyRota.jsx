@@ -70,7 +70,7 @@ export function WeeklyRota({ currentUser }) {
   };
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
-  const visibleShifts = shifts.filter((shift) => !hasApprovedTimeOff(timeOff, shift.staffId, shift.shiftDate));
+  const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
   const groupShareUrl = whatsappGroupShareUrl({
     weekRange,
     weekDays,
@@ -283,6 +283,10 @@ function hasApprovedTimeOff(requests, staffId, day) {
     day >= request.startDate &&
     day <= request.endDate
   );
+}
+
+function isApprovedOffShift(shift, requests, day) {
+  return Boolean(shift.approvedTimeOff) || hasApprovedTimeOff(requests, shift.staffId, day);
 }
 
 function sameStaff(left, right) {
