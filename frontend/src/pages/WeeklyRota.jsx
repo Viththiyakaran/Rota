@@ -12,6 +12,8 @@ export function WeeklyRota({ currentUser }) {
   const [timeOff, setTimeOff] = React.useState([]);
   const [editingNoteId, setEditingNoteId] = React.useState(null);
   const [noteDraft, setNoteDraft] = React.useState("");
+  const [savingNoteId, setSavingNoteId] = React.useState(null);
+  const [noteError, setNoteError] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -45,18 +47,29 @@ export function WeeklyRota({ currentUser }) {
   const startNoteEdit = (shift) => {
     setEditingNoteId(shift.id);
     setNoteDraft(shift.notes || "");
+    setNoteError("");
   };
 
   const cancelNoteEdit = () => {
     setEditingNoteId(null);
     setNoteDraft("");
+    setSavingNoteId(null);
+    setNoteError("");
   };
 
   const saveNote = async (shift) => {
-    await api.updateShift(shift.id, { notes: noteDraft });
-    setEditingNoteId(null);
-    setNoteDraft("");
-    load();
+    setSavingNoteId(shift.id);
+    setNoteError("");
+    try {
+      await api.updateShift(shift.id, { notes: noteDraft });
+      setEditingNoteId(null);
+      setNoteDraft("");
+      await load();
+    } catch (err) {
+      setNoteError(err.message || "Could not save note.");
+    } finally {
+      setSavingNoteId(null);
+    }
   };
 
   const moveWeek = (offset) => {
@@ -237,21 +250,24 @@ export function WeeklyRota({ currentUser }) {
                             <div className="grid grid-cols-2 gap-2">
                               <button
                                 type="button"
-                                className="flex items-center justify-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white disabled:cursor-wait disabled:opacity-70"
                                 onClick={() => saveNote(shift)}
+                                disabled={savingNoteId === shift.id}
                               >
                                 <Check size={16} />
-                                Save
+                                {savingNoteId === shift.id ? "Saving..." : "Save"}
                               </button>
                               <button
                                 type="button"
-                                className="flex items-center justify-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green"
+                                className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green disabled:opacity-60"
                                 onClick={cancelNoteEdit}
+                                disabled={savingNoteId === shift.id}
                               >
                                 <X size={16} />
                                 Cancel
                               </button>
                             </div>
+                            {noteError && <p className="rounded-md bg-red-50 px-3 py-2 text-xs font-black text-red-700">{noteError}</p>}
                           </div>
                         ) : (
                           <div className="flex items-start justify-between gap-2">

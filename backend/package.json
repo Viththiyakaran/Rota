@@ -1,7 +1,7 @@
 {
   "name": "fuelops-rota-backend",
   "version": "1.0.0",
-  "description": "Express, SQLite, print-ready bundled web app service with notification popup assets",
+  "description": "Express, SQLite, print-ready bundled web app service with reliable note save assets",
   "main": "src/server.js",
   "type": "module",
   "engines": {
