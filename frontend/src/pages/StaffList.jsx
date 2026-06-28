@@ -1,10 +1,11 @@
 import React from "react";
+import { PlusCircle } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { Status } from "../components/Status.jsx";
 
-export function StaffList() {
+export function StaffList({ goTo }) {
   const [staff, setStaff] = React.useState([]);
   const [editingId, setEditingId] = React.useState(null);
   const [form, setForm] = React.useState({});
@@ -39,7 +40,17 @@ export function StaffList() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-3xl font-black">Staff List</h2>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-3xl font-black">Staff List</h2>
+        <button
+          type="button"
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-5 py-3 font-black text-white shadow-lift transition hover:bg-fuel-deep"
+          onClick={() => goTo("add-staff")}
+        >
+          <PlusCircle size={18} />
+          Add Staff
+        </button>
+      </div>
       <Status loading={loading} error={error} empty={staff.length === 0}>
         <div className="space-y-3">
           {staff.map((person) => (

@@ -19,7 +19,7 @@ const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home, roles: ["admin", "staff"] },
   { id: "my-shifts", label: "My Shifts", icon: Clock, roles: ["staff"] },
   { id: "staff", label: "Staff", icon: Users, roles: ["admin"] },
-  { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"] },
+  { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "rota", label: "Rota", icon: CalendarDays, roles: ["admin", "staff"] },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
@@ -34,7 +34,7 @@ function App() {
   const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "" });
   const [checkingSession, setCheckingSession] = React.useState(true);
   const isAdmin = currentUser?.role === "admin";
-  const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role));
+  const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && !item.hidden);
   const appTitle = buildRotaTitle(branding.businessName);
   const pageProps = { goTo: setPage, currentUser, branding: { ...branding, appTitle } };
 
@@ -130,7 +130,7 @@ function App() {
       <main className="mx-auto max-w-7xl px-4 pb-28 pt-5">
         {page === "dashboard" && <Dashboard {...pageProps} />}
         {page === "my-shifts" && <MyShifts />}
-        {page === "staff" && isAdmin && <StaffList />}
+        {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
         {page === "rota" && <WeeklyRota currentUser={currentUser} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
