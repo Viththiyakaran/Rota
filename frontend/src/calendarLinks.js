@@ -26,7 +26,7 @@ export function phoneCalendarDataUrl(shift, businessName = "Rota") {
     `SUMMARY:${escapeIcs(shiftTitle(shift, businessName))}`,
     `DESCRIPTION:${escapeIcs(shiftDescription(shift))}`,
     "BEGIN:VALARM",
-    `TRIGGER:-PT${Math.max(Number(shift.reminderMinutes || 60), 0)}M`,
+    `TRIGGER:-PT${Math.max(Number(shift.reminderMinutes || 30), 0)}M`,
     "ACTION:DISPLAY",
     `DESCRIPTION:${escapeIcs(shift.reminderMessage || "Your shift starts soon")}`,
     "END:VALARM",

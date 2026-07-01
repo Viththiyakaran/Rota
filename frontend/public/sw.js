@@ -18,6 +18,10 @@ self.addEventListener("push", (event) => {
     body: data.body || data.message || "You have a rota update.",
     icon: "/pwa-icon.svg",
     badge: "/pwa-icon.svg",
+    tag: data.tag || data.type || "rota_update",
+    renotify: data.type === "shift_reminder" || data.type === "shift_start",
+    requireInteraction: data.type === "shift_start",
+    vibrate: data.type === "shift_start" ? [300, 120, 300, 120, 500] : [200, 100, 200],
     data: {
       url: data.url || "/",
       type: data.type || "rota_update"

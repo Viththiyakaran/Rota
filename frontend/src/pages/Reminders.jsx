@@ -137,14 +137,17 @@ export function Reminders({ branding = {}, currentUser = null }) {
 }
 
 function displayNotificationTitle(notification, currentUser) {
-  if (currentUser?.role === "admin" && notification.type === "shift_reminder") {
+  if (currentUser?.role === "admin" && isStaffShiftReminder(notification.type)) {
+    if (notification.type === "shift_start") {
+      return `${notification.staffName || "Staff"} shift starting now`;
+    }
     return `${notification.staffName || "Staff"} shift reminder`;
   }
   return notification.title;
 }
 
 function displayNotificationMessage(notification, currentUser) {
-  if (currentUser?.role === "admin" && notification.type === "shift_reminder") {
+  if (currentUser?.role === "admin" && isStaffShiftReminder(notification.type)) {
     return staffMessage(notification.message, notification.staffName);
   }
   return notification.message;
@@ -159,6 +162,10 @@ function displayReminderMessage(reminder, currentUser) {
 
 function staffMessage(message, staffName = "Staff") {
   return String(message || "").replace(/^Your shift starts/i, `${staffName}'s shift starts`);
+}
+
+function isStaffShiftReminder(type) {
+  return type === "shift_reminder" || type === "shift_start";
 }
 
 function formatNotificationDate(value) {

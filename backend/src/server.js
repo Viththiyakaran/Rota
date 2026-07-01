@@ -718,7 +718,7 @@ app.post("/api/shifts", requireAdmin, async (req, res, next) => {
       startTime,
       endTime,
       breakMinutes = 0,
-      reminderMinutes = 60,
+      reminderMinutes = 30,
       notes = "",
       isExtra = false,
       coverForStaffId = null,
@@ -738,7 +738,7 @@ app.post("/api/shifts", requireAdmin, async (req, res, next) => {
         startTime,
         endTime,
         Number(breakMinutes),
-        Number(reminderMinutes || 60),
+        Number(reminderMinutes || 30),
         calculateReminderTime(shiftDate, startTime, reminderMinutes),
         notes,
         isExtra ? 1 : 0,
@@ -797,7 +797,7 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
       `UPDATE shifts
        SET staffId = ?, shiftDate = ?, startTime = ?, endTime = ?, breakMinutes = ?,
            reminderMinutes = ?, reminderTime = ?, notes = ?, isExtra = ?, coverForStaffId = ?, googleCalendarEventId = ?,
-           reminderSentAt = ?, updatedAt = CURRENT_TIMESTAMP
+           reminderSentAt = ?, startReminderSentAt = ?, updatedAt = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         nextShift.staffId,
@@ -812,6 +812,7 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
         nextShift.coverForStaffId,
         nextShift.googleCalendarEventId,
         reminderChanged ? null : current.reminderSentAt,
+        reminderChanged ? null : current.startReminderSentAt,
         req.params.id
       ]
     );
@@ -1043,6 +1044,7 @@ async function sendPushToStaff(staffId, { title, message, type = "rota_update", 
     type,
     shiftId,
     timeOffRequestId,
+    tag: shiftId ? `${type}:${shiftId}` : type,
     url: "/"
   });
 
@@ -1068,15 +1070,21 @@ async function sendPushToStaff(staffId, { title, message, type = "rota_update", 
 }
 
 function startReminderPushScheduler() {
-  processDueReminderPushes().catch((error) => console.error("Reminder push check failed", error));
+  processDueShiftNotifications().catch((error) => console.error("Reminder push check failed", error));
   setInterval(() => {
-    processDueReminderPushes().catch((error) => console.error("Reminder push check failed", error));
+    processDueShiftNotifications().catch((error) => console.error("Reminder push check failed", error));
   }, 60 * 1000);
 }
 
-async function processDueReminderPushes() {
+async function processDueShiftNotifications() {
   if (!pushConfigured) return;
+  await processDueReminderPushes();
+  await processDueStartPushes();
+}
+
+async function processDueReminderPushes() {
   const now = new Date().toISOString();
+  const nowDate = new Date(now);
   const today = now.slice(0, 10);
   const due = await all(
     `SELECT shifts.*, staff.name AS staffName, staff.active,
@@ -1101,15 +1109,64 @@ async function processDueReminderPushes() {
 
   for (const shift of due) {
     const decorated = decorateShift(shift);
+    const startDate = shiftStartDate(decorated);
+    if (startDate <= nowDate) {
+      await run("UPDATE shifts SET reminderSentAt = ? WHERE id = ?", [now, decorated.id]);
+      continue;
+    }
     const coverText = decorated.isExtra && decorated.coverForStaffName ? ` Extra cover for ${decorated.coverForStaffName}.` : "";
     const noteText = decorated.notes ? ` Note: ${decorated.notes}.` : "";
     const message = `${decorated.reminderMessage}.${coverText}${noteText}`;
-    notifyStaff(decorated.staffId, "Shift reminder", message, {
+    notifyStaff(decorated.staffId, "Shift starts soon", message, {
       type: "shift_reminder",
       shiftId: decorated.id
     });
     await run("UPDATE shifts SET reminderSentAt = ? WHERE id = ?", [now, decorated.id]);
   }
+}
+
+async function processDueStartPushes() {
+  const now = new Date().toISOString();
+  const nowDate = new Date(now);
+  const today = now.slice(0, 10);
+  const due = await all(
+    `SELECT shifts.*, staff.name AS staffName, staff.active,
+            coverStaff.name AS coverForStaffName
+     FROM shifts
+     JOIN staff ON staff.id = shifts.staffId
+     LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+     LEFT JOIN timeOffRequests
+       ON timeOffRequests.staffId = shifts.staffId
+      AND timeOffRequests.status = 'approved'
+      AND timeOffRequests.endDate >= timeOffRequests.startDate
+      AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
+     WHERE staff.active = 1
+       AND shifts.startReminderSentAt IS NULL
+       AND shifts.shiftDate >= ?
+       AND timeOffRequests.id IS NULL
+     ORDER BY shifts.shiftDate ASC, shifts.startTime ASC
+     LIMIT 40`,
+    [today]
+  );
+
+  for (const shift of due) {
+    const decorated = decorateShift(shift);
+    const startDate = shiftStartDate(decorated);
+    if (startDate > nowDate) continue;
+
+    const coverText = decorated.isExtra && decorated.coverForStaffName ? ` Extra cover for ${decorated.coverForStaffName}.` : "";
+    const noteText = decorated.notes ? ` Note: ${decorated.notes}.` : "";
+    const message = `Your shift starts now at ${decorated.startTime}.${coverText}${noteText}`;
+    notifyStaff(decorated.staffId, "Shift starting now", message, {
+      type: "shift_start",
+      shiftId: decorated.id
+    });
+    await run("UPDATE shifts SET startReminderSentAt = ? WHERE id = ?", [now, decorated.id]);
+  }
+}
+
+function shiftStartDate(shift) {
+  return new Date(`${shift.shiftDate}T${shift.startTime}:00`);
 }
 
 function buildIcsCalendar({ name, shifts }) {
@@ -1152,7 +1209,7 @@ function buildShiftEvent(shift) {
     `SUMMARY:${escapeIcsText(summary)}`,
     `DESCRIPTION:${escapeIcsText(description)}`,
     "BEGIN:VALARM",
-    `TRIGGER:-PT${Math.max(Number(shift.reminderMinutes || 60), 0)}M`,
+    `TRIGGER:-PT${Math.max(Number(shift.reminderMinutes || 30), 0)}M`,
     "ACTION:DISPLAY",
     `DESCRIPTION:${escapeIcsText(shift.reminderMessage || "Your shift starts soon")}`,
     "END:VALARM",

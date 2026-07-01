@@ -413,10 +413,10 @@ Authenticated routes:
 ### Add Shift
 
 1. Admin opens Add Shift.
-2. Select staff, date, time range, break, reminder, and notes.
+2. Select staff, date, time range, break, reminder, and notes. The default reminder is 30 minutes before the shift.
 3. The system calculates hours and creates a reminder time.
 4. The staff member receives an in-app notification.
-5. If the staff member enabled phone notifications, the backend sends a push reminder when the reminder time is due.
+5. If the staff member enabled phone notifications, the backend sends a push reminder 30 minutes before the shift and another notification when the shift starts.
 
 ### Enable Phone Notifications
 
@@ -433,6 +433,8 @@ Notes:
 - The app must be served over HTTPS in production for push notifications to work.
 - Reminders are checked by the backend every minute.
 - If the browser is closed, the phone/browser can still receive the push reminder after notifications are enabled.
+- Shift-start notifications stay visible until dismissed and use vibration where supported.
+- Browsers and phones control the notification sound; custom alarm sounds are not reliable for closed-browser web push.
 
 ### Calendar Sync
 

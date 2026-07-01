@@ -10,17 +10,17 @@ const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "fuelops.sqlite
 export const db = new DatabaseSync(dbPath);
 
 const PERMANENT_ROTA_TEMPLATE = [
-  ["VITHTHI", 0, "05:30", "19:00", 0, 60, "Shopping"],
-  ["Afridi", 0, "18:00", "22:00", 0, 60, "Shopping"],
-  ["VITHTHI", 1, "05:30", "22:00", 0, 60, ""],
-  ["VITHTHI", 2, "05:30", "16:00", 0, 60, "Cleaning"],
-  ["Veera", 2, "13:00", "22:00", 0, 60, "Cleaning"],
-  ["Veera", 3, "05:30", "22:00", 0, 60, ""],
-  ["VITHTHI", 4, "13:00", "22:00", 0, 60, "Shopping"],
-  ["Veera", 4, "05:30", "14:00", 0, 60, "Shopping"],
-  ["VITHTHI", 5, "14:00", "22:00", 0, 60, ""],
-  ["Veera", 5, "05:30", "14:00", 0, 60, ""],
-  ["Afridi", 6, "05:30", "22:00", 30, 60, ""]
+  ["VITHTHI", 0, "05:30", "19:00", 0, 30, "Shopping"],
+  ["Afridi", 0, "18:00", "22:00", 0, 30, "Shopping"],
+  ["VITHTHI", 1, "05:30", "22:00", 0, 30, ""],
+  ["VITHTHI", 2, "05:30", "16:00", 0, 30, "Cleaning"],
+  ["Veera", 2, "13:00", "22:00", 0, 30, "Cleaning"],
+  ["Veera", 3, "05:30", "22:00", 0, 30, ""],
+  ["VITHTHI", 4, "13:00", "22:00", 0, 30, "Shopping"],
+  ["Veera", 4, "05:30", "14:00", 0, 30, "Shopping"],
+  ["VITHTHI", 5, "14:00", "22:00", 0, 30, ""],
+  ["Veera", 5, "05:30", "14:00", 0, 30, ""],
+  ["Afridi", 6, "05:30", "22:00", 30, 30, ""]
 ];
 
 export function run(sql, params = []) {
@@ -63,7 +63,7 @@ export async function initDb() {
       startTime TEXT NOT NULL,
       endTime TEXT NOT NULL,
       breakMinutes INTEGER NOT NULL DEFAULT 0,
-      reminderMinutes INTEGER NOT NULL DEFAULT 60,
+      reminderMinutes INTEGER NOT NULL DEFAULT 30,
       reminderTime TEXT NOT NULL,
       notes TEXT,
       isExtra INTEGER NOT NULL DEFAULT 0,
@@ -181,6 +181,7 @@ export async function initDb() {
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
   await ensureShiftColumn("reminderSentAt", "TEXT");
+  await ensureShiftColumn("startReminderSentAt", "TEXT");
   await ensureUsersTableShape();
   await ensureSessionsTableShape();
   await ensureTableColumn("notifications", "shiftId", "INTEGER");
@@ -207,6 +208,7 @@ export async function initDb() {
   }
 
   await seedUsers();
+  await normaliseLegacyReminderMinutes();
   await ensurePermanentRotaThroughYear(new Date());
 }
 
@@ -374,6 +376,27 @@ async function insertPermanentWeek(monday, yearEnd) {
   }
 }
 
+async function normaliseLegacyReminderMinutes() {
+  const today = formatDate(new Date());
+  const rows = await all(
+    "SELECT id, shiftDate, startTime FROM shifts WHERE shiftDate >= ? AND reminderMinutes = 60",
+    [today]
+  );
+
+  for (const row of rows) {
+    await run(
+      `UPDATE shifts
+       SET reminderMinutes = 30,
+           reminderTime = ?,
+           reminderSentAt = NULL,
+           startReminderSentAt = NULL,
+           updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [calculateReminderTime(row.shiftDate, row.startTime, 30), row.id]
+    );
+  }
+}
+
 function endOfYear(date) {
   return new Date(date.getFullYear(), 11, 31, 23, 59, 59, 999);
 }
@@ -400,9 +423,9 @@ function formatDate(date) {
   return `${year}-${month}-${day}`;
 }
 
-export function calculateReminderTime(shiftDate, startTime, reminderMinutes = 60) {
+export function calculateReminderTime(shiftDate, startTime, reminderMinutes = 30) {
   const start = new Date(`${shiftDate}T${startTime}:00`);
-  start.setMinutes(start.getMinutes() - Number(reminderMinutes || 60));
+  start.setMinutes(start.getMinutes() - Number(reminderMinutes || 30));
   return start.toISOString();
 }
 

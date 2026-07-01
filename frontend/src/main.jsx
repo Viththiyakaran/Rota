@@ -79,8 +79,9 @@ function App() {
     const checkNotifications = () => {
       api.notifications()
         .then((rows) => {
+          const staffShiftReminderTypes = new Set(["shift_reminder", "shift_start"]);
           const popupRows = currentUser.role === "admin"
-            ? rows.filter((notification) => notification.type !== "shift_reminder")
+            ? rows.filter((notification) => !staffShiftReminderTypes.has(notification.type))
             : rows;
           const latestUnread = popupRows.find((notification) => notification.unread && !dismissed.has(String(notification.id)));
           if (latestUnread) setPopupNotification(latestUnread);

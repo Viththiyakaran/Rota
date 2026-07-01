@@ -25,7 +25,7 @@ export function AddShift({ onSaved }) {
     startTime: "05:30",
     endTime: "14:00",
     breakMinutes: 0,
-    reminderMinutes: 60,
+    reminderMinutes: 30,
     notes: "",
     isExtra: false,
     coverForStaffId: ""
