@@ -44,7 +44,12 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const weekStart = new Date(`${dashboardWeekStart}T00:00:00`);
   const weekDays = Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index)));
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
-  const weekTasks = tasks.filter((task) => task.dueDate && task.dueDate >= weekDays[0] && task.dueDate <= weekDays[6]);
+  const weekTasks = tasks.filter((task) =>
+    task.status !== "done" &&
+    task.dueDate &&
+    task.dueDate >= weekDays[0] &&
+    task.dueDate <= weekDays[6]
+  );
   const moveDashboardWeek = (weeks) => {
     setDashboardWeekStart(toDateInputValue(addDays(weekStart, weeks * 7)));
   };
@@ -154,7 +159,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
                   const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
                   const visibleDayShifts = dayShifts.filter((shift) => !isApprovedOffShift(shift, timeOff, day));
                   const dayTimeOff = approvedTimeOffForDay(timeOff, day);
-                  const dayTasks = tasks.filter((task) => task.dueDate === day);
+                  const dayTasks = weekTasks.filter((task) => task.dueDate === day);
                   const dayNotes = [
                     ...new Set([
                       ...visibleDayShifts.map((shift) => shift.notes).filter(Boolean),

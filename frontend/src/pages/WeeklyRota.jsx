@@ -88,7 +88,12 @@ export function WeeklyRota({ currentUser }) {
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
-  const weekTasks = tasks.filter((task) => task.dueDate && task.dueDate >= weekDays[0] && task.dueDate <= weekDays[6]);
+  const weekTasks = tasks.filter((task) =>
+    task.status !== "done" &&
+    task.dueDate &&
+    task.dueDate >= weekDays[0] &&
+    task.dueDate <= weekDays[6]
+  );
   const activeStaff = staff.filter((person) => person.active);
   const groupShareUrl = whatsappGroupShareUrl({
     weekRange,
