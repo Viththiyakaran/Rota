@@ -7,7 +7,7 @@ import { Status } from "../components/Status.jsx";
 import { formatDateLabel, formatReminder } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
 
-export function Reminders({ branding = {} }) {
+export function Reminders({ branding = {}, currentUser = null }) {
   const [reminders, setReminders] = React.useState([]);
   const [notifications, setNotifications] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
@@ -64,8 +64,8 @@ export function Reminders({ branding = {} }) {
                     <Bell size={24} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-lg font-black">{notification.title}</p>
-                    <p className="font-bold text-fuel-green">{notification.message}</p>
+                    <p className="text-lg font-black">{displayNotificationTitle(notification, currentUser)}</p>
+                    <p className="font-bold text-fuel-green">{displayNotificationMessage(notification, currentUser)}</p>
                     <p className="mt-1 text-sm text-slate-600">
                       {notification.staffName} - {formatNotificationDate(notification.createdAt)}
                     </p>
@@ -87,7 +87,7 @@ export function Reminders({ branding = {} }) {
                   </div>
                   <div className="min-w-0">
                     <p className="text-lg font-black">{reminder.staffName}</p>
-                    <p className="font-bold text-fuel-green">{reminder.reminderMessage}</p>
+                    <p className="font-bold text-fuel-green">{displayReminderMessage(reminder, currentUser)}</p>
                     {reminder.isExtra && (
                       <p className="text-sm font-black text-fuel-ink">
                         Extra cover{reminder.coverForStaffName ? ` for ${reminder.coverForStaffName}` : ""}
@@ -134,6 +134,31 @@ export function Reminders({ branding = {} }) {
       </Status>
     </div>
   );
+}
+
+function displayNotificationTitle(notification, currentUser) {
+  if (currentUser?.role === "admin" && notification.type === "shift_reminder") {
+    return `${notification.staffName || "Staff"} shift reminder`;
+  }
+  return notification.title;
+}
+
+function displayNotificationMessage(notification, currentUser) {
+  if (currentUser?.role === "admin" && notification.type === "shift_reminder") {
+    return staffMessage(notification.message, notification.staffName);
+  }
+  return notification.message;
+}
+
+function displayReminderMessage(reminder, currentUser) {
+  if (currentUser?.role === "admin") {
+    return staffMessage(reminder.reminderMessage, reminder.staffName);
+  }
+  return reminder.reminderMessage;
+}
+
+function staffMessage(message, staffName = "Staff") {
+  return String(message || "").replace(/^Your shift starts/i, `${staffName}'s shift starts`);
 }
 
 function formatNotificationDate(value) {

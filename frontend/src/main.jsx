@@ -79,7 +79,10 @@ function App() {
     const checkNotifications = () => {
       api.notifications()
         .then((rows) => {
-          const latestUnread = rows.find((notification) => notification.unread && !dismissed.has(String(notification.id)));
+          const popupRows = currentUser.role === "admin"
+            ? rows.filter((notification) => notification.type !== "shift_reminder")
+            : rows;
+          const latestUnread = popupRows.find((notification) => notification.unread && !dismissed.has(String(notification.id)));
           if (latestUnread) setPopupNotification(latestUnread);
         })
         .catch(() => {});
@@ -193,7 +196,7 @@ function App() {
         {page === "rota" && <WeeklyRota currentUser={currentUser} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
-        {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} />}
+        {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}
         {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} />}
         {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>
