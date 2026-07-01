@@ -27,6 +27,7 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 - Shift notes editable from the rota
 - Staff availability warnings
 - Time-off requests with admin approval/rejection
+- Shared task board with Backlog, Todo, Process, and Done columns
 - Approved time off removes affected staff shifts from rota totals
 - Staff-only My Shifts page
 - Upcoming reminders, rota change notifications, and PWA push notifications
@@ -396,6 +397,10 @@ Authenticated routes:
 - `GET /api/availability`
 - `POST /api/availability`
 - `DELETE /api/availability/:id`
+- `GET /api/tasks`
+- `POST /api/tasks`
+- `PUT /api/tasks/:id`
+- `DELETE /api/tasks/:id`
 - `GET /api/audit`
 - `GET /api/settings/opening-hours`
 - `PUT /api/settings/opening-hours`

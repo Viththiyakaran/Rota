@@ -179,6 +179,21 @@ export async function initDb() {
     )
   `);
 
+  await run(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('backlog', 'todo', 'process', 'done')),
+      assignedStaffId INTEGER,
+      createdBy INTEGER,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (assignedStaffId) REFERENCES staff(id),
+      FOREIGN KEY (createdBy) REFERENCES users(id)
+    )
+  `);
+
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
   await ensureShiftColumn("reminderSentAt", "TEXT");

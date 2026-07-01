@@ -135,6 +135,10 @@ app.get("/api", (_req, res) => {
       "GET /api/availability",
       "POST /api/availability",
       "DELETE /api/availability/:id",
+      "GET /api/tasks",
+      "POST /api/tasks",
+      "PUT /api/tasks/:id",
+      "DELETE /api/tasks/:id",
       "GET /api/audit"
     ]
   });
@@ -483,6 +487,99 @@ app.post("/api/notifications/read-all", async (req, res, next) => {
       await run("UPDATE notifications SET readAt = CURRENT_TIMESTAMP WHERE readAt IS NULL");
     }
     res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/tasks", async (_req, res, next) => {
+  try {
+    const rows = await all(
+      `SELECT tasks.*, staff.name AS assignedStaffName, users.username AS createdByUsername
+       FROM tasks
+       LEFT JOIN staff ON staff.id = tasks.assignedStaffId
+       LEFT JOIN users ON users.id = tasks.createdBy
+       ORDER BY
+         CASE tasks.status
+           WHEN 'backlog' THEN 0
+           WHEN 'todo' THEN 1
+           WHEN 'process' THEN 2
+           WHEN 'done' THEN 3
+           ELSE 4
+         END,
+         tasks.updatedAt DESC,
+         tasks.id DESC`
+    );
+    res.json(rows.map(normaliseTask));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/tasks", async (req, res, next) => {
+  try {
+    const { title = "", description = "", status = "todo", assignedStaffId = null } = req.body;
+    const cleanTitle = String(title).trim();
+    if (!cleanTitle) return res.status(400).json({ error: "Task title is required." });
+    if (!isTaskStatus(status)) return res.status(400).json({ error: "Task status is invalid." });
+
+    const result = await run(
+      `INSERT INTO tasks (title, description, status, assignedStaffId, createdBy)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        cleanTitle,
+        String(description || "").trim(),
+        status,
+        assignedStaffId || null,
+        req.user.id
+      ]
+    );
+    addAudit(req.user.id, "create_task", `Created task ${cleanTitle}`);
+    const row = await getTask(result.id);
+    res.status(201).json(normaliseTask(row));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/tasks/:id", async (req, res, next) => {
+  try {
+    const current = await getTask(req.params.id);
+    if (!current) return res.status(404).json({ error: "Task not found." });
+
+    const nextStatus = req.body.status ?? current.status;
+    if (!isTaskStatus(nextStatus)) return res.status(400).json({ error: "Task status is invalid." });
+
+    const nextTitle = req.body.title === undefined ? current.title : String(req.body.title || "").trim();
+    if (!nextTitle) return res.status(400).json({ error: "Task title is required." });
+
+    await run(
+      `UPDATE tasks
+       SET title = ?, description = ?, status = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        nextTitle,
+        req.body.description === undefined ? current.description || "" : String(req.body.description || "").trim(),
+        nextStatus,
+        req.body.assignedStaffId === undefined ? current.assignedStaffId : req.body.assignedStaffId || null,
+        req.params.id
+      ]
+    );
+    addAudit(req.user.id, "update_task", `Updated task #${req.params.id} to ${nextStatus}`);
+    const row = await getTask(req.params.id);
+    res.json(normaliseTask(row));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/tasks/:id", async (req, res, next) => {
+  try {
+    const current = await getTask(req.params.id);
+    if (!current) return res.status(404).json({ error: "Task not found." });
+    await run("DELETE FROM tasks WHERE id = ?", [req.params.id]);
+    addAudit(req.user.id, "delete_task", `Deleted task #${req.params.id}`);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
@@ -1177,6 +1274,30 @@ async function processDueStartPushes() {
 
 function shiftStartDate(shift) {
   return shiftStartInstant(shift.shiftDate, shift.startTime);
+}
+
+async function getTask(id) {
+  return get(
+    `SELECT tasks.*, staff.name AS assignedStaffName, users.username AS createdByUsername
+     FROM tasks
+     LEFT JOIN staff ON staff.id = tasks.assignedStaffId
+     LEFT JOIN users ON users.id = tasks.createdBy
+     WHERE tasks.id = ?`,
+    [id]
+  );
+}
+
+function normaliseTask(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    assignedStaffId: row.assignedStaffId || null,
+    createdBy: row.createdBy || null
+  };
+}
+
+function isTaskStatus(status) {
+  return ["backlog", "todo", "process", "done"].includes(status);
 }
 
 function datePartsInBusinessTimeZone(date = new Date()) {

@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Bell, CalendarDays, Clock, Home, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
+import { Bell, CalendarDays, Clock, Home, ListChecks, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { AddShift } from "./pages/AddShift.jsx";
@@ -12,6 +12,7 @@ import { MyShifts } from "./pages/MyShifts.jsx";
 import { Reminders } from "./pages/Reminders.jsx";
 import { Settings } from "./pages/Settings.jsx";
 import { StaffList } from "./pages/StaffList.jsx";
+import { Tasks } from "./pages/Tasks.jsx";
 import { TimeOff } from "./pages/TimeOff.jsx";
 import { WeeklyRota } from "./pages/WeeklyRota.jsx";
 
@@ -22,6 +23,7 @@ const navItems = [
   { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "rota", label: "Rota", icon: CalendarDays, roles: ["admin", "staff"] },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
+  { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
   { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"] },
   { id: "account", label: "Account", icon: UserRound, roles: ["admin", "staff"] },
@@ -207,6 +209,7 @@ function App() {
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
         {page === "rota" && <WeeklyRota currentUser={currentUser} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
+        {page === "tasks" && <Tasks currentUser={currentUser} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}
         {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} />}
