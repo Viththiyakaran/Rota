@@ -64,6 +64,17 @@ function App() {
   }, [currentUser, page]);
 
   React.useEffect(() => {
+    const handlePasswordChangeRequired = () => {
+      setCurrentUser((user) => user ? { ...user, mustChangePassword: true } : user);
+      setPage("account");
+      setPopupNotification(null);
+    };
+
+    window.addEventListener("fuelops:password-change-required", handlePasswordChangeRequired);
+    return () => window.removeEventListener("fuelops:password-change-required", handlePasswordChangeRequired);
+  }, []);
+
+  React.useEffect(() => {
     document.title = appTitle;
   }, [appTitle]);
 

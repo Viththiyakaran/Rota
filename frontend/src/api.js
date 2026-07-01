@@ -22,7 +22,11 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || "Request failed");
+    const message = body.error || "Request failed";
+    if (message === "Please change your temporary password before using the rota.") {
+      window.dispatchEvent(new CustomEvent("fuelops:password-change-required"));
+    }
+    throw new Error(message);
   }
 
   if (response.status === 204) return null;

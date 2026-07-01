@@ -30,7 +30,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
         if (timeOffResult.status === "fulfilled") setTimeOff(timeOffResult.value);
         const failed = [staffResult, shiftResult, reminderResult, timeOffResult].find((result) => result.status === "rejected");
-        if (failed) setError(failed.reason.message);
+        if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -297,4 +297,8 @@ function isApprovedOffShift(shift, requests, day) {
 
 function sameStaff(left, right) {
   return String(left) === String(right);
+}
+
+function isPasswordChangeRequired(message) {
+  return message === "Please change your temporary password before using the rota.";
 }
