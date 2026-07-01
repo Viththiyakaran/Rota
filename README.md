@@ -449,7 +449,7 @@ Notes:
 
 - The calendar feed is private per staff login.
 - The feed includes upcoming shifts and excludes approved time off.
-- Calendar events use `Europe/London` time.
+- Calendar events use the business timezone from Settings. The default is `Europe/London` for UK businesses.
 - Each event includes the rota reminder as a calendar alarm.
 - Keep the feed URL private because calendar apps use the link without the normal app login cookie.
 

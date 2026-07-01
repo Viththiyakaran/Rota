@@ -109,7 +109,7 @@ export function Reminders({ branding = {}, currentUser = null }) {
                       ) : null}
                       <a
                         className="inline-flex items-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white"
-                        href={googleCalendarUrl(reminder, branding.appTitle)}
+                        href={googleCalendarUrl(reminder, branding.appTitle, branding.businessTimezone)}
                         target="_blank"
                         rel="noreferrer"
                       >
@@ -118,7 +118,7 @@ export function Reminders({ branding = {}, currentUser = null }) {
                       </a>
                       <a
                         className="inline-flex items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green"
-                        href={phoneCalendarDataUrl(reminder, branding.appTitle)}
+                        href={phoneCalendarDataUrl(reminder, branding.appTitle, branding.businessTimezone)}
                         download={phoneCalendarFilename(reminder)}
                       >
                         <Download size={16} />

@@ -37,7 +37,7 @@ export function MyShifts({ branding = {} }) {
                   <div className="mt-3 flex flex-wrap gap-2">
                     <a
                       className="inline-flex items-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white"
-                      href={googleCalendarUrl(shift, branding.appTitle)}
+                      href={googleCalendarUrl(shift, branding.appTitle, branding.businessTimezone)}
                       target="_blank"
                       rel="noreferrer"
                     >
@@ -46,7 +46,7 @@ export function MyShifts({ branding = {} }) {
                     </a>
                     <a
                       className="inline-flex items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green"
-                      href={phoneCalendarDataUrl(shift, branding.appTitle)}
+                      href={phoneCalendarDataUrl(shift, branding.appTitle, branding.businessTimezone)}
                       download={phoneCalendarFilename(shift)}
                     >
                       <Download size={16} />

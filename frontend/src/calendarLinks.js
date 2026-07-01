@@ -1,17 +1,18 @@
 import { formatDateLabel, formatShiftRange } from "./dateUtils.js";
 
-export function googleCalendarUrl(shift, businessName = "Rota") {
+export function googleCalendarUrl(shift, businessName = "Rota", timeZone = "Europe/London") {
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: shiftTitle(shift, businessName),
     dates: `${googleDateTime(shift.shiftDate, shift.startTime)}/${googleDateTime(endDateForShift(shift), shift.endTime)}`,
     details: shiftDescription(shift),
-    ctz: "Europe/London"
+    ctz: timeZone || "Europe/London"
   });
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-export function phoneCalendarDataUrl(shift, businessName = "Rota") {
+export function phoneCalendarDataUrl(shift, businessName = "Rota", timeZone = "Europe/London") {
+  const calendarTimeZone = timeZone || "Europe/London";
   const ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -21,8 +22,8 @@ export function phoneCalendarDataUrl(shift, businessName = "Rota") {
     "BEGIN:VEVENT",
     `UID:fuelops-shift-${shift.id}@fuelops-rota`,
     `DTSTAMP:${utcStamp(new Date())}`,
-    `DTSTART;TZID=Europe/London:${localIcsDateTime(shift.shiftDate, shift.startTime)}`,
-    `DTEND;TZID=Europe/London:${localIcsDateTime(endDateForShift(shift), shift.endTime)}`,
+    `DTSTART;TZID=${calendarTimeZone}:${localIcsDateTime(shift.shiftDate, shift.startTime)}`,
+    `DTEND;TZID=${calendarTimeZone}:${localIcsDateTime(endDateForShift(shift), shift.endTime)}`,
     `SUMMARY:${escapeIcs(shiftTitle(shift, businessName))}`,
     `DESCRIPTION:${escapeIcs(shiftDescription(shift))}`,
     "BEGIN:VALARM",

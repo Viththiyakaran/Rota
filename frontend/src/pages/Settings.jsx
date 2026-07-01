@@ -4,12 +4,22 @@ import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 
+const TIMEZONE_OPTIONS = [
+  { value: "Europe/London", label: "United Kingdom - Europe/London" },
+  { value: "Europe/Dublin", label: "Ireland - Europe/Dublin" },
+  { value: "Europe/Paris", label: "Western Europe - Europe/Paris" },
+  { value: "UTC", label: "UTC" },
+  { value: "Asia/Colombo", label: "Sri Lanka - Asia/Colombo" },
+  { value: "Asia/Dubai", label: "UAE - Asia/Dubai" },
+  { value: "America/New_York", label: "US Eastern - America/New_York" }
+];
+
 export function Settings({ branding, onBrandingSaved }) {
   const [form, setForm] = React.useState(branding);
   const [staff, setStaff] = React.useState([]);
   const [users, setUsers] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
-  const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00" });
+  const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", businessTimezone: "Europe/London" });
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "admin123" });
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -79,6 +89,7 @@ export function Settings({ branding, onBrandingSaved }) {
     try {
       const saved = await api.updateOpeningHours(openingHours);
       setOpeningHours(saved);
+      onBrandingSaved({ ...branding, businessTimezone: saved.businessTimezone });
       setMessage("Opening hours updated.");
       loadAdminData();
     } catch (err) {
@@ -199,14 +210,25 @@ export function Settings({ branding, onBrandingSaved }) {
         <SectionHeader
           icon={<Clock size={20} />}
           title="Business Opening Hours"
-          description="These hours help Add Shift show sensible time ranges for the rota."
+          description="These hours and timezone control shift ranges, reminders, and calendar sync."
         />
-        <form className="grid gap-4 px-5 pb-5 sm:grid-cols-[1fr_1fr_auto]" onSubmit={saveOpeningHours}>
+        <form className="grid gap-4 px-5 pb-5 lg:grid-cols-[1fr_1fr_1.5fr_auto]" onSubmit={saveOpeningHours}>
           <Field label="Open">
             <input type="time" className={inputClass} value={openingHours.openingStart} onChange={(e) => setOpeningHours({ ...openingHours, openingStart: e.target.value })} />
           </Field>
           <Field label="Close">
             <input type="time" className={inputClass} value={openingHours.openingEnd} onChange={(e) => setOpeningHours({ ...openingHours, openingEnd: e.target.value })} />
+          </Field>
+          <Field label="Timezone">
+            <select
+              className={inputClass}
+              value={openingHours.businessTimezone || "Europe/London"}
+              onChange={(e) => setOpeningHours({ ...openingHours, businessTimezone: e.target.value })}
+            >
+              {TIMEZONE_OPTIONS.map((timezone) => (
+                <option key={timezone.value} value={timezone.value}>{timezone.label}</option>
+              ))}
+            </select>
           </Field>
           <button className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-soft transition hover:bg-fuel-green/90">
             <Save size={18} />

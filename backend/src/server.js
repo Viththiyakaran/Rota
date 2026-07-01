@@ -17,6 +17,7 @@ import {
   ensureUserCalendarToken,
   findUserByUsername,
   get,
+  getBusinessTimezone,
   getBranding,
   getOpeningHours,
   getSessionUser,
@@ -31,6 +32,7 @@ import {
   updateOpeningHours,
   updateUser,
   updateBranding,
+  validTimeZone,
   verifyPassword
 } from "./db.js";
 
@@ -339,10 +341,11 @@ app.get("/api/settings/opening-hours", (_req, res) => {
 
 app.put("/api/settings/opening-hours", requireAdmin, async (req, res, next) => {
   try {
-    const { openingStart, openingEnd } = req.body;
+    const { openingStart, openingEnd, businessTimezone } = req.body;
     if (!isTime(openingStart) || !isTime(openingEnd)) return res.status(400).json({ error: "Opening hours must be valid times." });
-    const saved = updateOpeningHours({ openingStart, openingEnd });
-    addAudit(req.user.id, "update_opening_hours", `${openingStart}-${openingEnd}`);
+    if (businessTimezone !== undefined && !validTimeZone(businessTimezone)) return res.status(400).json({ error: "Timezone must be valid." });
+    const saved = updateOpeningHours({ openingStart, openingEnd, businessTimezone });
+    addAudit(req.user.id, "update_opening_hours", `${openingStart}-${openingEnd} ${saved.businessTimezone}`);
     res.json(saved);
   } catch (error) {
     next(error);
@@ -863,7 +866,7 @@ app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
 app.get("/api/reminders/upcoming", async (req, res, next) => {
   try {
     const now = new Date();
-    const today = ukDateParts(now).date;
+    const today = datePartsInBusinessTimeZone(now).date;
     const staffFilter = req.user.role === "staff" && req.user.staffId ? "AND staff.id = ?" : "";
     const params = req.user.role === "staff" && req.user.staffId ? [today, req.user.staffId] : [today];
     const rows = await all(
@@ -1176,9 +1179,9 @@ function shiftStartDate(shift) {
   return shiftStartInstant(shift.shiftDate, shift.startTime);
 }
 
-function ukDateParts(date = new Date()) {
+function datePartsInBusinessTimeZone(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: "Europe/London",
+    timeZone: getBusinessTimezone(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -1194,6 +1197,7 @@ function ukDateParts(date = new Date()) {
 }
 
 function buildIcsCalendar({ name, shifts }) {
+  const timeZone = getBusinessTimezone();
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
@@ -1201,19 +1205,19 @@ function buildIcsCalendar({ name, shifts }) {
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "X-WR-CALNAME:" + escapeIcsText(name),
-    "X-WR-TIMEZONE:Europe/London",
+    `X-WR-TIMEZONE:${timeZone}`,
     "X-PUBLISHED-TTL:PT30M"
   ];
 
   for (const shift of shifts) {
-    lines.push(...buildShiftEvent(shift));
+    lines.push(...buildShiftEvent(shift, timeZone));
   }
 
   lines.push("END:VCALENDAR");
   return `${lines.join("\r\n")}\r\n`;
 }
 
-function buildShiftEvent(shift) {
+function buildShiftEvent(shift, timeZone = getBusinessTimezone()) {
   const endDate = shift.endTime <= shift.startTime ? addDays(shift.shiftDate, 1) : shift.shiftDate;
   const summary = shift.isExtra
     ? `Extra shift - ${shift.staffName}`
@@ -1228,8 +1232,8 @@ function buildShiftEvent(shift) {
     "BEGIN:VEVENT",
     `UID:fuelops-shift-${shift.id}@fuelops-rota`,
     `DTSTAMP:${toUtcIcsDate(new Date())}`,
-    `DTSTART;TZID=Europe/London:${toLocalIcsDateTime(shift.shiftDate, shift.startTime)}`,
-    `DTEND;TZID=Europe/London:${toLocalIcsDateTime(endDate, shift.endTime)}`,
+    `DTSTART;TZID=${timeZone}:${toLocalIcsDateTime(shift.shiftDate, shift.startTime)}`,
+    `DTEND;TZID=${timeZone}:${toLocalIcsDateTime(endDate, shift.endTime)}`,
     `SUMMARY:${escapeIcsText(summary)}`,
     `DESCRIPTION:${escapeIcsText(description)}`,
     "BEGIN:VALARM",

@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename);
 const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "fuelops.sqlite");
 
 export const db = new DatabaseSync(dbPath);
-const UK_TIME_ZONE = "Europe/London";
+export const DEFAULT_TIME_ZONE = "Europe/London";
 
 const PERMANENT_ROTA_TEMPLATE = [
   ["VITHTHI", 0, "05:30", "19:00", 0, 30, "Shopping"],
@@ -201,6 +201,7 @@ export async function initDb() {
   await ensureTableColumn("sessions", "createdAt", "TEXT");
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
+  await ensureDefaultSetting("businessTimezone", DEFAULT_TIME_ZONE);
   await replaceLegacySeedEmails();
 
   const staffCount = await get("SELECT COUNT(*) AS count FROM staff");
@@ -399,15 +400,15 @@ async function normaliseLegacyReminderMinutes() {
   }
 }
 
-async function refreshFutureReminderTimes() {
+function refreshFutureReminderTimes() {
   const today = formatUkDate(new Date());
-  const rows = await all(
+  const rows = all(
     "SELECT id, shiftDate, startTime, reminderMinutes FROM shifts WHERE shiftDate >= ?",
     [today]
   );
 
   for (const row of rows) {
-    await run(
+    run(
       `UPDATE shifts
        SET reminderTime = ?,
            updatedAt = CURRENT_TIMESTAMP
@@ -523,24 +524,31 @@ export function publicUser(user) {
 }
 
 export function getBranding() {
-  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?)", ["businessName", "logoDataUrl"]);
+  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["businessName", "logoDataUrl", "businessTimezone"]);
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
     businessName: values.businessName || "Your Business",
-    logoDataUrl: values.logoDataUrl || ""
+    logoDataUrl: values.logoDataUrl || "",
+    businessTimezone: validTimeZone(values.businessTimezone) ? values.businessTimezone : DEFAULT_TIME_ZONE
   };
 }
 
 export function getOpeningHours() {
-  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?)", ["openingStart", "openingEnd"]);
+  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["openingStart", "openingEnd", "businessTimezone"]);
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
     openingStart: values.openingStart || "05:30",
-    openingEnd: values.openingEnd || "22:00"
+    openingEnd: values.openingEnd || "22:00",
+    businessTimezone: validTimeZone(values.businessTimezone) ? values.businessTimezone : DEFAULT_TIME_ZONE
   };
 }
 
-export function updateOpeningHours({ openingStart, openingEnd }) {
+export function getBusinessTimezone() {
+  const value = get("SELECT value FROM settings WHERE key = ?", ["businessTimezone"])?.value;
+  return validTimeZone(value) ? value : DEFAULT_TIME_ZONE;
+}
+
+export function updateOpeningHours({ openingStart, openingEnd, businessTimezone }) {
   run(
     `INSERT INTO settings (key, value)
      VALUES (?, ?)
@@ -553,6 +561,15 @@ export function updateOpeningHours({ openingStart, openingEnd }) {
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ["openingEnd", openingEnd || "22:00"]
   );
+  if (businessTimezone !== undefined) {
+    run(
+      `INSERT INTO settings (key, value)
+       VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ["businessTimezone", validTimeZone(businessTimezone) ? businessTimezone : DEFAULT_TIME_ZONE]
+    );
+    refreshFutureReminderTimes();
+  }
   return getOpeningHours();
 }
 
@@ -698,7 +715,7 @@ function toUsername(name) {
 }
 
 function buildReminderMessage(shiftDate, startTime) {
-  const today = formatUkDate(new Date());
+  const today = formatDateInTimeZone(new Date(), getBusinessTimezone());
   if (shiftDate === today) {
     return `Your shift starts at ${startTime} today`;
   }
@@ -723,8 +740,12 @@ function calculateHours(shiftDate, startTime, endTime) {
 }
 
 function formatUkDate(date) {
+  return formatDateInTimeZone(date, getBusinessTimezone());
+}
+
+function formatDateInTimeZone(date, timeZone) {
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: UK_TIME_ZONE,
+    timeZone: validTimeZone(timeZone) ? timeZone : DEFAULT_TIME_ZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit"
@@ -733,12 +754,13 @@ function formatUkDate(date) {
 }
 
 function ukDateTimeToUtc(dateString, timeString) {
+  const timeZone = getBusinessTimezone();
   const [year, month, day] = dateString.split("-").map(Number);
   const [hour, minute] = String(timeString || "00:00").split(":").map(Number);
   const targetAsUtc = Date.UTC(year, month - 1, day, hour, minute || 0, 0);
   const guess = new Date(targetAsUtc);
   const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: UK_TIME_ZONE,
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -760,4 +782,14 @@ function ukDateTimeToUtc(dateString, timeString) {
 
 function part(parts, type) {
   return parts.find((item) => item.type === type)?.value || "";
+}
+
+export function validTimeZone(timeZone) {
+  if (!timeZone) return false;
+  try {
+    new Intl.DateTimeFormat("en-GB", { timeZone }).format(new Date());
+    return true;
+  } catch (_error) {
+    return false;
+  }
 }
