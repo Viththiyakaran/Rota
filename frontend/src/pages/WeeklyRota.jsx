@@ -10,6 +10,7 @@ export function WeeklyRota({ currentUser }) {
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
+  const [tasks, setTasks] = React.useState([]);
   const [editingNoteId, setEditingNoteId] = React.useState(null);
   const [noteDraft, setNoteDraft] = React.useState("");
   const [savingNoteId, setSavingNoteId] = React.useState(null);
@@ -20,11 +21,12 @@ export function WeeklyRota({ currentUser }) {
 
   const load = React.useCallback(() => {
     setLoading(true);
-    Promise.all([api.week(startDate), api.timeOff(), api.staff()])
-      .then(([shiftRows, timeOffRows, staffRows]) => {
+    Promise.all([api.week(startDate), api.timeOff(), api.staff(), api.tasks()])
+      .then(([shiftRows, timeOffRows, staffRows, taskRows]) => {
         setShifts(shiftRows);
         setTimeOff(timeOffRows);
         setStaff(staffRows);
+        setTasks(taskRows);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -86,6 +88,7 @@ export function WeeklyRota({ currentUser }) {
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
+  const weekTasks = tasks.filter((task) => task.dueDate && task.dueDate >= weekDays[0] && task.dueDate <= weekDays[6]);
   const activeStaff = staff.filter((person) => person.active);
   const groupShareUrl = whatsappGroupShareUrl({
     weekRange,
@@ -101,6 +104,7 @@ export function WeeklyRota({ currentUser }) {
       <PrintWeeklyRota
         activeStaff={activeStaff}
         timeOff={timeOff}
+        tasks={weekTasks}
         visibleShifts={visibleShifts}
         weekDays={weekDays}
         weekRange={weekRange}
@@ -187,6 +191,7 @@ export function WeeklyRota({ currentUser }) {
           {weekDays.map((day) => {
             const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
             const dayTimeOff = approvedTimeOffForDay(timeOff, day);
+            const dayTasks = weekTasks.filter((task) => task.dueDate === day);
             return (
               <section key={day} className="flex min-h-[220px] flex-col overflow-hidden rounded-lg border border-fuel-line bg-white shadow-sm">
                 <div className="border-b border-fuel-line bg-fuel-mist/70 px-4 py-3">
@@ -197,11 +202,18 @@ export function WeeklyRota({ currentUser }) {
                   <p className="mt-0.5 text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-3">
-                  {dayShifts.length === 0 && dayTimeOff.length === 0 && (
+                  {dayShifts.length === 0 && dayTimeOff.length === 0 && dayTasks.length === 0 && (
                     <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-fuel-line bg-fuel-mist/30 p-4 text-sm font-bold text-slate-400">
                       No shifts
                     </div>
                   )}
+                  {dayTasks.map((task) => (
+                    <div key={`task-${task.id}`} className="rounded-md border border-fuel-line bg-fuel-mist/70 px-3 py-2">
+                      <p className="text-xs font-black uppercase text-fuel-green">Task - {formatTaskStatus(task.status)}</p>
+                      <p className="text-sm font-black text-fuel-ink">{task.title}</p>
+                      {task.assignedStaffName && <p className="truncate text-xs font-bold text-slate-600">{task.assignedStaffName}</p>}
+                    </div>
+                  ))}
                   {dayTimeOff.map((request) => (
                     <div key={`time-off-${request.id}`} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
                       <p className="text-xs font-black uppercase text-amber-800">Time off approved</p>
@@ -304,7 +316,7 @@ export function WeeklyRota({ currentUser }) {
   );
 }
 
-function PrintWeeklyRota({ activeStaff, timeOff, visibleShifts, weekDays, weekRange }) {
+function PrintWeeklyRota({ activeStaff, timeOff, tasks, visibleShifts, weekDays, weekRange }) {
   return (
     <section className="print-only">
       <div className="mb-3 flex items-end justify-between">
@@ -329,10 +341,12 @@ function PrintWeeklyRota({ activeStaff, timeOff, visibleShifts, weekDays, weekRa
           {weekDays.map((day) => {
             const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
             const dayTimeOff = approvedTimeOffForDay(timeOff, day);
+            const dayTasks = tasks.filter((task) => task.dueDate === day);
             const notes = [
               ...new Set([
                 ...dayShifts.map((shift) => shift.notes).filter(Boolean),
-                ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
+                ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`),
+                ...dayTasks.map(formatTaskNote)
               ])
             ];
 
@@ -410,6 +424,20 @@ function isApprovedOffShift(shift, requests, day) {
 
 function sameStaff(left, right) {
   return String(left) === String(right);
+}
+
+function formatTaskStatus(status) {
+  return {
+    backlog: "Backlog",
+    todo: "Todo",
+    process: "Process",
+    done: "Done"
+  }[status] || "Task";
+}
+
+function formatTaskNote(task) {
+  const assignee = task.assignedStaffName ? ` - ${task.assignedStaffName}` : "";
+  return `Task (${formatTaskStatus(task.status)}): ${task.title}${assignee}`;
 }
 
 function formatPrintWeekday(dateString) {

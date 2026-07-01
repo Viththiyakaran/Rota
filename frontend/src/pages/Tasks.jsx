@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { Status } from "../components/Status.jsx";
+import { toDateInputValue } from "../dateUtils.js";
 
 const COLUMNS = [
   { id: "backlog", label: "Backlog", tone: "bg-slate-100 text-slate-700" },
@@ -13,9 +14,10 @@ const COLUMNS = [
 ];
 
 export function Tasks({ currentUser }) {
+  const today = React.useMemo(() => toDateInputValue(new Date()), []);
   const [tasks, setTasks] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
-  const [form, setForm] = React.useState({ title: "", description: "", assignedStaffId: "", status: "todo" });
+  const [form, setForm] = React.useState({ title: "", description: "", dueDate: today, assignedStaffId: "", status: "todo" });
   const [draggingId, setDraggingId] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -47,7 +49,7 @@ export function Tasks({ currentUser }) {
         assignedStaffId: form.assignedStaffId || null
       });
       setTasks((current) => [task, ...current]);
-      setForm({ title: "", description: "", assignedStaffId: "", status: "todo" });
+      setForm({ title: "", description: "", dueDate: today, assignedStaffId: "", status: "todo" });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -98,8 +100,8 @@ export function Tasks({ currentUser }) {
       </div>
 
       <Card>
-        <form className="grid gap-3 lg:grid-cols-[1.2fr_1.4fr_1fr_0.8fr_auto]" onSubmit={createTask}>
-          {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700 lg:col-span-5">{error}</p>}
+        <form className="grid gap-3 lg:grid-cols-[1.2fr_1.4fr_0.9fr_1fr_0.8fr_auto]" onSubmit={createTask}>
+          {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700 lg:col-span-6">{error}</p>}
           <Field label="Task">
             <input
               required
@@ -115,6 +117,14 @@ export function Tasks({ currentUser }) {
               value={form.description}
               onChange={(event) => setForm({ ...form, description: event.target.value })}
               placeholder="Short note"
+            />
+          </Field>
+          <Field label="Date">
+            <input
+              type="date"
+              className={inputClass}
+              value={form.dueDate}
+              onChange={(event) => setForm({ ...form, dueDate: event.target.value })}
             />
           </Field>
           <Field label="Assign">
@@ -180,6 +190,11 @@ export function Tasks({ currentUser }) {
                         <GripVertical className="shrink-0 text-slate-400" size={18} />
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {task.dueDate && (
+                          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-black text-slate-600">
+                            {task.dueDate}
+                          </span>
+                        )}
                         <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-black text-fuel-green">
                           {task.assignedStaffName || "Anyone"}
                         </span>

@@ -507,6 +507,7 @@ app.get("/api/tasks", async (_req, res, next) => {
            WHEN 'done' THEN 3
            ELSE 4
          END,
+         COALESCE(tasks.dueDate, '9999-12-31') ASC,
          tasks.updatedAt DESC,
          tasks.id DESC`
     );
@@ -519,16 +520,19 @@ app.get("/api/tasks", async (_req, res, next) => {
 app.post("/api/tasks", async (req, res, next) => {
   try {
     const { title = "", description = "", status = "todo", assignedStaffId = null } = req.body;
+    const dueDate = req.body.dueDate || datePartsInBusinessTimeZone().date;
     const cleanTitle = String(title).trim();
     if (!cleanTitle) return res.status(400).json({ error: "Task title is required." });
     if (!isTaskStatus(status)) return res.status(400).json({ error: "Task status is invalid." });
+    if (!isDate(dueDate)) return res.status(400).json({ error: "Task date is invalid." });
 
     const result = await run(
-      `INSERT INTO tasks (title, description, status, assignedStaffId, createdBy)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO tasks (title, description, dueDate, status, assignedStaffId, createdBy)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         cleanTitle,
         String(description || "").trim(),
+        dueDate,
         status,
         assignedStaffId || null,
         req.user.id
@@ -552,14 +556,17 @@ app.put("/api/tasks/:id", async (req, res, next) => {
 
     const nextTitle = req.body.title === undefined ? current.title : String(req.body.title || "").trim();
     if (!nextTitle) return res.status(400).json({ error: "Task title is required." });
+    const nextDueDate = req.body.dueDate === undefined ? current.dueDate : req.body.dueDate || null;
+    if (nextDueDate && !isDate(nextDueDate)) return res.status(400).json({ error: "Task date is invalid." });
 
     await run(
       `UPDATE tasks
-       SET title = ?, description = ?, status = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP
+       SET title = ?, description = ?, dueDate = ?, status = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         nextTitle,
         req.body.description === undefined ? current.description || "" : String(req.body.description || "").trim(),
+        nextDueDate,
         nextStatus,
         req.body.assignedStaffId === undefined ? current.assignedStaffId : req.body.assignedStaffId || null,
         req.params.id
@@ -1298,6 +1305,10 @@ function normaliseTask(row) {
 
 function isTaskStatus(status) {
   return ["backlog", "todo", "process", "done"].includes(status);
+}
+
+function isDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""));
 }
 
 function datePartsInBusinessTimeZone(date = new Date()) {

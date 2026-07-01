@@ -28,6 +28,7 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 - Staff availability warnings
 - Time-off requests with admin approval/rejection
 - Shared task board with Backlog, Todo, Process, and Done columns
+- Dated tasks reflected in the dashboard rota, weekly rota, and print/PDF notes
 - Approved time off removes affected staff shifts from rota totals
 - Staff-only My Shifts page
 - Upcoming reminders, rota change notifications, and PWA push notifications
@@ -471,6 +472,13 @@ Notes:
 2. Select the correct week.
 3. Click Print / PDF.
 4. Use landscape layout for the cleanest shop noticeboard print.
+
+### Task Board
+
+1. Admin or staff opens the task board.
+2. Add a task with details, date, assignee, and status.
+3. Move tasks between Backlog, Todo, Process, and Done.
+4. Dated tasks appear on the matching rota day so shop jobs are visible beside shifts.
 
 ## Testing Before Deployment
 

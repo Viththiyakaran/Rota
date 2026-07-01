@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Info, MessageCircle, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Info, ListChecks, MessageCircle, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -11,6 +11,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [shifts, setShifts] = React.useState([]);
   const [reminders, setReminders] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
+  const [tasks, setTasks] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [dashboardWeekStart, setDashboardWeekStart] = React.useState(toDateInputValue(getMonday()));
@@ -22,14 +23,16 @@ export function Dashboard({ goTo, currentUser, branding }) {
       api.staff(),
       api.week(dashboardWeekStart),
       api.reminders(),
-      api.timeOff()
+      api.timeOff(),
+      api.tasks()
     ])
-      .then(([staffResult, shiftResult, reminderResult, timeOffResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
         if (timeOffResult.status === "fulfilled") setTimeOff(timeOffResult.value);
-        const failed = [staffResult, shiftResult, reminderResult, timeOffResult].find((result) => result.status === "rejected");
+        if (taskResult.status === "fulfilled") setTasks(taskResult.value);
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult].find((result) => result.status === "rejected");
         if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
@@ -41,6 +44,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const weekStart = new Date(`${dashboardWeekStart}T00:00:00`);
   const weekDays = Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index)));
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
+  const weekTasks = tasks.filter((task) => task.dueDate && task.dueDate >= weekDays[0] && task.dueDate <= weekDays[6]);
   const moveDashboardWeek = (weeks) => {
     setDashboardWeekStart(toDateInputValue(addDays(weekStart, weeks * 7)));
   };
@@ -66,7 +70,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
           <Metric icon={Users} label="Active staff" value={activeStaff} />
           <Metric icon={CalendarDays} label="Shifts this week" value={shifts.length} />
           <Metric icon={MessageCircle} label="Reminders" value={reminders.length} />
-          <Metric icon={CalendarDays} label="Week days" value="7" />
+          <Metric icon={ListChecks} label="Week tasks" value={weekTasks.length} />
         </div>
 
         <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
@@ -150,10 +154,12 @@ export function Dashboard({ goTo, currentUser, branding }) {
                   const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
                   const visibleDayShifts = dayShifts.filter((shift) => !isApprovedOffShift(shift, timeOff, day));
                   const dayTimeOff = approvedTimeOffForDay(timeOff, day);
+                  const dayTasks = tasks.filter((task) => task.dueDate === day);
                   const dayNotes = [
                     ...new Set([
                       ...visibleDayShifts.map((shift) => shift.notes).filter(Boolean),
-                      ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
+                      ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`),
+                      ...dayTasks.map(formatTaskNote)
                     ])
                   ];
                   return (
@@ -192,7 +198,13 @@ export function Dashboard({ goTo, currentUser, branding }) {
                           </td>
                         );
                       })}
-                      <td className="border border-fuel-line px-3 py-3 font-bold">{dayNotes.join(", ")}</td>
+                      <td className="border border-fuel-line px-3 py-3 font-bold">
+                        <div className="space-y-1">
+                          {dayNotes.length > 0 ? dayNotes.map((note) => (
+                            <p key={note}>{note}</p>
+                          )) : <span className="text-slate-400">-</span>}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
@@ -297,6 +309,17 @@ function isApprovedOffShift(shift, requests, day) {
 
 function sameStaff(left, right) {
   return String(left) === String(right);
+}
+
+function formatTaskNote(task) {
+  const status = {
+    backlog: "Backlog",
+    todo: "Todo",
+    process: "Process",
+    done: "Done"
+  }[task.status] || "Task";
+  const assignee = task.assignedStaffName ? ` - ${task.assignedStaffName}` : "";
+  return `Task (${status}): ${task.title}${assignee}`;
 }
 
 function isPasswordChangeRequired(message) {

@@ -184,6 +184,7 @@ export async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
+      dueDate TEXT,
       status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('backlog', 'todo', 'process', 'done')),
       assignedStaffId INTEGER,
       createdBy INTEGER,
@@ -214,6 +215,7 @@ export async function initDb() {
   await ensureTableColumn("sessions", "userId", "INTEGER");
   await ensureTableColumn("sessions", "expiresAt", "TEXT");
   await ensureTableColumn("sessions", "createdAt", "TEXT");
+  await ensureTableColumn("tasks", "dueDate", "TEXT");
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
   await ensureDefaultSetting("businessTimezone", DEFAULT_TIME_ZONE);
