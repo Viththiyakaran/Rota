@@ -8,6 +8,7 @@ const __dirname = path.dirname(__filename);
 const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "fuelops.sqlite");
 
 export const db = new DatabaseSync(dbPath);
+const UK_TIME_ZONE = "Europe/London";
 
 const PERMANENT_ROTA_TEMPLATE = [
   ["VITHTHI", 0, "05:30", "19:00", 0, 30, "Shopping"],
@@ -209,6 +210,7 @@ export async function initDb() {
 
   await seedUsers();
   await normaliseLegacyReminderMinutes();
+  await refreshFutureReminderTimes();
   await ensurePermanentRotaThroughYear(new Date());
 }
 
@@ -397,6 +399,24 @@ async function normaliseLegacyReminderMinutes() {
   }
 }
 
+async function refreshFutureReminderTimes() {
+  const today = formatUkDate(new Date());
+  const rows = await all(
+    "SELECT id, shiftDate, startTime, reminderMinutes FROM shifts WHERE shiftDate >= ?",
+    [today]
+  );
+
+  for (const row of rows) {
+    await run(
+      `UPDATE shifts
+       SET reminderTime = ?,
+           updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [calculateReminderTime(row.shiftDate, row.startTime, row.reminderMinutes), row.id]
+    );
+  }
+}
+
 function endOfYear(date) {
   return new Date(date.getFullYear(), 11, 31, 23, 59, 59, 999);
 }
@@ -424,9 +444,13 @@ function formatDate(date) {
 }
 
 export function calculateReminderTime(shiftDate, startTime, reminderMinutes = 30) {
-  const start = new Date(`${shiftDate}T${startTime}:00`);
+  const start = ukDateTimeToUtc(shiftDate, startTime);
   start.setMinutes(start.getMinutes() - Number(reminderMinutes || 30));
   return start.toISOString();
+}
+
+export function shiftStartInstant(shiftDate, startTime) {
+  return ukDateTimeToUtc(shiftDate, startTime);
 }
 
 export function decorateShift(row) {
@@ -674,7 +698,7 @@ function toUsername(name) {
 }
 
 function buildReminderMessage(shiftDate, startTime) {
-  const today = formatDate(new Date());
+  const today = formatUkDate(new Date());
   if (shiftDate === today) {
     return `Your shift starts at ${startTime} today`;
   }
@@ -688,8 +712,52 @@ function buildReminderMessage(shiftDate, startTime) {
 }
 
 function calculateHours(shiftDate, startTime, endTime) {
-  const start = new Date(`${shiftDate}T${startTime}:00`);
-  const end = new Date(`${shiftDate}T${endTime}:00`);
-  if (end <= start) end.setDate(end.getDate() + 1);
+  const start = ukDateTimeToUtc(shiftDate, startTime);
+  let endDate = shiftDate;
+  let end = ukDateTimeToUtc(endDate, endTime);
+  if (end <= start) {
+    endDate = formatDate(addDays(new Date(`${shiftDate}T00:00:00`), 1));
+    end = ukDateTimeToUtc(endDate, endTime);
+  }
   return (end - start) / 36e5;
+}
+
+function formatUkDate(date) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: UK_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  return `${part(parts, "year")}-${part(parts, "month")}-${part(parts, "day")}`;
+}
+
+function ukDateTimeToUtc(dateString, timeString) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  const [hour, minute] = String(timeString || "00:00").split(":").map(Number);
+  const targetAsUtc = Date.UTC(year, month - 1, day, hour, minute || 0, 0);
+  const guess = new Date(targetAsUtc);
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: UK_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(guess);
+  const zonedAsUtc = Date.UTC(
+    Number(part(parts, "year")),
+    Number(part(parts, "month")) - 1,
+    Number(part(parts, "day")),
+    Number(part(parts, "hour")),
+    Number(part(parts, "minute")),
+    Number(part(parts, "second"))
+  );
+  return new Date(guess.getTime() + (targetAsUtc - zonedAsUtc));
+}
+
+function part(parts, type) {
+  return parts.find((item) => item.type === type)?.value || "";
 }

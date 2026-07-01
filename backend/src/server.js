@@ -27,6 +27,7 @@ import {
   publicUser,
   run,
   resetUserPassword,
+  shiftStartInstant,
   updateOpeningHours,
   updateUser,
   updateBranding,
@@ -861,7 +862,8 @@ app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
 
 app.get("/api/reminders/upcoming", async (req, res, next) => {
   try {
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const today = ukDateParts(now).date;
     const staffFilter = req.user.role === "staff" && req.user.staffId ? "AND staff.id = ?" : "";
     const params = req.user.role === "staff" && req.user.staffId ? [today, req.user.staffId] : [today];
     const rows = await all(
@@ -873,10 +875,15 @@ app.get("/api/reminders/upcoming", async (req, res, next) => {
        WHERE staff.active = 1 AND shifts.shiftDate >= ?
        ${staffFilter}
        ORDER BY shifts.shiftDate ASC, shifts.startTime ASC
-       LIMIT 20`,
+       LIMIT 80`,
       params
     );
-    res.json(rows.map(decorateShift));
+    res.json(
+      rows
+        .map(decorateShift)
+        .filter((shift) => shiftStartInstant(shift.shiftDate, shift.startTime) >= now)
+        .slice(0, 20)
+    );
   } catch (error) {
     next(error);
   }
@@ -1166,7 +1173,24 @@ async function processDueStartPushes() {
 }
 
 function shiftStartDate(shift) {
-  return new Date(`${shift.shiftDate}T${shift.startTime}:00`);
+  return shiftStartInstant(shift.shiftDate, shift.startTime);
+}
+
+function ukDateParts(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Europe/London",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const value = (type) => parts.find((item) => item.type === type)?.value || "";
+  return {
+    date: `${value("year")}-${value("month")}-${value("day")}`,
+    time: `${value("hour")}:${value("minute")}`
+  };
 }
 
 function buildIcsCalendar({ name, shifts }) {

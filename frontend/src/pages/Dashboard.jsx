@@ -226,7 +226,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
             {reminders.slice(0, 4).map((reminder) => (
               <div key={reminder.id} className="rounded-md bg-fuel-mist p-3">
                 <p className="truncate font-black">{reminder.staffName}</p>
-                <p className="mt-1 text-sm text-slate-700">{reminder.reminderMessage}</p>
+                <p className="mt-1 text-sm text-slate-700">{displayReminderMessage(reminder, currentUser)}</p>
                 {reminder.isExtra && (
                   <p className="mt-1 text-xs font-black text-fuel-green">
                     Extra cover{reminder.coverForStaffName ? ` for ${reminder.coverForStaffName}` : ""}
@@ -301,4 +301,11 @@ function sameStaff(left, right) {
 
 function isPasswordChangeRequired(message) {
   return message === "Please change your temporary password before using the rota.";
+}
+
+function displayReminderMessage(reminder, currentUser) {
+  if (currentUser?.role === "admin") {
+    return String(reminder.reminderMessage || "").replace(/^Your shift starts/i, `${reminder.staffName || "Staff"}'s shift starts`);
+  }
+  return reminder.reminderMessage;
 }
