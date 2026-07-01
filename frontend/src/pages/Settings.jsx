@@ -1,5 +1,5 @@
 import React from "react";
-import { ImagePlus, RotateCcw, Save } from "lucide-react";
+import { Clock, History, ImagePlus, KeyRound, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -112,14 +112,32 @@ export function Settings({ branding, onBrandingSaved }) {
   };
 
   return (
-    <div className="space-y-4">
-      <div>
-        <p className="text-sm font-bold uppercase tracking-[0.16em] text-fuel-green">Admin</p>
-        <h2 className="text-3xl font-black">Business Settings</h2>
+    <div className="space-y-5 pb-8">
+      <div className="rounded-lg border border-fuel-line bg-white/95 p-5 shadow-md">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.18em] text-fuel-green">Admin Control</p>
+            <h2 className="mt-1 text-3xl font-black sm:text-4xl">Business Settings</h2>
+            <p className="mt-2 max-w-2xl text-sm font-bold text-slate-600">
+              Manage the business name, logo, rota hours, login access, and audit history from one place.
+            </p>
+          </div>
+          <div className="inline-flex w-fit items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green">
+            <ShieldCheck size={18} />
+            Admin only
+          </div>
+        </div>
       </div>
 
-      <Card>
+      <Card className="p-0">
         <form className="space-y-4" onSubmit={save}>
+          <SectionHeader
+            icon={<ImagePlus size={20} />}
+            title="Branding"
+            description="This name and logo appear in the header, browser title, rota printouts, and staff screens."
+          />
+
+          <div className="space-y-4 px-5 pb-5">
           {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700">{error}</p>}
           {message && <p className="rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{message}</p>}
 
@@ -133,66 +151,78 @@ export function Settings({ branding, onBrandingSaved }) {
             />
           </Field>
 
-          <Field label="Logo image">
-            <div className="grid gap-3 sm:grid-cols-[auto_1fr] sm:items-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-md border border-fuel-line bg-fuel-mist">
+          <div className="rounded-lg border border-fuel-line bg-fuel-mist/60 p-4">
+            <p className="mb-3 text-sm font-black text-slate-700">Logo image</p>
+            <div className="grid gap-4 sm:grid-cols-[96px_1fr] sm:items-center">
+              <div className="flex h-24 w-24 items-center justify-center rounded-lg border border-fuel-line bg-white shadow-sm">
                 {form.logoDataUrl ? (
-                  <img src={form.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
+                  <img src={form.logoDataUrl} alt="" className="h-full w-full rounded-lg object-contain p-2" />
                 ) : (
                   <span className="text-2xl font-black text-fuel-green">
                     {String(form.businessName || "R").trim().charAt(0).toUpperCase()}
                   </span>
                 )}
               </div>
-              <div className="space-y-2">
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white shadow-soft">
-                  <ImagePlus size={18} />
-                  Upload Logo
-                  <input className="hidden" type="file" accept="image/*" onChange={chooseLogo} />
-                </label>
-                <button
-                  type="button"
-                  className="ml-2 inline-flex items-center gap-2 rounded-md bg-fuel-mist px-4 py-3 font-black text-fuel-green"
-                  onClick={() => setForm({ ...form, logoDataUrl: "" })}
-                >
-                  <RotateCcw size={18} />
-                  Remove
-                </button>
-                <p className="text-xs font-bold text-slate-500">Use a square PNG/JPG under 500KB.</p>
+              <div>
+                <div className="flex flex-wrap gap-2">
+                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white shadow-soft transition hover:bg-fuel-green/90">
+                    <ImagePlus size={18} />
+                    Upload logo
+                    <input className="hidden" type="file" accept="image/*" onChange={chooseLogo} />
+                  </label>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-3 font-black text-fuel-green ring-1 ring-fuel-line transition hover:bg-fuel-mist"
+                    onClick={() => setForm({ ...form, logoDataUrl: "" })}
+                  >
+                    <RotateCcw size={18} />
+                    Remove
+                  </button>
+                </div>
+                <p className="mt-2 text-xs font-bold text-slate-500">Use a square PNG/JPG under 500KB for the cleanest header display.</p>
               </div>
             </div>
-          </Field>
+          </div>
 
           <button
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-fuel-ink px-5 py-4 text-lg font-black text-white shadow-lift disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-fuel-ink px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-ink/95 disabled:opacity-60 sm:w-auto"
             disabled={saving}
           >
             <Save size={20} />
             {saving ? "Saving..." : "Save Branding"}
           </button>
+          </div>
         </form>
       </Card>
 
-      <Card>
-        <h3 className="mb-3 text-xl font-black">Business Opening Hours</h3>
-        <form className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]" onSubmit={saveOpeningHours}>
+      <Card className="p-0">
+        <SectionHeader
+          icon={<Clock size={20} />}
+          title="Business Opening Hours"
+          description="These hours help Add Shift show sensible time ranges for the rota."
+        />
+        <form className="grid gap-4 px-5 pb-5 sm:grid-cols-[1fr_1fr_auto]" onSubmit={saveOpeningHours}>
           <Field label="Open">
             <input type="time" className={inputClass} value={openingHours.openingStart} onChange={(e) => setOpeningHours({ ...openingHours, openingStart: e.target.value })} />
           </Field>
           <Field label="Close">
             <input type="time" className={inputClass} value={openingHours.openingEnd} onChange={(e) => setOpeningHours({ ...openingHours, openingEnd: e.target.value })} />
           </Field>
-          <button className="self-end rounded-md bg-fuel-green px-5 py-4 font-black text-white">Save</button>
+          <button className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-soft transition hover:bg-fuel-green/90">
+            <Save size={18} />
+            Save
+          </button>
         </form>
       </Card>
 
-      <Card>
-        <h3 className="text-xl font-black">Login Access</h3>
-        <p className="mt-1 text-sm font-bold text-slate-600">
-          Staff logins are created automatically when staff are added. Manage staff details in Staff List.
-        </p>
+      <Card className="p-0">
+        <SectionHeader
+          icon={<KeyRound size={20} />}
+          title="Login Access"
+          description="Staff logins are created automatically when staff are added. Create extra admin users here."
+        />
 
-        <form className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]" onSubmit={createAdmin}>
+        <form className="grid gap-4 px-5 pb-5 md:grid-cols-[1fr_1fr_auto]" onSubmit={createAdmin}>
           <Field label="Username">
             <input className={inputClass} value={adminForm.username} onChange={(e) => setAdminForm({ ...adminForm, username: e.target.value })} />
           </Field>
@@ -202,7 +232,7 @@ export function Settings({ branding, onBrandingSaved }) {
           <button className="self-end rounded-md bg-fuel-ink px-5 py-4 font-black text-white">Create Admin</button>
         </form>
 
-        <div className="mt-4 space-y-2">
+        <div className="space-y-2 border-t border-fuel-line px-5 py-5">
           <p className="text-sm font-black uppercase tracking-[0.12em] text-fuel-green">Existing logins</p>
           {users.map((user) => (
             <div key={user.id} className="grid gap-2 rounded-md border border-fuel-line bg-white p-3 sm:grid-cols-[1fr_auto_auto] sm:items-center">
@@ -221,9 +251,13 @@ export function Settings({ branding, onBrandingSaved }) {
         </div>
       </Card>
 
-      <Card>
-        <h3 className="mb-3 text-xl font-black">Audit Log</h3>
-        <div className="max-h-96 space-y-2 overflow-auto">
+      <Card className="p-0">
+        <SectionHeader
+          icon={<History size={20} />}
+          title="Audit Log"
+          description="Recent changes made by admins and system actions."
+        />
+        <div className="max-h-96 space-y-2 overflow-auto px-5 pb-5">
           {audit.map((item) => (
             <div key={item.id} className="rounded-md bg-fuel-mist p-3">
               <p className="font-black">{item.action.replaceAll("_", " ")}</p>
@@ -234,6 +268,20 @@ export function Settings({ branding, onBrandingSaved }) {
           {audit.length === 0 && <p className="text-sm font-bold text-slate-500">No audit entries yet.</p>}
         </div>
       </Card>
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, description }) {
+  return (
+    <div className="flex items-start gap-3 border-b border-fuel-line px-5 py-4">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-fuel-mist text-fuel-green">
+        {icon}
+      </div>
+      <div>
+        <h3 className="text-xl font-black">{title}</h3>
+        <p className="mt-1 text-sm font-bold text-slate-600">{description}</p>
+      </div>
     </div>
   );
 }
