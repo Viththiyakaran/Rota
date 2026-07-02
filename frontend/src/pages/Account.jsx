@@ -3,6 +3,7 @@ import { Bell, CalendarDays, Copy, ExternalLink, KeyRound } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { PageHeader, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { canUsePushNotifications, enablePushNotifications } from "../pushNotifications.js";
 
 export function Account({ currentUser, forced = false, onPasswordChanged = () => {} }) {
@@ -79,11 +80,11 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
 
   return (
     <div className="space-y-4">
-      <div>
-        <p className="text-sm font-bold uppercase tracking-[0.16em] text-fuel-green">{currentUser.role}</p>
-        <h2 className="text-3xl font-black">My Account</h2>
-        {forced && <p className="mt-2 font-bold text-red-700">Please change your temporary password before using the rota.</p>}
-      </div>
+      <PageHeader
+        eyebrow={currentUser.role}
+        title="My Account"
+        description={forced ? "Please change your temporary password before using the rota." : "Manage your password, phone notifications, and calendar sync."}
+      />
       <Card>
         <form className="space-y-4" onSubmit={submit}>
           {message && <p className="rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{message}</p>}
@@ -97,7 +98,7 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
           <Field label="Confirm new password">
             <input className={inputClass} type="password" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} />
           </Field>
-          <button className="flex w-full items-center justify-center gap-2 rounded-md bg-fuel-green px-5 py-4 font-black text-white">
+          <button className={`${primaryButton} w-full`}>
             <KeyRound size={18} />
             Change Password
           </button>
@@ -119,7 +120,7 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
                 )}
               </div>
               <button
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-5 py-4 font-black text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+                className={`${primaryButton} disabled:bg-slate-300`}
                 disabled={savingPush || !canUsePushNotifications()}
                 onClick={enablePush}
               >
@@ -152,21 +153,21 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
               {calendarFeed?.feedUrl && (
                 <div className="flex flex-wrap gap-2">
                   <a
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white"
+                    className={primaryButton}
                     href={calendarFeed.appleCalendarUrl || calendarFeed.feedUrl}
                   >
                     <CalendarDays size={18} />
                     Phone sync
                   </a>
                   <button
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 font-black text-fuel-green"
+                    className={softButton}
                     onClick={copyCalendarFeed}
                   >
                     <Copy size={18} />
                     Copy link
                   </button>
                   <a
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 font-black text-fuel-green"
+                    className={softButton}
                     href={calendarFeed.feedUrl}
                     target="_blank"
                     rel="noreferrer"

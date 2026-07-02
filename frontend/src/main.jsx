@@ -142,20 +142,20 @@ function App() {
       <div className="min-h-screen bg-fuel-cream">
         <header className="border-b border-fuel-line bg-white/95 shadow-sm">
           <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-            <button className="flex items-center gap-3 text-left">
-              <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-fuel-deep text-lg font-black text-fuel-lime shadow-md">
+            <button className="flex min-w-0 items-center gap-3 text-left">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-deep text-lg font-black text-fuel-lime shadow-sm">
                 {branding.logoDataUrl ? (
-                  <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-xl object-contain p-1" />
+                  <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-lg object-contain p-1" />
                 ) : (
                   getBrandInitial(branding.businessName)
                 )}
               </span>
-              <h1 className="max-w-[180px] truncate text-2xl font-black leading-none text-fuel-ink sm:max-w-sm">{appTitle}</h1>
+              <h1 className="max-w-[180px] truncate text-xl font-black leading-none text-fuel-ink sm:max-w-sm">{appTitle}</h1>
             </button>
             <button
               onClick={logout}
               title="Log out"
-              className="flex h-12 w-12 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green transition hover:bg-fuel-line"
+              className="flex h-11 w-11 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green transition hover:bg-fuel-line"
             >
               <LogOut size={20} />
             </button>
@@ -172,16 +172,16 @@ function App() {
     <div className="min-h-screen bg-fuel-cream">
       <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <button className="flex items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-fuel-deep text-lg font-black text-fuel-lime shadow-md">
+          <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-deep text-lg font-black text-fuel-lime shadow-sm">
               {branding.logoDataUrl ? (
-                <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-xl object-contain p-1" />
+                <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-lg object-contain p-1" />
               ) : (
                 getBrandInitial(branding.businessName)
               )}
             </span>
             <span>
-              <h1 className="max-w-[180px] truncate text-2xl font-black leading-none text-fuel-ink sm:max-w-sm">
+              <h1 className="max-w-[180px] truncate text-xl font-black leading-none text-fuel-ink sm:max-w-sm">
                 {appTitle}
               </h1>
             </span>
@@ -194,7 +194,7 @@ function App() {
             <button
               onClick={logout}
               title="Log out"
-              className="flex h-12 w-12 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green transition hover:bg-fuel-line"
+              className="flex h-11 w-11 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green transition hover:bg-fuel-line"
             >
               <LogOut size={20} />
             </button>
@@ -202,7 +202,7 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-28 pt-5">
+      <main className="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:pt-5">
         {page === "dashboard" && <Dashboard {...pageProps} />}
         {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
@@ -248,7 +248,7 @@ function App() {
       )}
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/90 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl gap-2 overflow-x-auto px-2 py-2">
+        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 py-2 sm:gap-2">
           {visibleNav.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
@@ -257,8 +257,8 @@ function App() {
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 title={item.label}
-                className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center rounded-xl px-2 py-2 text-[11px] font-black normal-case transition sm:min-w-24 ${
-                  active ? "bg-fuel-green text-white shadow-md" : "bg-transparent text-slate-500 shadow-none hover:bg-fuel-mist hover:text-fuel-green"
+                className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center rounded-lg px-2 py-2 text-[11px] font-black normal-case transition sm:min-w-24 ${
+                  active ? "bg-fuel-green text-white shadow-sm" : "bg-transparent text-slate-500 shadow-none hover:bg-fuel-mist hover:text-fuel-green"
                 }`}
               >
                 <Icon size={20} />

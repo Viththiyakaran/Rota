@@ -2,6 +2,7 @@ import React from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Info, ListChecks, MessageCircle, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
+import { PageHeader, darkButton, primaryButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
@@ -56,13 +57,11 @@ export function Dashboard({ goTo, currentUser, branding }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-md border border-fuel-line bg-white p-5 shadow-soft">
-        <p className="text-sm font-black uppercase tracking-[0.16em] text-fuel-green">Today</p>
-        <h2 className="mt-1 text-3xl font-black text-fuel-ink">{branding.appTitle}</h2>
-        <p className="mt-2 max-w-2xl text-sm font-semibold text-slate-600">
-          Weekly rota, cover shifts, and reminders in one place.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Today"
+        title={branding.appTitle}
+        description="Weekly rota, cover shifts, tasks, and reminders in one place."
+      />
 
       {error && !loading && (
         <p className="rounded-md bg-amber-50 p-3 font-bold text-amber-800">
@@ -80,20 +79,20 @@ export function Dashboard({ goTo, currentUser, branding }) {
 
         <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           {isAdmin && (
-            <button onClick={() => goTo("add-staff")} className="rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-deep">
+            <button onClick={() => goTo("add-staff")} className={primaryButton}>
               Add Staff
             </button>
           )}
           {isAdmin && (
-            <button onClick={() => goTo("add-shift")} className="rounded-md bg-fuel-ink px-5 py-4 font-black text-white shadow-soft transition hover:bg-fuel-deep">
+            <button onClick={() => goTo("add-shift")} className={darkButton}>
               Add Shift
             </button>
           )}
-          <button onClick={() => goTo("rota")} className="rounded-md bg-fuel-lime px-5 py-4 font-black text-fuel-ink shadow-soft transition hover:bg-fuel-gold">
+          <button onClick={() => goTo("rota")} className="inline-flex min-h-11 items-center justify-center rounded-md bg-fuel-lime px-4 py-2.5 text-sm font-black text-fuel-ink shadow-sm transition hover:bg-fuel-gold">
             Weekly Rota
           </button>
           {!isAdmin && (
-            <button onClick={() => goTo("reminders")} className="rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-deep">
+            <button onClick={() => goTo("reminders")} className={primaryButton}>
               My Reminders
             </button>
           )}

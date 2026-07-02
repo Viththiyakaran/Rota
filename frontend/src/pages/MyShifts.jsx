@@ -3,6 +3,7 @@ import { CalendarDays, Download, ExternalLink } from "lucide-react";
 import { api } from "../api.js";
 import { googleCalendarUrl, phoneCalendarDataUrl, phoneCalendarFilename } from "../calendarLinks.js";
 import { Card } from "../components/Card.jsx";
+import { PageHeader, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { formatDayLabel, formatShiftRange } from "../dateUtils.js";
 
@@ -20,7 +21,11 @@ export function MyShifts({ branding = {} }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-3xl font-black">My Shifts</h2>
+      <PageHeader
+        eyebrow="Staff"
+        title="My Shifts"
+        description="Your upcoming shifts, notes, and calendar shortcuts."
+      />
       <Status loading={loading} error={error} empty={shifts.length === 0}>
         <div className="space-y-3">
           {shifts.map((shift) => (
@@ -36,7 +41,7 @@ export function MyShifts({ branding = {} }) {
                   {shift.notes && <p className="mt-2 rounded-md bg-fuel-mist px-2 py-1 text-sm font-bold">{shift.notes}</p>}
                   <div className="mt-3 flex flex-wrap gap-2">
                     <a
-                      className="inline-flex items-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white"
+                      className={primaryButton}
                       href={googleCalendarUrl(shift, branding.appTitle, branding.businessTimezone)}
                       target="_blank"
                       rel="noreferrer"
@@ -45,7 +50,7 @@ export function MyShifts({ branding = {} }) {
                       Google
                     </a>
                     <a
-                      className="inline-flex items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green"
+                      className={softButton}
                       href={phoneCalendarDataUrl(shift, branding.appTitle, branding.businessTimezone)}
                       download={phoneCalendarFilename(shift)}
                     >

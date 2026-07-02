@@ -2,6 +2,7 @@ import React from "react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { PageHeader, Pill, primaryButton } from "../components/PageHeader.jsx";
 import { toDateInputValue } from "../dateUtils.js";
 
 const quickRanges = [
@@ -67,7 +68,11 @@ export function AddShift({ onSaved }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-3xl font-black">Add Shift</h2>
+      <PageHeader
+        eyebrow="Rota"
+        title="Add Shift"
+        description="Choose staff, date, hours, and optional cover details. Availability warnings appear before saving."
+      />
       <Card>
         <form onSubmit={submit} className="space-y-4">
           {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700">{error}</p>}
@@ -79,10 +84,12 @@ export function AddShift({ onSaved }) {
             </select>
           </Field>
           {selectedStaff && (
-            <div className="rounded-md border border-fuel-line bg-white p-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-fuel-line bg-fuel-mist/60 p-3">
               <p className="text-sm font-bold text-slate-600">Selected staff</p>
-              <p className="text-xl font-black">{selectedStaff.name}</p>
-              <p className="text-sm font-bold text-fuel-green">{selectedStaff.role}</p>
+              <div className="text-right">
+                <p className="text-lg font-black">{selectedStaff.name}</p>
+                <Pill>{selectedStaff.role}</Pill>
+              </div>
             </div>
           )}
           {conflict && (
@@ -143,7 +150,7 @@ export function AddShift({ onSaved }) {
           <Field label="Notes">
             <textarea className={`${inputClass} min-h-24`} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
-          <button className="w-full rounded-md bg-fuel-green py-4 text-lg font-black text-white">Save Shift</button>
+          <button className={`${primaryButton} w-full`}>Save Shift</button>
         </form>
       </Card>
     </div>

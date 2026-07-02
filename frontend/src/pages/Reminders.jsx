@@ -3,6 +3,7 @@ import { Bell, CheckCheck, Download, ExternalLink, MessageCircle } from "lucide-
 import { api } from "../api.js";
 import { googleCalendarUrl, phoneCalendarDataUrl, phoneCalendarFilename } from "../calendarLinks.js";
 import { Card } from "../components/Card.jsx";
+import { PageHeader, Pill, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { formatDateLabel, formatReminder } from "../dateUtils.js";
 import { whatsappReminderUrl } from "../whatsapp.js";
@@ -37,18 +38,18 @@ export function Reminders({ branding = {}, currentUser = null }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h2 className="text-3xl font-black">Notifications</h2>
-          <p className="font-bold text-slate-600">Rota changes and upcoming shift reminders</p>
-        </div>
-        {unreadCount > 0 && (
-          <button className="inline-flex items-center justify-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white" onClick={markRead}>
+      <PageHeader
+        eyebrow="Alerts"
+        title="Notifications"
+        description="Rota changes and upcoming shift reminders."
+        meta={unreadCount > 0 ? <Pill tone="lime">{unreadCount} unread</Pill> : <Pill>All read</Pill>}
+        action={unreadCount > 0 && (
+          <button className={primaryButton} onClick={markRead}>
             <CheckCheck size={18} />
             Mark all read
           </button>
         )}
-      </div>
+      />
 
       <Status loading={loading} error={error} empty={notifications.length === 0 && reminders.length === 0}>
         {notifications.length > 0 && (
@@ -108,7 +109,7 @@ export function Reminders({ branding = {}, currentUser = null }) {
                         </a>
                       ) : null}
                       <a
-                        className="inline-flex items-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white"
+                      className={primaryButton}
                         href={googleCalendarUrl(reminder, branding.appTitle, branding.businessTimezone)}
                         target="_blank"
                         rel="noreferrer"
@@ -117,7 +118,7 @@ export function Reminders({ branding = {}, currentUser = null }) {
                         Google
                       </a>
                       <a
-                        className="inline-flex items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green"
+                        className={softButton}
                         href={phoneCalendarDataUrl(reminder, branding.appTitle, branding.businessTimezone)}
                         download={phoneCalendarFilename(reminder)}
                       >

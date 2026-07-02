@@ -1,6 +1,7 @@
 import React from "react";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
+import { PageHeader, Pill, darkButton, primaryButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDateLabel, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappGroupShareUrl } from "../whatsapp.js";
@@ -115,17 +116,13 @@ export function WeeklyRota({ currentUser }) {
         weekRange={weekRange}
       />
 
-      <div className="screen-only flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-[0.16em] text-fuel-green">Monday to Sunday</p>
-          <h2 className="text-4xl font-black text-fuel-ink">
-            Weekly Rota
-          </h2>
-          <p className="mt-1 text-sm font-bold text-slate-500">{weekRange}</p>
-        </div>
-        <div className="w-fit rounded-full border border-fuel-line bg-white px-4 py-3 font-black text-fuel-green shadow-sm">
-          {visibleShifts.length} shifts
-        </div>
+      <div className="screen-only">
+        <PageHeader
+          eyebrow="Monday to Sunday"
+          title="Weekly Rota"
+          description={weekRange}
+          meta={<Pill>{visibleShifts.length} shifts</Pill>}
+        />
       </div>
 
       <div className="screen-only rounded-lg border border-fuel-line bg-white p-4 shadow-md">
@@ -143,7 +140,7 @@ export function WeeklyRota({ currentUser }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rounded-lg bg-fuel-mist text-fuel-green shadow-none hover:bg-fuel-line"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-fuel-mist text-fuel-green hover:bg-fuel-line"
               onClick={() => moveWeek(-1)}
               title="Previous week"
             >
@@ -151,7 +148,7 @@ export function WeeklyRota({ currentUser }) {
             </button>
             <button
               type="button"
-              className="rounded-lg bg-fuel-green px-5 py-3 font-black normal-case text-white shadow-md"
+              className={primaryButton}
               onClick={() => moveWeek(1)}
             >
               Next
@@ -160,7 +157,7 @@ export function WeeklyRota({ currentUser }) {
           </div>
           <div className="flex flex-col gap-2 lg:col-span-3 lg:flex-row">
             <a
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-3 font-black normal-case text-white shadow-md"
+              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-[#25D366] px-4 py-3 text-sm font-black normal-case text-white shadow-sm"
               href={groupShareUrl}
               target="_blank"
               rel="noreferrer"
@@ -170,7 +167,7 @@ export function WeeklyRota({ currentUser }) {
             </a>
             <button
               type="button"
-              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-fuel-ink px-4 py-3 font-black normal-case text-white shadow-md"
+              className={`flex-1 ${darkButton}`}
               onClick={() => window.print()}
             >
               <Printer size={18} />
@@ -179,7 +176,7 @@ export function WeeklyRota({ currentUser }) {
             {isAdmin && (
               <button
                 type="button"
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-fuel-lime px-4 py-3 font-black normal-case text-fuel-ink shadow-md"
+                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-fuel-lime px-4 py-2.5 text-sm font-black normal-case text-fuel-ink shadow-sm"
                 onClick={copyToNextWeek}
               >
                 <Copy size={18} />

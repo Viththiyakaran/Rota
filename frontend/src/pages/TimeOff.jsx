@@ -3,6 +3,7 @@ import { Check, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { PageHeader, Pill, darkButton, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { formatDateLabel, toDateInputValue } from "../dateUtils.js";
 
@@ -101,10 +102,12 @@ export function TimeOff({ currentUser }) {
 
   return (
     <div className="space-y-4">
-      <div>
-        <p className="text-sm font-black uppercase tracking-[0.12em] text-fuel-green">Holiday and availability</p>
-        <h2 className="text-3xl font-black">Time Off</h2>
-      </div>
+      <PageHeader
+        eyebrow="Holiday and availability"
+        title="Time Off"
+        description="Request leave, review approvals, and record unavailable times before rota planning."
+        meta={<Pill tone={pendingCount > 0 ? "lime" : "green"}>{pendingCount} pending</Pill>}
+      />
       <Status loading={loading} error={error}>
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -143,7 +146,7 @@ export function TimeOff({ currentUser }) {
               <Field label="Reason">
                 <textarea className={`${inputClass} min-h-20`} value={timeOffForm.reason} onChange={(e) => setTimeOffForm({ ...timeOffForm, reason: e.target.value })} />
               </Field>
-              <button className="w-full rounded-md bg-fuel-green px-5 py-4 font-black text-white">Submit Request</button>
+              <button className={`${primaryButton} w-full`}>Submit Request</button>
             </form>
           </Card>
 
@@ -173,7 +176,7 @@ export function TimeOff({ currentUser }) {
               <Field label="Note">
                 <input className={inputClass} value={availabilityForm.note} onChange={(e) => setAvailabilityForm({ ...availabilityForm, note: e.target.value })} />
               </Field>
-              <button className="w-full rounded-md bg-fuel-ink px-5 py-4 font-black text-white">Add Unavailable Time</button>
+              <button className={`${darkButton} w-full`}>Add Unavailable Time</button>
             </form>
           </Card>
         </div>
@@ -206,8 +209,8 @@ export function TimeOff({ currentUser }) {
                   <div className="flex gap-2 md:justify-end">
                     {canReview ? (
                       <>
-                        <button className="rounded-md bg-fuel-green p-2 text-white" onClick={() => review(request.id, "approved")} title="Approve"><Check size={16} /></button>
-                        <button className="rounded-md bg-red-100 p-2 text-red-700" onClick={() => review(request.id, "rejected")} title="Reject"><X size={16} /></button>
+                        <button className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-fuel-green text-white" onClick={() => review(request.id, "approved")} title="Approve"><Check size={16} /></button>
+                        <button className="inline-flex h-10 w-10 items-center justify-center rounded-md bg-red-100 text-red-700" onClick={() => review(request.id, "rejected")} title="Reject"><X size={16} /></button>
                       </>
                     ) : (
                       <span className="text-xs font-black uppercase text-slate-400">{invalidRange ? "Fix dates" : "Reviewed"}</span>
@@ -230,7 +233,7 @@ export function TimeOff({ currentUser }) {
                   <p className="text-sm font-bold text-slate-600">{weekdays[item.weekday]} {item.startTime}-{item.endTime}</p>
                   {item.note && <p className="text-sm">{item.note}</p>}
                 </div>
-                <button className="rounded-md bg-fuel-mist p-2 text-slate-500" onClick={() => removeAvailability(item.id)} title="Delete"><Trash2 size={16} /></button>
+                <button className={softButton} onClick={() => removeAvailability(item.id)} title="Delete"><Trash2 size={16} /></button>
               </div>
             ))}
             {availability.length === 0 && <p className="text-sm font-bold text-slate-500">No unavailable times yet.</p>}

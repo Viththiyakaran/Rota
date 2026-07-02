@@ -3,6 +3,7 @@ import { Clock, History, ImagePlus, KeyRound, RotateCcw, Save, ShieldCheck } fro
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { PageHeader, Pill, darkButton, primaryButton, softButton } from "../components/PageHeader.jsx";
 
 const TIMEZONE_OPTIONS = [
   { value: "Europe/London", label: "United Kingdom - Europe/London" },
@@ -124,21 +125,17 @@ export function Settings({ branding, onBrandingSaved }) {
 
   return (
     <div className="space-y-5 pb-8">
-      <div className="rounded-lg border border-fuel-line bg-white/95 p-5 shadow-md">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.18em] text-fuel-green">Admin Control</p>
-            <h2 className="mt-1 text-3xl font-black sm:text-4xl">Business Settings</h2>
-            <p className="mt-2 max-w-2xl text-sm font-bold text-slate-600">
-              Manage the business name, logo, rota hours, login access, and audit history from one place.
-            </p>
-          </div>
-          <div className="inline-flex w-fit items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green">
+      <PageHeader
+        eyebrow="Admin Control"
+        title="Business Settings"
+        description="Manage the business name, logo, rota hours, login access, and audit history from one place."
+        meta={(
+          <Pill>
             <ShieldCheck size={18} />
             Admin only
-          </div>
-        </div>
-      </div>
+          </Pill>
+        )}
+      />
 
       <Card className="p-0">
         <form className="space-y-4" onSubmit={save}>
@@ -176,14 +173,14 @@ export function Settings({ branding, onBrandingSaved }) {
               </div>
               <div>
                 <div className="flex flex-wrap gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-fuel-green px-4 py-3 font-black text-white shadow-soft transition hover:bg-fuel-green/90">
+                  <label className={`${primaryButton} cursor-pointer`}>
                     <ImagePlus size={18} />
                     Upload logo
                     <input className="hidden" type="file" accept="image/*" onChange={chooseLogo} />
                   </label>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-3 font-black text-fuel-green ring-1 ring-fuel-line transition hover:bg-fuel-mist"
+                    className={softButton}
                     onClick={() => setForm({ ...form, logoDataUrl: "" })}
                   >
                     <RotateCcw size={18} />
@@ -196,7 +193,7 @@ export function Settings({ branding, onBrandingSaved }) {
           </div>
 
           <button
-            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-fuel-ink px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-ink/95 disabled:opacity-60 sm:w-auto"
+            className={`${darkButton} w-full sm:w-auto`}
             disabled={saving}
           >
             <Save size={20} />
@@ -230,7 +227,7 @@ export function Settings({ branding, onBrandingSaved }) {
               ))}
             </select>
           </Field>
-          <button className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-soft transition hover:bg-fuel-green/90">
+          <button className={`${primaryButton} self-end`}>
             <Save size={18} />
             Save
           </button>
@@ -251,7 +248,7 @@ export function Settings({ branding, onBrandingSaved }) {
           <Field label="Password">
             <input className={inputClass} value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} />
           </Field>
-          <button className="self-end rounded-md bg-fuel-ink px-5 py-4 font-black text-white">Create Admin</button>
+          <button className={`${darkButton} self-end`}>Create Admin</button>
         </form>
 
         <div className="space-y-2 border-t border-fuel-line px-5 py-5">
@@ -262,10 +259,10 @@ export function Settings({ branding, onBrandingSaved }) {
                 <p className="font-black">{user.username}</p>
                 <p className="text-sm font-bold text-slate-600">{user.role}{user.staffName ? ` - ${user.staffName}` : ""}</p>
               </div>
-              <button className="rounded-md bg-fuel-mist px-3 py-2 font-black text-fuel-green" onClick={() => resetPassword(user)}>
+              <button className={softButton} onClick={() => resetPassword(user)}>
                 Reset
               </button>
-              <button className={`rounded-md px-3 py-2 font-black ${user.active ? "bg-red-50 text-red-700" : "bg-fuel-green text-white"}`} onClick={() => toggleUser(user)}>
+              <button className={user.active ? "inline-flex min-h-11 items-center justify-center rounded-md bg-red-50 px-4 py-2.5 text-sm font-black text-red-700" : primaryButton} onClick={() => toggleUser(user)}>
                 {user.active ? "Disable" : "Enable"}
               </button>
             </div>

@@ -3,6 +3,7 @@ import { CheckCircle2, GripVertical, ListChecks, Plus, Trash2 } from "lucide-rea
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { PageHeader, Pill, primaryButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { toDateInputValue } from "../dateUtils.js";
 
@@ -83,21 +84,17 @@ export function Tasks({ currentUser }) {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-fuel-line bg-white/95 p-5 shadow-md">
-        <p className="text-sm font-black uppercase tracking-[0.18em] text-fuel-green">Shared Work</p>
-        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-3xl font-black sm:text-4xl">Task Board</h2>
-            <p className="mt-2 max-w-2xl text-sm font-bold text-slate-600">
-              Track shop jobs, admin follow-ups, and handover tasks from backlog to done.
-            </p>
-          </div>
-          <div className="inline-flex w-fit items-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green">
+      <PageHeader
+        eyebrow="Shared Work"
+        title="Task Board"
+        description="Track shop jobs, admin follow-ups, and handover tasks from backlog to done."
+        meta={(
+          <Pill>
             <ListChecks size={18} />
             {tasks.length} tasks
-          </div>
-        </div>
-      </div>
+          </Pill>
+        )}
+      />
 
       <Card>
         <form className="grid gap-3 lg:grid-cols-[1.2fr_1.4fr_0.9fr_1fr_0.8fr_auto]" onSubmit={createTask}>
@@ -142,7 +139,7 @@ export function Tasks({ currentUser }) {
               ))}
             </select>
           </Field>
-          <button className="inline-flex items-center justify-center gap-2 self-end rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-soft disabled:opacity-60" disabled={saving}>
+          <button className={`${primaryButton} self-end`} disabled={saving}>
             <Plus size={18} />
             Add
           </button>
@@ -156,7 +153,7 @@ export function Tasks({ currentUser }) {
             return (
               <section
                 key={column.id}
-                className="min-h-72 rounded-lg border border-fuel-line bg-white/90 p-3 shadow-md"
+                className="min-h-72 rounded-lg border border-fuel-line bg-white/90 p-3 shadow-sm"
                 onDragOver={(event) => event.preventDefault()}
                 onDrop={(event) => {
                   event.preventDefault();
@@ -180,7 +177,7 @@ export function Tasks({ currentUser }) {
                         event.dataTransfer.setData("text/plain", String(task.id));
                       }}
                       onDragEnd={() => setDraggingId(null)}
-                      className={`rounded-lg border border-fuel-line bg-white p-3 shadow-sm transition ${draggingId === task.id ? "opacity-50" : ""}`}
+                      className={`rounded-md border border-fuel-line bg-white p-3 shadow-sm transition ${draggingId === task.id ? "opacity-50" : ""}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">

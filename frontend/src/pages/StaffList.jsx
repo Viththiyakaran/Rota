@@ -3,6 +3,7 @@ import { PlusCircle } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { PageHeader, Pill, primaryButton, softButton, darkButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 
 export function StaffList({ goTo }) {
@@ -40,19 +41,17 @@ export function StaffList({ goTo }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-4xl font-black text-fuel-ink">
-          Staff List
-        </h2>
-        <button
-          type="button"
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-fuel-green px-5 py-3 font-black normal-case text-white shadow-md transition hover:bg-fuel-deep"
-          onClick={() => goTo("add-staff")}
-        >
-          <PlusCircle size={18} />
-          Add Staff
-        </button>
-      </div>
+      <PageHeader
+        eyebrow="Team"
+        title="Staff"
+        description="View staff details, update roles, and deactivate people who no longer need rota access."
+        action={(
+          <button type="button" className={primaryButton} onClick={() => goTo("add-staff")}>
+            <PlusCircle size={18} />
+            Add Staff
+          </button>
+        )}
+      />
       <Status loading={loading} error={error} empty={staff.length === 0}>
         <div className="space-y-3">
           {staff.map((person) => (
@@ -82,8 +81,8 @@ export function StaffList({ goTo }) {
                     </select>
                   </Field>
                   <div className="grid grid-cols-2 gap-3">
-                    <button className="rounded-md bg-fuel-green py-3 font-black text-white" onClick={save}>Save</button>
-                    <button className="rounded-md bg-slate-100 py-3 font-black" onClick={() => setEditingId(null)}>Cancel</button>
+                    <button className={primaryButton} onClick={save}>Save</button>
+                    <button className={softButton} onClick={() => setEditingId(null)}>Cancel</button>
                   </div>
                 </div>
               ) : (
@@ -95,13 +94,11 @@ export function StaffList({ goTo }) {
                       <p className="text-sm text-slate-600">{person.phone}</p>
                       <p className="text-sm text-slate-600">{person.email}</p>
                     </div>
-                    <span className={`rounded-full px-3 py-2 text-xs font-black ${person.active ? "bg-fuel-mist text-fuel-green" : "bg-slate-100 text-slate-500"}`}>
-                      {person.active ? "Active" : "Inactive"}
-                    </span>
+                    <Pill tone={person.active ? "green" : "slate"}>{person.active ? "Active" : "Inactive"}</Pill>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <button className="rounded-lg bg-fuel-ink py-3 font-black normal-case text-white shadow-md" onClick={() => startEdit(person)}>Edit</button>
-                    <button className="rounded-lg bg-slate-100 py-3 font-black normal-case text-fuel-ink shadow-none" onClick={() => deactivate(person)}>Deactivate</button>
+                    <button className={darkButton} onClick={() => startEdit(person)}>Edit</button>
+                    <button className={softButton} onClick={() => deactivate(person)}>Deactivate</button>
                   </div>
                 </div>
               )}

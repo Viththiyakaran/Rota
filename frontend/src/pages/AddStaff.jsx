@@ -2,6 +2,7 @@ import React from "react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
+import { PageHeader, primaryButton } from "../components/PageHeader.jsx";
 
 export function AddStaff({ onSaved }) {
   const [form, setForm] = React.useState({ name: "", phone: "", email: "", role: "Cashier", active: true });
@@ -19,10 +20,14 @@ export function AddStaff({ onSaved }) {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-3xl font-black">Add Staff</h2>
+      <PageHeader
+        eyebrow="Team"
+        title="Add Staff"
+        description="Create a staff record and temporary login. The staff member will change their password at first login."
+      />
       <Card>
-        <form onSubmit={submit} className="space-y-4">
-          {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700">{error}</p>}
+        <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
+          {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700 md:col-span-2">{error}</p>}
           <Field label="Name">
             <input required className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>
@@ -40,7 +45,7 @@ export function AddStaff({ onSaved }) {
               <option>Fuel Attendant</option>
             </select>
           </Field>
-          <button className="w-full rounded-md bg-fuel-green py-4 text-lg font-black text-white">Save Staff</button>
+          <button className={`${primaryButton} md:col-span-2`}>Save Staff</button>
         </form>
       </Card>
     </div>

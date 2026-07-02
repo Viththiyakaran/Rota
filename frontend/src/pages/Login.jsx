@@ -2,6 +2,7 @@ import React from "react";
 import { LockKeyhole, UserRound } from "lucide-react";
 import { api, setAuthToken } from "../api.js";
 import { Field, inputClass } from "../components/Field.jsx";
+import { primaryButton } from "../components/PageHeader.jsx";
 
 export function Login({ branding, onLogin }) {
   const [form, setForm] = React.useState({ username: "", password: "" });
@@ -27,17 +28,17 @@ export function Login({ branding, onLogin }) {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-fuel-cream px-4 py-8">
-      <section className="w-full max-w-md rounded-md border border-fuel-line bg-white p-5 shadow-lift">
+      <section className="w-full max-w-md rounded-lg border border-fuel-line bg-white p-5 shadow-sm sm:p-6">
         <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-12 w-12 items-center justify-center rounded-md bg-fuel-deep text-xl font-black text-fuel-lime">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-fuel-deep text-xl font-black text-fuel-lime shadow-sm">
             {branding.logoDataUrl ? (
-              <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-md object-contain p-1" />
+              <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-lg object-contain p-1" />
             ) : (
               String(branding.businessName || "R").trim().charAt(0).toUpperCase()
             )}
           </span>
-          <div>
-            <h1 className="text-3xl font-black leading-none text-fuel-ink">{branding.appTitle}</h1>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-black leading-none text-fuel-ink">{branding.appTitle}</h1>
             <p className="mt-1 text-sm font-bold text-slate-500">Rota Login</p>
           </div>
         </div>
@@ -71,7 +72,7 @@ export function Login({ branding, onLogin }) {
           {error && <p className="rounded-md bg-red-50 px-3 py-3 text-sm font-black text-red-700">{error}</p>}
 
           <button
-            className="w-full rounded-md bg-fuel-green px-5 py-4 font-black text-white shadow-lift transition hover:bg-fuel-deep disabled:opacity-60"
+            className={`${primaryButton} w-full`}
             disabled={saving}
           >
             {saving ? "Signing in..." : "Sign in"}
