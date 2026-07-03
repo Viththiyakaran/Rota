@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Info, Layers, ListChecks, MessageCircle, PlusCircle, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Info, Layers, ListChecks, MessageCircle, PlusCircle, Settings, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { PageHeader, darkButton, primaryButton } from "../components/PageHeader.jsx";
@@ -77,7 +77,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
           <Metric icon={ListChecks} label="Week tasks" value={weekTasks.length} />
         </div>
 
-        <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+        <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-2 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
           {isAdmin && (
             <button onClick={() => goTo("rota-pattern")} className={primaryButton}>
               <Layers size={18} />
@@ -94,6 +94,16 @@ export function Dashboard({ goTo, currentUser, branding }) {
             <CalendarDays size={18} className="mr-2" />
             Weekly Rota
           </button>
+          <button onClick={() => goTo("tasks")} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-2.5 text-sm font-black text-fuel-green transition hover:bg-fuel-line">
+            <ListChecks size={18} />
+            Tasks
+          </button>
+          {isAdmin && (
+            <button onClick={() => goTo("settings")} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-2.5 text-sm font-black text-fuel-green transition hover:bg-fuel-line">
+              <Settings size={18} />
+              Settings
+            </button>
+          )}
           {!isAdmin && (
             <button onClick={() => goTo("reminders")} className={primaryButton}>
               My Reminders
