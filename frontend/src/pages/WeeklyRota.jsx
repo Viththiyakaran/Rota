@@ -110,7 +110,6 @@ export function WeeklyRota({ currentUser }) {
       <PrintWeeklyRota
         activeStaff={activeStaff}
         timeOff={timeOff}
-        tasks={weekTasks}
         visibleShifts={visibleShifts}
         weekDays={weekDays}
         weekRange={weekRange}
@@ -318,7 +317,7 @@ export function WeeklyRota({ currentUser }) {
   );
 }
 
-function PrintWeeklyRota({ activeStaff, timeOff, tasks, visibleShifts, weekDays, weekRange }) {
+function PrintWeeklyRota({ activeStaff, timeOff, visibleShifts, weekDays, weekRange }) {
   return (
     <section className="print-only">
       <div className="mb-3 flex items-end justify-between">
@@ -343,12 +342,10 @@ function PrintWeeklyRota({ activeStaff, timeOff, tasks, visibleShifts, weekDays,
           {weekDays.map((day) => {
             const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
             const dayTimeOff = approvedTimeOffForDay(timeOff, day);
-            const dayTasks = tasks.filter((task) => task.dueDate === day);
             const notes = [
               ...new Set([
                 ...dayShifts.map((shift) => shift.notes).filter(Boolean),
-                ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`),
-                ...dayTasks.map(formatTaskNote)
+                ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
               ])
             ];
 
@@ -435,11 +432,6 @@ function formatTaskStatus(status) {
     process: "Process",
     done: "Done"
   }[status] || "Task";
-}
-
-function formatTaskNote(task) {
-  const assignee = task.assignedStaffName ? ` - ${task.assignedStaffName}` : "";
-  return `Task (${formatTaskStatus(task.status)}): ${task.title}${assignee}`;
 }
 
 function formatPrintWeekday(dateString) {

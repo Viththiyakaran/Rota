@@ -158,12 +158,10 @@ export function Dashboard({ goTo, currentUser, branding }) {
                   const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
                   const visibleDayShifts = dayShifts.filter((shift) => !isApprovedOffShift(shift, timeOff, day));
                   const dayTimeOff = approvedTimeOffForDay(timeOff, day);
-                  const dayTasks = weekTasks.filter((task) => task.dueDate === day);
                   const dayNotes = [
                     ...new Set([
                       ...visibleDayShifts.map((shift) => shift.notes).filter(Boolean),
-                      ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`),
-                      ...dayTasks.map(formatTaskNote)
+                      ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
                     ])
                   ];
                   return (
@@ -313,17 +311,6 @@ function isApprovedOffShift(shift, requests, day) {
 
 function sameStaff(left, right) {
   return String(left) === String(right);
-}
-
-function formatTaskNote(task) {
-  const status = {
-    backlog: "Backlog",
-    todo: "Todo",
-    process: "Process",
-    done: "Done"
-  }[task.status] || "Task";
-  const assignee = task.assignedStaffName ? ` - ${task.assignedStaffName}` : "";
-  return `Task (${status}): ${task.title}${assignee}`;
 }
 
 function isPasswordChangeRequired(message) {
