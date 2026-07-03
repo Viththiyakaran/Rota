@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Info, Layers, ListChecks, MessageCircle, PlusCircle, Settings, Users } from "lucide-react";
+import { Bot, CalendarDays, ChevronLeft, ChevronRight, Info, Layers, ListChecks, MessageCircle, PlusCircle, Settings, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { PageHeader, darkButton, primaryButton } from "../components/PageHeader.jsx";
@@ -77,7 +77,13 @@ export function Dashboard({ goTo, currentUser, branding }) {
           <Metric icon={ListChecks} label="Week tasks" value={weekTasks.length} />
         </div>
 
-        <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-2 lg:grid-cols-5" : "sm:grid-cols-3"}`}>
+        <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-2 lg:grid-cols-6" : "sm:grid-cols-3"}`}>
+          {isAdmin && (
+            <button onClick={() => goTo("rota-ai")} className={primaryButton}>
+              <Bot size={18} />
+              Rota AI
+            </button>
+          )}
           {isAdmin && (
             <button onClick={() => goTo("rota-pattern")} className={primaryButton}>
               <Layers size={18} />

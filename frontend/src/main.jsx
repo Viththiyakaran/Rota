@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Bell, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
+import { Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { AddShift } from "./pages/AddShift.jsx";
@@ -10,6 +10,7 @@ import { Dashboard } from "./pages/Dashboard.jsx";
 import { Login } from "./pages/Login.jsx";
 import { MyShifts } from "./pages/MyShifts.jsx";
 import { Reminders } from "./pages/Reminders.jsx";
+import { RotaAi } from "./pages/RotaAi.jsx";
 import { RotaPattern } from "./pages/RotaPattern.jsx";
 import { Settings } from "./pages/Settings.jsx";
 import { StaffList } from "./pages/StaffList.jsx";
@@ -23,6 +24,7 @@ const navItems = [
   { id: "staff", label: "Staff", icon: Users, roles: ["admin"] },
   { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "rota", label: "Rota", icon: CalendarDays, roles: ["admin", "staff"] },
+  { id: "rota-ai", label: "Rota AI", icon: Bot, roles: ["admin"], hidden: true },
   { id: "rota-pattern", label: "Pattern", icon: Layers, roles: ["admin"], hidden: true },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"], hidden: true },
@@ -189,6 +191,16 @@ function App() {
             </span>
           </button>
           <div className="flex items-center justify-end gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setPage("rota-ai")}
+                className="hidden min-h-11 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-fuel-deep sm:inline-flex"
+              >
+                <Bot size={18} />
+                Rota AI
+              </button>
+            )}
             <div className="hidden text-right sm:block">
               <p className="text-xs font-black uppercase text-fuel-green">{currentUser.role}</p>
               <p className="text-sm font-bold text-slate-600">{currentUser.staffName || currentUser.username}</p>
@@ -210,6 +222,7 @@ function App() {
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
         {page === "rota" && <WeeklyRota currentUser={currentUser} goTo={setPage} />}
+        {page === "rota-ai" && isAdmin && <RotaAi goTo={setPage} />}
         {page === "rota-pattern" && isAdmin && <RotaPattern goTo={setPage} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
         {page === "tasks" && <Tasks currentUser={currentUser} />}

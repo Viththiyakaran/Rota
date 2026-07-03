@@ -61,6 +61,15 @@ export function RotaPattern({ goTo }) {
       .finally(() => setLoading(false));
   }, []);
 
+  React.useEffect(() => {
+    const imported = JSON.parse(sessionStorage.getItem("fuelopsRotaAiRows") || "null");
+    if (!imported?.rows?.length) return;
+    sessionStorage.removeItem("fuelopsRotaAiRows");
+    setWeekStart(imported.weekStart || weekStart);
+    setRows(imported.rows);
+    setMessage(`Imported ${imported.rows.length} shifts from Rota AI.`);
+  }, []);
+
   const weekEnd = toDateInputValue(addDays(new Date(`${weekStart}T00:00:00`), 6));
   const endDate = previewEndDate(weekStart, endMode, customEndDate);
 
