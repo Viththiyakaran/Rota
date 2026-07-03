@@ -22,7 +22,8 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 - Business branding: business name and logo
 - Business opening hours
 - Weekly rota from Monday to Sunday
-- Permanent rota seed pattern through the end of the year
+- Rota Pattern builder for 1 month, 3 months, 6 months, custom date ranges, or end of year
+- Free Rota AI helper to convert pasted rota text into rota pattern rows
 - Extra cover shifts when someone is off
 - Shift notes editable from the rota
 - Staff availability warnings
@@ -38,6 +39,18 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 - Copy week to next week
 - Audit log
 - PWA install support
+
+## Documentation
+
+Detailed documentation lives in the `docs/` folder:
+
+- [Admin Guide](docs/ADMIN_GUIDE.md)
+- [Staff Guide](docs/STAFF_GUIDE.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+- [API Reference](docs/API.md)
+- [Security And Operations](docs/SECURITY_AND_OPERATIONS.md)
+
+Use the README for quick setup. Use the docs folder for handover, deployment, and day-to-day operating instructions.
 
 ## UK Standards
 
@@ -432,6 +445,24 @@ Notes:
 - Generated pattern shifts are marked internally so they can be replaced later.
 - One-off cover shifts are not deleted when replacing generated pattern shifts.
 - This is the recommended way to keep a regular rota running without the manager assigning every week manually.
+
+### Rota AI
+
+Use this as a free admin helper when the rota already exists in text or in a screenshot.
+
+1. Admin presses Rota AI from the top header or Dashboard.
+2. Paste/type rota text, for example `Monday Afridi 6pm-10pm Shopping`.
+3. Optionally upload a rota image as a reference while typing.
+4. Press Generate from text.
+5. Review detected rows.
+6. Press Send to Pattern.
+7. Generate the rota from Rota Pattern.
+
+Notes:
+
+- The current helper does not use paid AI services.
+- Text parsing happens in the browser.
+- Uploaded images are shown as a reference only. Automatic OCR can be added later with a local OCR library or a paid OCR/AI service.
 
 ### One-off Shift
 
