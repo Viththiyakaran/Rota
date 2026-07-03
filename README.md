@@ -379,6 +379,7 @@ Authenticated routes:
 - `POST /api/users/:id/reset-password`
 - `GET /api/shifts/week?startDate=yyyy-mm-dd`
 - `GET /api/shifts/my`
+- `POST /api/rota-patterns/generate`
 - `POST /api/shifts`
 - `PUT /api/shifts/:id`
 - `DELETE /api/shifts/:id`
@@ -416,9 +417,27 @@ Authenticated routes:
 3. A temporary staff login is created automatically.
 4. Staff logs in and changes password.
 
-### Add Shift
+### Rota Pattern
 
-1. Admin opens Add Shift.
+Use this for the normal repeating rota.
+
+1. Admin opens Pattern.
+2. Choose the first Monday of the rota.
+3. Add the weekly staff shifts, or import the current week.
+4. Choose Ends after: 1 month, 3 months, 6 months, End of year, or Custom.
+5. Press Generate rota.
+
+Notes:
+
+- Generated pattern shifts are marked internally so they can be replaced later.
+- One-off cover shifts are not deleted when replacing generated pattern shifts.
+- This is the recommended way to keep a regular rota running without the manager assigning every week manually.
+
+### One-off Shift
+
+Use this for temporary cover, holiday cover, or a single change.
+
+1. Admin opens One-off Shift.
 2. Select staff, date, time range, break, reminder, and notes. The default reminder is 30 minutes before the shift.
 3. The system calculates hours and creates a reminder time.
 4. The staff member receives an in-app notification.

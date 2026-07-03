@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Bell, CalendarDays, Clock, Home, ListChecks, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
+import { Bell, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { AddShift } from "./pages/AddShift.jsx";
@@ -10,6 +10,7 @@ import { Dashboard } from "./pages/Dashboard.jsx";
 import { Login } from "./pages/Login.jsx";
 import { MyShifts } from "./pages/MyShifts.jsx";
 import { Reminders } from "./pages/Reminders.jsx";
+import { RotaPattern } from "./pages/RotaPattern.jsx";
 import { Settings } from "./pages/Settings.jsx";
 import { StaffList } from "./pages/StaffList.jsx";
 import { Tasks } from "./pages/Tasks.jsx";
@@ -22,6 +23,7 @@ const navItems = [
   { id: "staff", label: "Staff", icon: Users, roles: ["admin"] },
   { id: "add-staff", label: "Add Staff", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "rota", label: "Rota", icon: CalendarDays, roles: ["admin", "staff"] },
+  { id: "rota-pattern", label: "Pattern", icon: Layers, roles: ["admin"] },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
@@ -207,7 +209,8 @@ function App() {
         {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
-        {page === "rota" && <WeeklyRota currentUser={currentUser} />}
+        {page === "rota" && <WeeklyRota currentUser={currentUser} goTo={setPage} />}
+        {page === "rota-pattern" && isAdmin && <RotaPattern goTo={setPage} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
         {page === "tasks" && <Tasks currentUser={currentUser} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}

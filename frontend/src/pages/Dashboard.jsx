@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Info, ListChecks, MessageCircle, Users } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Info, Layers, ListChecks, MessageCircle, PlusCircle, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { PageHeader, darkButton, primaryButton } from "../components/PageHeader.jsx";
@@ -79,16 +79,19 @@ export function Dashboard({ goTo, currentUser, branding }) {
 
         <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           {isAdmin && (
-            <button onClick={() => goTo("add-staff")} className={primaryButton}>
-              Add Staff
+            <button onClick={() => goTo("rota-pattern")} className={primaryButton}>
+              <Layers size={18} />
+              Rota Pattern
             </button>
           )}
           {isAdmin && (
             <button onClick={() => goTo("add-shift")} className={darkButton}>
-              Add Shift
+              <PlusCircle size={18} />
+              One-off Shift
             </button>
           )}
           <button onClick={() => goTo("rota")} className="inline-flex min-h-11 items-center justify-center rounded-md bg-fuel-lime px-4 py-2.5 text-sm font-black text-fuel-ink shadow-sm transition hover:bg-fuel-gold">
+            <CalendarDays size={18} className="mr-2" />
             Weekly Rota
           </button>
           {!isAdmin && (
@@ -177,8 +180,8 @@ export function Dashboard({ goTo, currentUser, branding }) {
                             {personShifts.length > 0 || personTimeOff.length > 0 ? (
                               <div className="space-y-2">
                                 {personTimeOff.length > 0 && (
-                                  <p className="rounded-md bg-red-50 px-2 py-1 text-xs font-black uppercase text-red-700">
-                                    Approved time off
+                                  <p className="text-xs font-black uppercase text-amber-700" title={`Approved time off for ${person.name}`}>
+                                    Time off
                                   </p>
                                 )}
                                 {personShifts.map((personShift) => (

@@ -1,12 +1,12 @@
 import React from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Copy, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
+import { CalendarDays, Check, ChevronLeft, ChevronRight, Layers, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { PageHeader, Pill, darkButton, primaryButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDateLabel, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappGroupShareUrl } from "../whatsapp.js";
 
-export function WeeklyRota({ currentUser }) {
+export function WeeklyRota({ currentUser, goTo }) {
   const [startDate, setStartDate] = React.useState(toDateInputValue(getMonday()));
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
@@ -18,7 +18,6 @@ export function WeeklyRota({ currentUser }) {
   const [noteError, setNoteError] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
-  const [message, setMessage] = React.useState("");
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -78,13 +77,6 @@ export function WeeklyRota({ currentUser }) {
   const moveWeek = (offset) => {
     const next = addDays(new Date(`${startDate}T00:00:00`), offset * 7);
     setStartDate(toDateInputValue(next));
-  };
-
-  const copyToNextWeek = async () => {
-    setMessage("");
-    const toStartDate = toDateInputValue(addDays(new Date(`${startDate}T00:00:00`), 7));
-    const result = await api.copyWeek({ fromStartDate: startDate, toStartDate });
-    setMessage(`${result.copied} shifts copied to next week.`);
   };
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
@@ -176,10 +168,10 @@ export function WeeklyRota({ currentUser }) {
               <button
                 type="button"
                 className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-fuel-lime px-4 py-2.5 text-sm font-black normal-case text-fuel-ink shadow-sm"
-                onClick={copyToNextWeek}
+                onClick={() => goTo("rota-pattern")}
               >
-                <Copy size={18} />
-                Copy next week
+                <Layers size={18} />
+                Rota pattern
               </button>
             )}
           </div>
@@ -187,11 +179,9 @@ export function WeeklyRota({ currentUser }) {
       </div>
 
       <Status loading={loading} error={error}>
-        {message && <p className="rounded-md bg-fuel-mist p-3 font-black text-fuel-green">{message}</p>}
         <div className="screen-only grid gap-3 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
           {weekDays.map((day) => {
             const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
-            const dayTimeOff = approvedTimeOffForDay(timeOff, day);
             const dayTasks = weekTasks.filter((task) => task.dueDate === day);
             return (
               <section key={day} className="flex min-h-[220px] flex-col overflow-hidden rounded-lg border border-fuel-line bg-white shadow-sm">
@@ -203,7 +193,7 @@ export function WeeklyRota({ currentUser }) {
                   <p className="mt-0.5 text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
                 </div>
                 <div className="flex flex-1 flex-col gap-2 p-3">
-                  {dayShifts.length === 0 && dayTimeOff.length === 0 && dayTasks.length === 0 && (
+                  {dayShifts.length === 0 && dayTasks.length === 0 && (
                     <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-fuel-line bg-fuel-mist/30 p-4 text-sm font-bold text-slate-400">
                       No shifts
                     </div>
@@ -213,13 +203,6 @@ export function WeeklyRota({ currentUser }) {
                       <p className="text-xs font-black uppercase text-fuel-green">Task - {formatTaskStatus(task.status)}</p>
                       <p className="text-sm font-black text-fuel-ink">{task.title}</p>
                       {task.assignedStaffName && <p className="truncate text-xs font-bold text-slate-600">{task.assignedStaffName}</p>}
-                    </div>
-                  ))}
-                  {dayTimeOff.map((request) => (
-                    <div key={`time-off-${request.id}`} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
-                      <p className="text-xs font-black uppercase text-amber-800">Time off approved</p>
-                      <p className="text-sm font-black text-fuel-ink">{request.staffName || currentUser.staffName || "Staff"}</p>
-                      {request.reason && <p className="truncate text-xs font-bold text-slate-600">{request.reason}</p>}
                     </div>
                   ))}
                   {dayShifts.map((shift) => (

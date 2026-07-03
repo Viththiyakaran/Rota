@@ -70,6 +70,8 @@ export async function initDb() {
       isExtra INTEGER NOT NULL DEFAULT 0,
       coverForStaffId INTEGER,
       googleCalendarEventId TEXT,
+      patternGenerated INTEGER NOT NULL DEFAULT 0,
+      patternBatchId TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id),
@@ -199,6 +201,8 @@ export async function initDb() {
   await ensureShiftColumn("coverForStaffId", "INTEGER");
   await ensureShiftColumn("reminderSentAt", "TEXT");
   await ensureShiftColumn("startReminderSentAt", "TEXT");
+  await ensureShiftColumn("patternGenerated", "INTEGER NOT NULL DEFAULT 0");
+  await ensureShiftColumn("patternBatchId", "TEXT");
   await ensureUsersTableShape();
   await ensureSessionsTableShape();
   await ensureTableColumn("notifications", "shiftId", "INTEGER");

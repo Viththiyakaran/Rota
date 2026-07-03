@@ -177,6 +177,20 @@ async function runSmoke() {
   });
   assert(Number.isInteger(copy.copied), "copy week works");
 
+  const pattern = await request("/api/rota-patterns/generate", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: {
+      startDate: "2026-08-03",
+      endMode: "1m",
+      replaceGenerated: true,
+      entries: [
+        { staffId: staffRows[0].id, dayOffset: 0, startTime: "09:00", endTime: "17:00", breakMinutes: 30, reminderMinutes: 30, notes: "Pattern test" }
+      ]
+    }
+  });
+  assert(pattern.created > 0, "rota pattern generation works");
+
   await request("/api/auth/change-password", {
     cookie: staff.cookie,
     method: "POST",

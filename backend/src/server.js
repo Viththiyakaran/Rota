@@ -1,5 +1,6 @@
 import cors from "cors";
 import express from "express";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -117,6 +118,7 @@ app.get("/api", (_req, res) => {
       "GET /api/shifts/week?startDate=yyyy-mm-dd",
       "GET /api/shifts/my",
       "POST /api/shifts/copy-week",
+      "POST /api/rota-patterns/generate",
       "POST /api/shifts",
       "PUT /api/shifts/:id",
       "DELETE /api/shifts/:id",
@@ -818,6 +820,84 @@ app.post("/api/shifts/copy-week", requireAdmin, async (req, res, next) => {
   }
 });
 
+app.post("/api/rota-patterns/generate", requireAdmin, async (req, res, next) => {
+  try {
+    const {
+      startDate,
+      endMode = "3m",
+      customEndDate = "",
+      replaceGenerated = false,
+      entries = []
+    } = req.body;
+
+    if (!isDate(startDate)) return res.status(400).json({ error: "Valid week start date is required." });
+    if (!Array.isArray(entries) || entries.length === 0) return res.status(400).json({ error: "Add at least one weekly shift pattern." });
+
+    const cleanStart = mondayForDate(startDate);
+    const cleanEnd = patternEndDate(cleanStart, endMode, customEndDate);
+    if (!cleanEnd || cleanEnd < cleanStart) return res.status(400).json({ error: "End date must be after the week start." });
+
+    const cleanEntries = entries.map((entry, index) => normalisePatternEntry(entry, index));
+    const batchId = `pattern-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+    let deleted = 0;
+    let created = 0;
+    let skipped = 0;
+
+    if (replaceGenerated) {
+      const result = await run(
+        `DELETE FROM shifts
+         WHERE patternGenerated = 1
+           AND isExtra = 0
+           AND shiftDate BETWEEN ? AND ?`,
+        [cleanStart, cleanEnd]
+      );
+      deleted = result.changes;
+    }
+
+    for (let weekStart = cleanStart; weekStart <= cleanEnd; weekStart = addDays(weekStart, 7)) {
+      for (const entry of cleanEntries) {
+        const shiftDate = addDays(weekStart, entry.dayOffset);
+        if (shiftDate > cleanEnd) continue;
+
+        const existing = await get(
+          `SELECT id FROM shifts
+           WHERE staffId = ? AND shiftDate = ? AND startTime = ? AND endTime = ? AND isExtra = 0`,
+          [entry.staffId, shiftDate, entry.startTime, entry.endTime]
+        );
+        if (existing) {
+          skipped += 1;
+          continue;
+        }
+
+        await run(
+          `INSERT INTO shifts
+            (staffId, shiftDate, startTime, endTime, breakMinutes, reminderMinutes, reminderTime, notes,
+             isExtra, coverForStaffId, googleCalendarEventId, patternGenerated, patternBatchId)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, 1, ?)`,
+          [
+            entry.staffId,
+            shiftDate,
+            entry.startTime,
+            entry.endTime,
+            entry.breakMinutes,
+            entry.reminderMinutes,
+            calculateReminderTime(shiftDate, entry.startTime, entry.reminderMinutes),
+            entry.notes,
+            batchId
+          ]
+        );
+        created += 1;
+      }
+    }
+
+    addAudit(req.user.id, "generate_rota_pattern", `Generated ${created} rota shifts from ${cleanStart} to ${cleanEnd}`);
+    res.status(201).json({ created, skipped, deleted, startDate: cleanStart, endDate: cleanEnd, batchId });
+  } catch (error) {
+    if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    next(error);
+  }
+});
+
 app.post("/api/shifts", requireAdmin, async (req, res, next) => {
   try {
     const {
@@ -1070,6 +1150,62 @@ function daysBetween(startDate, endDate) {
   const start = new Date(`${startDate}T00:00:00`);
   const end = new Date(`${endDate}T00:00:00`);
   return Math.round((end - start) / 86400000);
+}
+
+function mondayForDate(dateString) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return addDays(dateString, diff);
+}
+
+function addMonths(dateString, months) {
+  const date = new Date(`${dateString}T00:00:00`);
+  const day = date.getDate();
+  date.setMonth(date.getMonth() + months);
+  if (date.getDate() !== day) date.setDate(0);
+  return addDays(toDateString(date), -1);
+}
+
+function toDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function patternEndDate(startDate, mode, customEndDate) {
+  if (mode === "1m") return addMonths(startDate, 1);
+  if (mode === "3m") return addMonths(startDate, 3);
+  if (mode === "6m") return addMonths(startDate, 6);
+  if (mode === "year") return `${startDate.slice(0, 4)}-12-31`;
+  if (mode === "custom" && isDate(customEndDate)) return customEndDate;
+  const error = new Error("Choose a valid rota duration.");
+  error.statusCode = 400;
+  throw error;
+}
+
+function normalisePatternEntry(entry, index) {
+  const dayOffset = Number(entry.dayOffset);
+  const staffId = Number(entry.staffId);
+  const breakMinutes = Number(entry.breakMinutes || 0);
+  const reminderMinutes = Number(entry.reminderMinutes || 30);
+  const startTime = String(entry.startTime || "");
+  const endTime = String(entry.endTime || "");
+  if (!staffId || !Number.isInteger(dayOffset) || dayOffset < 0 || dayOffset > 6 || !isTime(startTime) || !isTime(endTime)) {
+    const error = new Error(`Pattern row ${index + 1} needs staff, day, start time, and end time.`);
+    error.statusCode = 400;
+    throw error;
+  }
+  return {
+    staffId,
+    dayOffset,
+    startTime,
+    endTime,
+    breakMinutes: Number.isFinite(breakMinutes) && breakMinutes >= 0 ? breakMinutes : 0,
+    reminderMinutes: Number.isFinite(reminderMinutes) && reminderMinutes >= 0 ? reminderMinutes : 30,
+    notes: String(entry.notes || "").trim()
+  };
 }
 
 function isTime(value) {

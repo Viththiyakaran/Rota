@@ -70,8 +70,8 @@ export function AddShift({ onSaved }) {
     <div className="space-y-4">
       <PageHeader
         eyebrow="Rota"
-        title="Add Shift"
-        description="Choose staff, date, hours, and optional cover details. Availability warnings appear before saving."
+        title="One-off Shift"
+        description="Use this for temporary cover or changes. For normal repeating rota, use Rota Pattern."
       />
       <Card>
         <form onSubmit={submit} className="space-y-4">
@@ -150,7 +150,7 @@ export function AddShift({ onSaved }) {
           <Field label="Notes">
             <textarea className={`${inputClass} min-h-24`} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
-          <button className={`${primaryButton} w-full`}>Save Shift</button>
+          <button className={`${primaryButton} w-full`}>Save One-off Shift</button>
         </form>
       </Card>
     </div>
