@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CloudSun, Clock, Info, Layers, ListChecks, MapPin, MessageCircle, PlusCircle, Printer, RefreshCw, Settings, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Info, Layers, ListChecks, PlusCircle, Printer, Settings, Sparkles, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -42,7 +42,6 @@ export function Dashboard({ goTo, currentUser, branding }) {
       .finally(() => setLoading(false));
   }, [dashboardWeekStart]);
 
-  const activeStaff = staff.filter((person) => person.active).length;
   const isAdmin = currentUser?.role === "admin";
   const today = toDateInputValue(new Date());
   const weekStart = new Date(`${dashboardWeekStart}T00:00:00`);
@@ -57,12 +56,6 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const moveDashboardWeek = (weeks) => {
     setDashboardWeekStart(toDateInputValue(addDays(weekStart, weeks * 7)));
   };
-  const dashboardStats = [
-    { icon: Users, label: "Staff", value: activeStaff, subtext: "active" },
-    { icon: CalendarDays, label: "Week shifts", value: shifts.length, subtext: "planned" },
-    { icon: MessageCircle, label: "Reminders", value: reminders.length, subtext: "upcoming" },
-    { icon: ListChecks, label: "Tasks", value: weekTasks.length, subtext: "due this week" }
-  ];
   const attentionItems = getAttentionItems({ shifts, timeOff, tasks, availability, today });
   const workingNow = getWorkingNow(shifts, today);
   const nextShift = getNextShiftToday(shifts, today);
@@ -92,12 +85,6 @@ export function Dashboard({ goTo, currentUser, branding }) {
           moreOpen={moreOpen}
           onToggleMore={() => setMoreOpen((value) => !value)}
         />
-
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {dashboardStats.map((item) => (
-            <Metric key={item.label} icon={item.icon} label={item.label} value={item.value} subtext={item.subtext} />
-          ))}
-        </div>
 
         <Card>
           <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -150,8 +137,6 @@ export function Dashboard({ goTo, currentUser, branding }) {
             onOpenWeek={() => goTo("rota")}
           />
         </Card>
-
-        <WeatherCard compact />
       </Status>
     </div>
   );
@@ -227,10 +212,7 @@ function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow 
           tone={hasAlerts ? "warning" : "good"}
         />
       </div>
-      <div className="grid gap-3 lg:grid-cols-2">
-        <WorkingNowCard nextShift={nextShift} workingNow={workingNow} />
-        <NeedsAttentionCard items={attentionItems} />
-      </div>
+      {hasAlerts && <NeedsAttentionCard items={attentionItems} />}
     </section>
   );
 }
@@ -249,43 +231,6 @@ function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) 
           <p className="mt-1 text-lg font-black text-fuel-ink">{value}</p>
           <p className="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{detail}</p>
         </div>
-      </div>
-    </Card>
-  );
-}
-
-function WorkingNowCard({ nextShift, workingNow }) {
-  return (
-    <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-black text-fuel-ink">Working Now</h3>
-          <p className="text-sm font-medium text-slate-600">Live view from today's rota.</p>
-        </div>
-        <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-fuel-green">{workingNow.length} active</span>
-      </div>
-      {workingNow.length ? (
-        <div className="space-y-2">
-          {workingNow.slice(0, 4).map((shift) => (
-            <div key={shift.id} className="flex items-center justify-between gap-3 rounded-lg bg-fuel-mist px-3 py-2">
-              <div>
-                <p className="font-bold text-fuel-ink">{shift.staffName}</p>
-                <p className="text-xs font-semibold text-slate-600">{formatShiftRange(shift.startTime, shift.endTime)}</p>
-              </div>
-              {shift.notes && <span className="max-w-[140px] truncate rounded bg-white px-2 py-1 text-xs font-semibold text-slate-600">{shift.notes}</span>}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-lg border border-dashed border-fuel-line bg-white px-3 py-4 text-sm font-medium text-slate-500">
-          No one is currently clocked/scheduled in.
-        </p>
-      )}
-      <div className="mt-3 rounded-lg bg-white px-3 py-2 text-sm">
-        <span className="font-semibold text-slate-500">Next staff today: </span>
-        <span className="font-bold text-fuel-ink">
-          {nextShift ? `${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today"}
-        </span>
       </div>
     </Card>
   );
@@ -380,114 +325,6 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
         </div>
       )}
     </div>
-  );
-}
-
-function WeatherCard({ compact = false }) {
-  const [weather, setWeather] = React.useState(null);
-  const [status, setStatus] = React.useState("Loading weather...");
-  const [loading, setLoading] = React.useState(false);
-
-  const loadWeather = React.useCallback((coords = { latitude: 51.5072, longitude: -0.1276, label: "London" }) => {
-    setLoading(true);
-    setStatus("Loading weather...");
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`;
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) throw new Error("Weather unavailable");
-        return response.json();
-      })
-      .then((data) => {
-        setWeather({
-          label: coords.label,
-          temperature: Math.round(Number(data.current?.temperature_2m || 0)),
-          wind: Math.round(Number(data.current?.wind_speed_10m || 0)),
-          condition: weatherCodeLabel(data.current?.weather_code)
-        });
-        setStatus("");
-      })
-      .catch(() => {
-        setWeather(null);
-        setStatus("Weather is unavailable right now.");
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  React.useEffect(() => {
-    loadWeather();
-  }, [loadWeather]);
-
-  const useMyLocation = () => {
-    if (!navigator.geolocation) {
-      setStatus("Location is not supported on this browser.");
-      return;
-    }
-    setLoading(true);
-    setStatus("Checking your location...");
-    navigator.geolocation.getCurrentPosition(
-      (position) => loadWeather({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        label: "Your area"
-      }),
-      () => {
-        setLoading(false);
-        setStatus("Location denied. Showing London weather.");
-        loadWeather();
-      },
-      { enableHighAccuracy: false, timeout: 8000, maximumAge: 30 * 60 * 1000 }
-    );
-  };
-
-  return (
-    <Card className={compact ? "p-4" : "bg-fuel-ink text-white"}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className={`text-xs font-black uppercase tracking-[0.18em] ${compact ? "text-fuel-green" : "text-fuel-lime"}`}>Current weather</p>
-          {weather ? (
-            <>
-              <p className={`mt-2 font-black ${compact ? "text-2xl text-fuel-ink" : "text-4xl"}`}>{weather.temperature} deg C</p>
-              <p className={`mt-1 text-sm font-bold ${compact ? "text-slate-700" : "text-white/80"}`}>{weather.condition}</p>
-              <p className={`mt-3 flex items-center gap-1 text-xs font-bold ${compact ? "text-slate-500" : "text-white/70"}`}>
-                <MapPin size={14} />
-                {weather.label} - wind {weather.wind} km/h
-              </p>
-            </>
-          ) : (
-            <p className={`mt-3 text-sm font-bold ${compact ? "text-slate-600" : "text-white/75"}`}>{status}</p>
-          )}
-        </div>
-        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${compact ? "bg-fuel-mist text-fuel-green" : "bg-white/10 text-fuel-lime"}`}>
-          <CloudSun size={26} />
-        </span>
-      </div>
-      <button
-        type="button"
-        className={`mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-black transition ${compact ? "bg-fuel-mist text-fuel-green hover:bg-emerald-100" : "bg-white/10 text-white hover:bg-white/20"}`}
-        onClick={useMyLocation}
-        disabled={loading}
-      >
-        <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
-        {loading ? "Updating" : "Use my location"}
-      </button>
-    </Card>
-  );
-}
-
-function Metric({ icon: Icon, label, subtext, value }) {
-  return (
-    <Card className="relative overflow-hidden p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-600">{label}</p>
-          <p className="mt-2 text-3xl font-black text-fuel-ink">{value}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{subtext}</p>
-        </div>
-        <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
-          <Icon size={23} />
-        </span>
-      </div>
-    </Card>
   );
 }
 
@@ -714,17 +551,4 @@ function getGreeting(date = new Date()) {
   if (hour < 12) return "Good morning";
   if (hour < 17) return "Good afternoon";
   return "Good evening";
-}
-
-function weatherCodeLabel(code) {
-  const value = Number(code);
-  if ([0].includes(value)) return "Clear sky";
-  if ([1, 2].includes(value)) return "Partly cloudy";
-  if ([3].includes(value)) return "Cloudy";
-  if ([45, 48].includes(value)) return "Foggy";
-  if ([51, 53, 55, 56, 57].includes(value)) return "Drizzle";
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return "Rain";
-  if ([71, 73, 75, 77, 85, 86].includes(value)) return "Snow";
-  if ([95, 96, 99].includes(value)) return "Thunderstorm";
-  return "Weather update";
 }
