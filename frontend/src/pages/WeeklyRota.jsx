@@ -179,122 +179,23 @@ export function WeeklyRota({ currentUser, goTo }) {
       </div>
 
       <Status loading={loading} error={error}>
-        <div className="screen-only grid gap-3 md:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
-          {weekDays.map((day) => {
-            const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
-            const dayTasks = weekTasks.filter((task) => task.dueDate === day);
-            return (
-              <section key={day} className="flex min-h-[220px] flex-col overflow-hidden rounded-lg border border-fuel-line bg-white shadow-sm">
-                <div className="border-b border-fuel-line bg-fuel-mist/70 px-4 py-3">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p className="text-lg font-black leading-tight text-fuel-ink">{formatDayLabel(day)}</p>
-                    <p className="text-xs font-black text-slate-500">{dayShifts.length}</p>
-                  </div>
-                  <p className="mt-0.5 text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
-                </div>
-                <div className="flex flex-1 flex-col gap-2 p-3">
-                  {dayShifts.length === 0 && dayTasks.length === 0 && (
-                    <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-fuel-line bg-fuel-mist/30 p-4 text-sm font-bold text-slate-400">
-                      No shifts
-                    </div>
-                  )}
-                  {dayTasks.map((task) => (
-                    <div key={`task-${task.id}`} className="rounded-md border border-fuel-line bg-fuel-mist/70 px-3 py-2">
-                      <p className="text-xs font-black uppercase text-fuel-green">Task - {formatTaskStatus(task.status)}</p>
-                      <p className="text-sm font-black text-fuel-ink">{task.title}</p>
-                      {task.assignedStaffName && <p className="truncate text-xs font-bold text-slate-600">{task.assignedStaffName}</p>}
-                    </div>
-                  ))}
-                  {dayShifts.map((shift) => (
-                    <article key={shift.id} className={`rounded-md border bg-white p-3 shadow-[0_1px_0_rgba(15,23,42,0.04)] ${shift.isExtra ? "border-fuel-lime" : "border-fuel-line"}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="truncate text-base font-black leading-tight text-fuel-ink">{shift.staffName}</p>
-                            {shift.isExtra && (
-                              <span className="rounded-full bg-fuel-lime px-2 py-0.5 text-[11px] font-black text-fuel-ink">
-                                Extra
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-2 inline-flex rounded-md bg-fuel-mist px-2 py-1 text-sm font-black leading-none text-fuel-green">
-                            {formatShiftRange(shift.startTime, shift.endTime)}
-                          </p>
-                          {shift.isExtra && shift.coverForStaffName && (
-                            <p className="mt-2 truncate text-xs font-bold text-slate-600">Cover for {shift.coverForStaffName}</p>
-                          )}
-                        </div>
-                        {isAdmin && (
-                          <button
-                            className="shrink-0 rounded-md bg-fuel-mist p-2 text-slate-500"
-                            onClick={() => removeShift(shift.id)}
-                            title="Delete shift"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                      <div className="mt-2 text-xs font-bold text-slate-600">
-                        {shift.totalHours} hrs
-                      </div>
-                      <div className="mt-2">
-                        {editingNoteId === shift.id ? (
-                          <div className="space-y-2">
-                            <textarea
-                              className="min-h-20 w-full rounded-md border border-fuel-line bg-white px-3 py-2 text-sm font-bold outline-none focus:border-fuel-green"
-                              value={noteDraft}
-                              onChange={(event) => setNoteDraft(event.target.value)}
-                              placeholder="Add note"
-                            />
-                            <div className="grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white disabled:cursor-wait disabled:opacity-70"
-                                onClick={() => saveNote(shift)}
-                                disabled={savingNoteId === shift.id}
-                              >
-                                <Check size={16} />
-                                {savingNoteId === shift.id ? "Saving..." : "Save"}
-                              </button>
-                              <button
-                                type="button"
-                                className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green disabled:opacity-60"
-                                onClick={cancelNoteEdit}
-                                disabled={savingNoteId === shift.id}
-                              >
-                                <X size={16} />
-                                Cancel
-                              </button>
-                            </div>
-                            {noteError && <p className="rounded-md bg-red-50 px-3 py-2 text-xs font-black text-red-700">{noteError}</p>}
-                          </div>
-                        ) : (
-                          <div className="flex items-start justify-between gap-2">
-                            {shift.notes ? (
-                              <p className="min-w-0 truncate rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-slate-700">{shift.notes}</p>
-                            ) : (
-                              <p className="text-xs font-bold text-slate-400">No note</p>
-                            )}
-                            {isAdmin && (
-                              <button
-                                type="button"
-                                className="shrink-0 rounded-md bg-fuel-mist p-2 text-fuel-green"
-                                title="Edit note"
-                                onClick={() => startNoteEdit(shift)}
-                              >
-                                <Pencil size={15} />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </div>
+        <PlannerGrid
+          activeStaff={activeStaff}
+          editingNoteId={editingNoteId}
+          isAdmin={isAdmin}
+          noteDraft={noteDraft}
+          noteError={noteError}
+          onCancelNote={cancelNoteEdit}
+          onDeleteShift={removeShift}
+          onEditNote={startNoteEdit}
+          onNoteDraftChange={setNoteDraft}
+          onSaveNote={saveNote}
+          savingNoteId={savingNoteId}
+          tasks={weekTasks}
+          timeOff={timeOff}
+          visibleShifts={visibleShifts}
+          weekDays={weekDays}
+        />
       </Status>
     </div>
   );
@@ -379,6 +280,307 @@ function PrintWeeklyRota({ activeStaff, timeOff, visibleShifts, weekDays, weekRa
       </table>
     </section>
   );
+}
+
+function PlannerGrid({
+  activeStaff,
+  editingNoteId,
+  isAdmin,
+  noteDraft,
+  noteError,
+  onCancelNote,
+  onDeleteShift,
+  onEditNote,
+  onNoteDraftChange,
+  onSaveNote,
+  savingNoteId,
+  tasks,
+  timeOff,
+  visibleShifts,
+  weekDays
+}) {
+  const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+
+  return (
+    <section className="screen-only overflow-hidden rounded-xl border border-fuel-line bg-white shadow-md">
+      <div className="flex flex-col gap-3 border-b border-fuel-line bg-white px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-xl font-black text-fuel-ink">Staff planner</h2>
+          <p className="text-sm font-bold text-slate-600">
+            {activeStaff.length} staff · {visibleShifts.length} shifts · {formatHourTotal(totalHours)} paid hours
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs font-black text-slate-600 sm:flex">
+          <span className="rounded-md bg-fuel-mist px-3 py-2">Staff rows</span>
+          <span className="rounded-md bg-fuel-mist px-3 py-2">Day columns</span>
+          <span className="rounded-md bg-fuel-mist px-3 py-2">Scroll sideways</span>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[1080px]">
+          <div className="grid grid-cols-[220px_repeat(7,minmax(126px,1fr))] border-b border-fuel-line bg-fuel-mist/80">
+            <div className="sticky left-0 z-10 border-r border-fuel-line bg-fuel-mist/95 px-4 py-3">
+              <p className="text-xs font-black uppercase tracking-wide text-slate-500">Week summary</p>
+              <p className="mt-1 text-sm font-black text-fuel-ink">{formatHourTotal(totalHours)} hrs</p>
+            </div>
+            {weekDays.map((day) => {
+              const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
+              const dayHours = dayShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+              return (
+                <div key={day} className="border-r border-fuel-line px-3 py-3 last:border-r-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="text-base font-black text-fuel-ink">{formatDayLabel(day)}</p>
+                      <p className="text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
+                    </div>
+                    <span className="rounded-md bg-white px-2 py-1 text-xs font-black text-fuel-green">
+                      {dayShifts.length}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs font-bold text-slate-600">{formatHourTotal(dayHours)} hrs</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="divide-y divide-fuel-line">
+            <TasksRow tasks={tasks} weekDays={weekDays} />
+            {activeStaff.map((person) => (
+              <StaffPlannerRow
+                editingNoteId={editingNoteId}
+                isAdmin={isAdmin}
+                key={person.id}
+                noteDraft={noteDraft}
+                noteError={noteError}
+                onCancelNote={onCancelNote}
+                onDeleteShift={onDeleteShift}
+                onEditNote={onEditNote}
+                onNoteDraftChange={onNoteDraftChange}
+                onSaveNote={onSaveNote}
+                person={person}
+                savingNoteId={savingNoteId}
+                shifts={visibleShifts}
+                timeOff={timeOff}
+                weekDays={weekDays}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TasksRow({ tasks, weekDays }) {
+  if (tasks.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-[220px_repeat(7,minmax(126px,1fr))] bg-white">
+      <div className="sticky left-0 z-10 border-r border-fuel-line bg-white px-4 py-3">
+        <p className="text-sm font-black text-fuel-ink">Tasks</p>
+        <p className="text-xs font-bold text-slate-500">Not completed</p>
+      </div>
+      {weekDays.map((day) => {
+        const dayTasks = tasks.filter((task) => task.dueDate === day);
+        return (
+          <div key={day} className="min-h-20 border-r border-fuel-line bg-fuel-cream/40 p-2 last:border-r-0">
+            {dayTasks.length === 0 ? (
+              <p className="text-xs font-bold text-slate-300">No tasks</p>
+            ) : (
+              <div className="space-y-2">
+                {dayTasks.slice(0, 2).map((task) => (
+                  <div key={task.id} className="rounded-md border border-fuel-line bg-white px-2 py-1.5">
+                    <p className="truncate text-xs font-black text-fuel-ink">{task.title}</p>
+                    <p className="text-[11px] font-black uppercase text-fuel-green">{formatTaskStatus(task.status)}</p>
+                  </div>
+                ))}
+                {dayTasks.length > 2 && (
+                  <p className="text-xs font-black text-slate-500">+{dayTasks.length - 2} more</p>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function StaffPlannerRow({
+  editingNoteId,
+  isAdmin,
+  noteDraft,
+  noteError,
+  onCancelNote,
+  onDeleteShift,
+  onEditNote,
+  onNoteDraftChange,
+  onSaveNote,
+  person,
+  savingNoteId,
+  shifts,
+  timeOff,
+  weekDays
+}) {
+  const staffShifts = shifts.filter((shift) => sameStaff(shift.staffId, person.id));
+  const total = staffShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+
+  return (
+    <div className="grid grid-cols-[220px_repeat(7,minmax(126px,1fr))] bg-white">
+      <div className="sticky left-0 z-10 border-r border-fuel-line bg-white px-4 py-4 shadow-[6px_0_12px_rgba(15,23,42,0.04)]">
+        <div className="flex items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-fuel-mist text-sm font-black text-fuel-green">
+            {String(person.name || "?").charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <p className="truncate font-black text-fuel-ink">{person.name}</p>
+            <p className="truncate text-xs font-bold text-slate-500">{person.role || "Staff"}</p>
+            <p className="mt-1 text-xs font-black text-fuel-green">
+              {formatHourTotal(total)} hrs · {staffShifts.length} shifts
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {weekDays.map((day) => {
+        const cellShifts = staffShifts.filter((shift) => shift.shiftDate === day);
+        const dayTimeOff = approvedTimeOffForDay(timeOff, day).filter((item) => sameStaff(item.staffId, person.id));
+
+        return (
+          <div key={`${person.id}-${day}`} className="min-h-28 border-r border-fuel-line bg-slate-50/40 p-2 last:border-r-0">
+            {dayTimeOff.length > 0 && (
+              <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-700">
+                Approved off
+              </div>
+            )}
+            {cellShifts.length === 0 ? (
+              <div className="flex h-full min-h-20 items-center justify-center rounded-md border border-dashed border-fuel-line bg-white text-xs font-bold text-slate-300">
+                Off
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {cellShifts.map((shift) => (
+                  <PlannerShiftCard
+                    editingNoteId={editingNoteId}
+                    isAdmin={isAdmin}
+                    key={shift.id}
+                    noteDraft={noteDraft}
+                    noteError={noteError}
+                    onCancelNote={onCancelNote}
+                    onDeleteShift={onDeleteShift}
+                    onEditNote={onEditNote}
+                    onNoteDraftChange={onNoteDraftChange}
+                    onSaveNote={onSaveNote}
+                    savingNoteId={savingNoteId}
+                    shift={shift}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function PlannerShiftCard({
+  editingNoteId,
+  isAdmin,
+  noteDraft,
+  noteError,
+  onCancelNote,
+  onDeleteShift,
+  onEditNote,
+  onNoteDraftChange,
+  onSaveNote,
+  savingNoteId,
+  shift
+}) {
+  const isEditing = editingNoteId === shift.id;
+
+  return (
+    <article className={`rounded-md border-l-4 bg-white p-2 shadow-sm ${shift.isExtra ? "border-l-fuel-lime ring-1 ring-fuel-lime/50" : "border-l-fuel-green ring-1 ring-fuel-line"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-black text-fuel-ink">{formatShiftRange(shift.startTime, shift.endTime)}</p>
+          <p className="mt-0.5 text-xs font-bold text-slate-500">{shift.totalHours} hrs</p>
+        </div>
+        {isAdmin && (
+          <button
+            className="shrink-0 rounded-md bg-fuel-mist p-1.5 text-slate-500 hover:text-red-700"
+            onClick={() => onDeleteShift(shift.id)}
+            title="Delete shift"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+      </div>
+
+      {shift.isExtra && (
+        <p className="mt-2 rounded-md bg-fuel-lime px-2 py-1 text-[11px] font-black text-fuel-ink">
+          Extra{shift.coverForStaffName ? ` for ${shift.coverForStaffName}` : ""}
+        </p>
+      )}
+
+      <div className="mt-2">
+        {isEditing ? (
+          <div className="space-y-2">
+            <textarea
+              className="min-h-20 w-full rounded-md border border-fuel-line bg-white px-2 py-2 text-xs font-bold outline-none focus:border-fuel-green"
+              value={noteDraft}
+              onChange={(event) => onNoteDraftChange(event.target.value)}
+              placeholder="Add note"
+            />
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="flex min-h-9 items-center justify-center gap-1 rounded-md bg-fuel-green px-2 py-1 text-xs font-black text-white disabled:cursor-wait disabled:opacity-70"
+                onClick={() => onSaveNote(shift)}
+                disabled={savingNoteId === shift.id}
+              >
+                <Check size={14} />
+                {savingNoteId === shift.id ? "Saving" : "Save"}
+              </button>
+              <button
+                type="button"
+                className="flex min-h-9 items-center justify-center gap-1 rounded-md bg-fuel-mist px-2 py-1 text-xs font-black text-fuel-green"
+                onClick={onCancelNote}
+                disabled={savingNoteId === shift.id}
+              >
+                <X size={14} />
+                Cancel
+              </button>
+            </div>
+            {noteError && <p className="rounded-md bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">{noteError}</p>}
+          </div>
+        ) : (
+          <div className="flex items-start justify-between gap-2">
+            {shift.notes ? (
+              <p className="min-w-0 truncate rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-slate-700">{shift.notes}</p>
+            ) : (
+              <p className="text-xs font-bold text-slate-400">No note</p>
+            )}
+            {isAdmin && (
+              <button
+                type="button"
+                className="shrink-0 rounded-md bg-fuel-mist p-1.5 text-fuel-green"
+                title="Edit note"
+                onClick={() => onEditNote(shift)}
+              >
+                <Pencil size={14} />
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function formatHourTotal(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function approvedTimeOffForDay(requests, day) {
