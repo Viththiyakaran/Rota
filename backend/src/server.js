@@ -146,8 +146,12 @@ app.get("/api", (_req, res) => {
   });
 });
 
-app.get("/api/settings/branding", (_req, res) => {
-  res.json(getBranding());
+app.get("/api/settings/branding", async (_req, res, next) => {
+  try {
+    res.json(await getBranding());
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/calendar/:token.ics", async (req, res, next) => {
@@ -182,7 +186,7 @@ app.get("/calendar/:token.ics", async (req, res, next) => {
       [user.staffId, today, until]
     );
 
-    const branding = getBranding();
+    const branding = await getBranding();
     const calendar = buildIcsCalendar({
       name: `${branding.businessName || "Business"} Rota - ${user.staffName || user.username}`,
       shifts: rows.map(decorateShift)
@@ -210,11 +214,11 @@ app.post("/api/auth/recover-admin", async (req, res, next) => {
     if (token !== recoveryToken) return res.status(403).json({ error: "Invalid recovery token." });
     if (newPassword.length < 8) return res.status(400).json({ error: "New password must be at least 8 characters." });
 
-    const user = findUserByUsername(String(username).trim());
+    const user = await findUserByUsername(String(username).trim());
     if (!user || user.role !== "admin") return res.status(404).json({ error: "Admin user not found." });
 
-    resetUserPassword(user.id, newPassword);
-    addAudit(user.id, "recover_admin_password", `Recovered admin login ${user.username}`);
+    await resetUserPassword(user.id, newPassword);
+    await addAudit(user.id, "recover_admin_password", `Recovered admin login ${user.username}`);
     res.json({ ok: true, username: user.username, mustChangePassword: true });
   } catch (error) {
     next(error);
@@ -229,17 +233,17 @@ app.post("/api/auth/login", async (req, res, next) => {
       return res.status(429).json({ error: "Too many login attempts. Please try again in 15 minutes." });
     }
 
-    const user = findUserByUsername(username.trim());
+    const user = await findUserByUsername(username.trim());
     if (!user || !verifyPassword(password, user.passwordHash)) {
       recordFailedLogin(loginKey);
       return res.status(401).json({ error: "Invalid username or password." });
     }
 
     clearFailedLogin(loginKey);
-    const session = createSession(user.id);
-    const sessionUser = getSessionUser(session.token);
+    const session = await createSession(user.id);
+    const sessionUser = await getSessionUser(session.token);
     setSessionCookie(req, res, session);
-    addAudit(user.id, "login", `${user.username} logged in`);
+    await addAudit(user.id, "login", `${user.username} logged in`);
     res.json({ expiresAt: session.expiresAt, user: publicUser(sessionUser) });
   } catch (error) {
     next(error);
@@ -250,10 +254,14 @@ app.get("/api/auth/me", requireAuth, (req, res) => {
   res.json({ user: publicUser(req.user) });
 });
 
-app.post("/api/auth/logout", requireAuth, (req, res) => {
-  deleteSession(req.token);
-  clearSessionCookie(req, res);
-  res.status(204).send();
+app.post("/api/auth/logout", requireAuth, async (req, res, next) => {
+  try {
+    await deleteSession(req.token);
+    clearSessionCookie(req, res);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/auth/change-password", requireAuth, async (req, res, next) => {
@@ -266,9 +274,9 @@ app.post("/api/auth/change-password", requireAuth, async (req, res, next) => {
       return res.status(401).json({ error: "Current password is wrong." });
     }
 
-    changePassword(req.user.id, newPassword);
-    addAudit(req.user.id, "change_password", `${req.user.username} changed password`);
-    const user = getSessionUser(req.token);
+    await changePassword(req.user.id, newPassword);
+    await addAudit(req.user.id, "change_password", `${req.user.username} changed password`);
+    const user = await getSessionUser(req.token);
     res.json({ ok: true, user: publicUser(user) });
   } catch (error) {
     next(error);
@@ -278,8 +286,12 @@ app.post("/api/auth/change-password", requireAuth, async (req, res, next) => {
 app.use("/api", requireAuth);
 app.use("/api", requirePasswordChange);
 
-app.get("/api/users", requireAdmin, (_req, res) => {
-  res.json(listUsers());
+app.get("/api/users", requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await listUsers());
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/users", requireAdmin, async (req, res, next) => {
@@ -288,8 +300,8 @@ app.post("/api/users", requireAdmin, async (req, res, next) => {
     if (!username || !["admin", "staff"].includes(role)) return res.status(400).json({ error: "Username and role are required." });
     if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
 
-    const user = createUser({ username, password, role, staffId, active });
-    addAudit(req.user.id, "create_user", `Created login ${username}`);
+    const user = await createUser({ username, password, role, staffId, active });
+    await addAudit(req.user.id, "create_user", `Created login ${username}`);
     res.status(201).json(user);
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) return res.status(400).json({ error: "Username already exists." });
@@ -299,9 +311,9 @@ app.post("/api/users", requireAdmin, async (req, res, next) => {
 
 app.put("/api/users/:id", requireAdmin, async (req, res, next) => {
   try {
-    const user = updateUser(req.params.id, req.body);
+    const user = await updateUser(req.params.id, req.body);
     if (!user) return res.status(404).json({ error: "User not found." });
-    addAudit(req.user.id, "update_user", `Updated login ${user.username}`);
+    await addAudit(req.user.id, "update_user", `Updated login ${user.username}`);
     res.json(user);
   } catch (error) {
     if (String(error.message).includes("UNIQUE")) return res.status(400).json({ error: "Username already exists." });
@@ -313,8 +325,8 @@ app.post("/api/users/:id/reset-password", requireAdmin, async (req, res, next) =
   try {
     const password = req.body.password || "staff123";
     if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters." });
-    if (!resetUserPassword(req.params.id, password)) return res.status(404).json({ error: "User not found." });
-    addAudit(req.user.id, "reset_password", `Reset password for user #${req.params.id}`);
+    if (!await resetUserPassword(req.params.id, password)) return res.status(404).json({ error: "User not found." });
+    await addAudit(req.user.id, "reset_password", `Reset password for user #${req.params.id}`);
     res.json({ ok: true });
   } catch (error) {
     next(error);
@@ -334,15 +346,19 @@ app.put("/api/settings/branding", requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: "Logo image is too large. Use an image under 500KB." });
     }
 
-    res.json(updateBranding({ businessName, logoDataUrl }));
-    addAudit(req.user.id, "update_branding", "Updated business branding");
+    res.json(await updateBranding({ businessName, logoDataUrl }));
+    await addAudit(req.user.id, "update_branding", "Updated business branding");
   } catch (error) {
     next(error);
   }
 });
 
-app.get("/api/settings/opening-hours", (_req, res) => {
-  res.json(getOpeningHours());
+app.get("/api/settings/opening-hours", async (_req, res, next) => {
+  try {
+    res.json(await getOpeningHours());
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.put("/api/settings/opening-hours", requireAdmin, async (req, res, next) => {
@@ -350,8 +366,8 @@ app.put("/api/settings/opening-hours", requireAdmin, async (req, res, next) => {
     const { openingStart, openingEnd, businessTimezone } = req.body;
     if (!isTime(openingStart) || !isTime(openingEnd)) return res.status(400).json({ error: "Opening hours must be valid times." });
     if (businessTimezone !== undefined && !validTimeZone(businessTimezone)) return res.status(400).json({ error: "Timezone must be valid." });
-    const saved = updateOpeningHours({ openingStart, openingEnd, businessTimezone });
-    addAudit(req.user.id, "update_opening_hours", `${openingStart}-${openingEnd} ${saved.businessTimezone}`);
+    const saved = await updateOpeningHours({ openingStart, openingEnd, businessTimezone });
+    await addAudit(req.user.id, "update_opening_hours", `${openingStart}-${openingEnd} ${saved.businessTimezone}`);
     res.json(saved);
   } catch (error) {
     next(error);
@@ -384,7 +400,7 @@ app.post("/api/availability", async (req, res, next) => {
       "INSERT INTO availability (staffId, weekday, startTime, endTime, note) VALUES (?, ?, ?, ?, ?)",
       [staffId, Number(weekday), startTime, endTime, note]
     );
-    addAudit(req.user.id, "add_availability", `Staff #${staffId} unavailable on weekday ${weekday}`);
+    await addAudit(req.user.id, "add_availability", `Staff #${staffId} unavailable on weekday ${weekday}`);
     res.status(201).json(await get("SELECT * FROM availability WHERE id = ?", [result.id]));
   } catch (error) {
     next(error);
@@ -397,7 +413,7 @@ app.delete("/api/availability/:id", async (req, res, next) => {
     if (!row) return res.status(404).json({ error: "Availability item not found." });
     if (req.user.role !== "admin" && Number(row.staffId) !== Number(req.user.staffId)) return res.status(403).json({ error: "Not allowed." });
     await run("DELETE FROM availability WHERE id = ?", [req.params.id]);
-    addAudit(req.user.id, "delete_availability", `Deleted availability #${req.params.id}`);
+    await addAudit(req.user.id, "delete_availability", `Deleted availability #${req.params.id}`);
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -430,7 +446,7 @@ app.post("/api/time-off", async (req, res, next) => {
       "INSERT INTO timeOffRequests (staffId, startDate, endDate, reason) VALUES (?, ?, ?, ?)",
       [staffId, startDate, endDate, reason]
     );
-    addAudit(req.user.id, "request_time_off", `Staff #${staffId} requested ${startDate} to ${endDate}`);
+    await addAudit(req.user.id, "request_time_off", `Staff #${staffId} requested ${startDate} to ${endDate}`);
     res.status(201).json(await get("SELECT * FROM timeOffRequests WHERE id = ?", [result.id]));
   } catch (error) {
     next(error);
@@ -445,10 +461,10 @@ app.put("/api/time-off/:id", requireAdmin, async (req, res, next) => {
       "UPDATE timeOffRequests SET status = ?, reviewedBy = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
       [status, req.user.id, req.params.id]
     );
-    addAudit(req.user.id, "review_time_off", `Set request #${req.params.id} to ${status}`);
+    await addAudit(req.user.id, "review_time_off", `Set request #${req.params.id} to ${status}`);
     const row = await get("SELECT * FROM timeOffRequests WHERE id = ?", [req.params.id]);
     if (!row) return res.status(404).json({ error: "Request not found." });
-    notifyStaff(row.staffId, `Time off ${status}`, `Your time-off request for ${row.startDate} to ${row.endDate} was ${status}.`, {
+    await notifyStaff(row.staffId, `Time off ${status}`, `Your time-off request for ${row.startDate} to ${row.endDate} was ${status}.`, {
       type: "time_off_reviewed",
       timeOffRequestId: row.id
     });
@@ -458,8 +474,12 @@ app.put("/api/time-off/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get("/api/audit", requireAdmin, (_req, res) => {
-  res.json(listAudit());
+app.get("/api/audit", requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await listAudit());
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/notifications", async (req, res, next) => {
@@ -540,7 +560,7 @@ app.post("/api/tasks", async (req, res, next) => {
         req.user.id
       ]
     );
-    addAudit(req.user.id, "create_task", `Created task ${cleanTitle}`);
+    await addAudit(req.user.id, "create_task", `Created task ${cleanTitle}`);
     const row = await getTask(result.id);
     res.status(201).json(normaliseTask(row));
   } catch (error) {
@@ -574,7 +594,7 @@ app.put("/api/tasks/:id", async (req, res, next) => {
         req.params.id
       ]
     );
-    addAudit(req.user.id, "update_task", `Updated task #${req.params.id} to ${nextStatus}`);
+    await addAudit(req.user.id, "update_task", `Updated task #${req.params.id} to ${nextStatus}`);
     const row = await getTask(req.params.id);
     res.json(normaliseTask(row));
   } catch (error) {
@@ -587,16 +607,20 @@ app.delete("/api/tasks/:id", async (req, res, next) => {
     const current = await getTask(req.params.id);
     if (!current) return res.status(404).json({ error: "Task not found." });
     await run("DELETE FROM tasks WHERE id = ?", [req.params.id]);
-    addAudit(req.user.id, "delete_task", `Deleted task #${req.params.id}`);
+    await addAudit(req.user.id, "delete_task", `Deleted task #${req.params.id}`);
     res.status(204).send();
   } catch (error) {
     next(error);
   }
 });
 
-app.get("/api/push/public-key", (_req, res) => {
-  const key = getPushPublicKey();
-  res.json({ publicKey: key, enabled: Boolean(key && pushConfigured) });
+app.get("/api/push/public-key", async (_req, res, next) => {
+  try {
+    const key = await getPushPublicKey();
+    res.json({ publicKey: key, enabled: Boolean(key && pushConfigured) });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.get("/api/push/status", async (req, res, next) => {
@@ -630,7 +654,7 @@ app.post("/api/push/subscribe", async (req, res, next) => {
          updatedAt = CURRENT_TIMESTAMP`,
       [req.user.staffId, endpoint, p256dh, auth, req.get("user-agent") || ""]
     );
-    addAudit(req.user.id, "enable_push", `${req.user.username} enabled push notifications`);
+    await addAudit(req.user.id, "enable_push", `${req.user.username} enabled push notifications`);
     res.status(201).json({ ok: true });
   } catch (error) {
     next(error);
@@ -654,7 +678,7 @@ app.post("/api/push/test", async (req, res, next) => {
 app.get("/api/calendar/my-feed", async (req, res, next) => {
   try {
     if (!req.user.staffId) return res.status(400).json({ error: "Only staff-linked users have a calendar feed." });
-    const token = ensureUserCalendarToken(req.user.id);
+    const token = await ensureUserCalendarToken(req.user.id);
     const feedUrl = `${getRequestOrigin(req)}/calendar/${token}.ics`;
     res.json({
       feedUrl,
@@ -684,9 +708,9 @@ app.post("/api/staff", requireAdmin, async (req, res, next) => {
       "INSERT INTO staff (name, phone, email, role, active) VALUES (?, ?, ?, ?, ?)",
       [name, phone, email, role, active ? 1 : 0]
     );
-    createStaffUser(result.id, name);
+    await createStaffUser(result.id, name);
     const row = await get("SELECT * FROM staff WHERE id = ?", [result.id]);
-    addAudit(req.user.id, "create_staff", `Created staff ${name}`);
+    await addAudit(req.user.id, "create_staff", `Created staff ${name}`);
     res.status(201).json({ ...row, active: Boolean(row.active) });
   } catch (error) {
     next(error);
@@ -714,8 +738,8 @@ app.put("/api/staff/:id", requireAdmin, async (req, res, next) => {
     );
     await run("UPDATE users SET active = ?, updatedAt = CURRENT_TIMESTAMP WHERE staffId = ?", [nextStaff.active, req.params.id]);
     const row = await get("SELECT * FROM staff WHERE id = ?", [req.params.id]);
-    addAudit(req.user.id, "update_staff", `Updated staff ${row.name}`);
-    notifyStaff(row.id, "Staff details updated", "Admin updated your staff profile.", {
+    await addAudit(req.user.id, "update_staff", `Updated staff ${row.name}`);
+    await notifyStaff(row.id, "Staff details updated", "Admin updated your staff profile.", {
       type: "staff_updated"
     });
     res.json({ ...row, active: Boolean(row.active) });
@@ -807,13 +831,13 @@ app.post("/api/shifts/copy-week", requireAdmin, async (req, res, next) => {
           null
         ]
       );
-      notifyStaff(shift.staffId, "Shift copied to next week", `You have a copied shift on ${shiftDate} from ${shift.startTime} to ${shift.endTime}.`, {
+      await notifyStaff(shift.staffId, "Shift copied to next week", `You have a copied shift on ${shiftDate} from ${shift.startTime} to ${shift.endTime}.`, {
         type: "shift_created",
         shiftId: copyResult.id
       });
       copied += 1;
     }
-    addAudit(req.user.id, "copy_week", `Copied ${copied} shifts from ${fromStartDate} to ${toStartDate}`);
+    await addAudit(req.user.id, "copy_week", `Copied ${copied} shifts from ${fromStartDate} to ${toStartDate}`);
     res.json({ copied });
   } catch (error) {
     next(error);
@@ -890,7 +914,7 @@ app.post("/api/rota-patterns/generate", requireAdmin, async (req, res, next) => 
       }
     }
 
-    addAudit(req.user.id, "generate_rota_pattern", `Generated ${created} rota shifts from ${cleanStart} to ${cleanEnd}`);
+    await addAudit(req.user.id, "generate_rota_pattern", `Generated ${created} rota shifts from ${cleanStart} to ${cleanEnd}`);
     res.status(201).json({ created, skipped, deleted, startDate: cleanStart, endDate: cleanEnd, batchId });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
@@ -935,8 +959,8 @@ app.post("/api/shifts", requireAdmin, async (req, res, next) => {
       ]
     );
     const row = await getShift(result.id);
-    addAudit(req.user.id, "create_shift", `Created shift #${result.id}`);
-    notifyStaff(row.staffId, "New shift assigned", `You have a shift on ${row.shiftDate} from ${row.startTime} to ${row.endTime}.`, {
+    await addAudit(req.user.id, "create_shift", `Created shift #${result.id}`);
+    await notifyStaff(row.staffId, "New shift assigned", `You have a shift on ${row.shiftDate} from ${row.startTime} to ${row.endTime}.`, {
       type: "shift_created",
       shiftId: row.id
     });
@@ -1005,21 +1029,21 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
       ]
     );
     const row = await getShift(req.params.id);
-    addAudit(req.user.id, "update_shift", `Updated shift #${req.params.id}`);
+    await addAudit(req.user.id, "update_shift", `Updated shift #${req.params.id}`);
     if (notesChanged && nextNotes) {
-      notifyStaff(row.staffId, previousNotes ? "Shift note updated" : "Shift note added", `Note for ${row.shiftDate} ${row.startTime}-${row.endTime}: ${nextNotes}`, {
+      await notifyStaff(row.staffId, previousNotes ? "Shift note updated" : "Shift note added", `Note for ${row.shiftDate} ${row.startTime}-${row.endTime}: ${nextNotes}`, {
         type: "shift_note",
         shiftId: row.id
       });
     }
     if (rotaChanged) {
-      notifyStaff(row.staffId, "Shift updated", `Your shift on ${row.shiftDate} is now ${row.startTime} to ${row.endTime}.`, {
+      await notifyStaff(row.staffId, "Shift updated", `Your shift on ${row.shiftDate} is now ${row.startTime} to ${row.endTime}.`, {
         type: "shift_updated",
         shiftId: row.id
       });
     }
     if (Number(current.staffId) !== Number(row.staffId)) {
-      notifyStaff(current.staffId, "Shift reassigned", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was reassigned.`, {
+      await notifyStaff(current.staffId, "Shift reassigned", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was reassigned.`, {
         type: "shift_reassigned",
         shiftId: row.id
       });
@@ -1035,9 +1059,9 @@ app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
     const current = await getShift(req.params.id);
     const result = await run("DELETE FROM shifts WHERE id = ?", [req.params.id]);
     if (result.changes === 0) return res.status(404).json({ error: "Shift not found." });
-    addAudit(req.user.id, "delete_shift", `Deleted shift #${req.params.id}`);
+    await addAudit(req.user.id, "delete_shift", `Deleted shift #${req.params.id}`);
     if (current) {
-      notifyStaff(current.staffId, "Shift removed", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was removed.`, {
+      await notifyStaff(current.staffId, "Shift removed", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was removed.`, {
         type: "shift_deleted"
       });
     }
@@ -1105,18 +1129,22 @@ app.use((error, _req, res, _next) => {
   });
 });
 
-function requireAuth(req, res, next) {
-  const header = req.get("authorization") || "";
-  const cookieToken = parseCookies(req).fuelops_session || "";
-  const bearerToken = header.startsWith("Bearer ") ? header.slice(7) : "";
-  const token = cookieToken || bearerToken;
-  const user = getSessionUser(token);
+async function requireAuth(req, res, next) {
+  try {
+    const header = req.get("authorization") || "";
+    const cookieToken = parseCookies(req).fuelops_session || "";
+    const bearerToken = header.startsWith("Bearer ") ? header.slice(7) : "";
+    const token = cookieToken || bearerToken;
+    const user = await getSessionUser(token);
 
-  if (!user) return res.status(401).json({ error: "Please log in." });
+    if (!user) return res.status(401).json({ error: "Please log in." });
 
-  req.token = token;
-  req.user = user;
-  next();
+    req.token = token;
+    req.user = user;
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
 
 function requirePasswordChange(req, res, next) {
@@ -1129,8 +1157,8 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-initDb().then(() => {
-  configurePushNotifications();
+initDb().then(async () => {
+  await configurePushNotifications();
   app.listen(PORT, () => {
     console.log(`FuelOps Rota Backend running on port ${PORT}`);
   });
@@ -1224,9 +1252,9 @@ function getShift(id) {
   );
 }
 
-function notifyStaff(staffId, title, message, { type = "rota_update", shiftId = null, timeOffRequestId = null } = {}) {
+async function notifyStaff(staffId, title, message, { type = "rota_update", shiftId = null, timeOffRequestId = null } = {}) {
   if (!staffId) return;
-  run(
+  await run(
     `INSERT INTO notifications (staffId, type, title, message, shiftId, timeOffRequestId)
      VALUES (?, ?, ?, ?, ?, ?)`,
     [staffId, type, title, message, shiftId, timeOffRequestId]
@@ -1236,8 +1264,8 @@ function notifyStaff(staffId, title, message, { type = "rota_update", shiftId = 
   });
 }
 
-function configurePushNotifications() {
-  const keys = getOrCreateVapidKeys();
+async function configurePushNotifications() {
+  const keys = await getOrCreateVapidKeys();
   if (!keys?.publicKey || !keys?.privateKey) {
     pushConfigured = false;
     return;
@@ -1251,7 +1279,7 @@ function configurePushNotifications() {
   pushConfigured = true;
 }
 
-function getOrCreateVapidKeys() {
+async function getOrCreateVapidKeys() {
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
     return {
       publicKey: process.env.VAPID_PUBLIC_KEY,
@@ -1259,20 +1287,20 @@ function getOrCreateVapidKeys() {
     };
   }
 
-  const publicRow = get("SELECT value FROM settings WHERE key = ?", ["vapidPublicKey"]);
-  const privateRow = get("SELECT value FROM settings WHERE key = ?", ["vapidPrivateKey"]);
+  const publicRow = await get("SELECT value FROM settings WHERE key = ?", ["vapidPublicKey"]);
+  const privateRow = await get("SELECT value FROM settings WHERE key = ?", ["vapidPrivateKey"]);
   if (publicRow?.value && privateRow?.value) {
     return { publicKey: publicRow.value, privateKey: privateRow.value };
   }
 
   const generated = webpush.generateVAPIDKeys();
-  run(
+  await run(
     `INSERT INTO settings (key, value)
      VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ["vapidPublicKey", generated.publicKey]
   );
-  run(
+  await run(
     `INSERT INTO settings (key, value)
      VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
@@ -1281,8 +1309,8 @@ function getOrCreateVapidKeys() {
   return generated;
 }
 
-function getPushPublicKey() {
-  return process.env.VAPID_PUBLIC_KEY || get("SELECT value FROM settings WHERE key = ?", ["vapidPublicKey"])?.value || "";
+async function getPushPublicKey() {
+  return process.env.VAPID_PUBLIC_KEY || (await get("SELECT value FROM settings WHERE key = ?", ["vapidPublicKey"]))?.value || "";
 }
 
 async function sendPushToStaff(staffId, { title, message, type = "rota_update", shiftId = null, timeOffRequestId = null } = {}) {
@@ -1367,7 +1395,7 @@ async function processDueReminderPushes() {
     const coverText = decorated.isExtra && decorated.coverForStaffName ? ` Extra cover for ${decorated.coverForStaffName}.` : "";
     const noteText = decorated.notes ? ` Note: ${decorated.notes}.` : "";
     const message = `${decorated.reminderMessage}.${coverText}${noteText}`;
-    notifyStaff(decorated.staffId, "Shift starts soon", message, {
+    await notifyStaff(decorated.staffId, "Shift starts soon", message, {
       type: "shift_reminder",
       shiftId: decorated.id
     });
@@ -1407,7 +1435,7 @@ async function processDueStartPushes() {
     const coverText = decorated.isExtra && decorated.coverForStaffName ? ` Extra cover for ${decorated.coverForStaffName}.` : "";
     const noteText = decorated.notes ? ` Note: ${decorated.notes}.` : "";
     const message = `Your shift starts now at ${decorated.startTime}.${coverText}${noteText}`;
-    notifyStaff(decorated.staffId, "Shift starting now", message, {
+    await notifyStaff(decorated.staffId, "Shift starting now", message, {
       type: "shift_start",
       shiftId: decorated.id
     });

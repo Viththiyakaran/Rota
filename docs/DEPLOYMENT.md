@@ -1,12 +1,12 @@
 # FuelOps Rota Deployment Guide
 
-FuelOps Rota is a React frontend with a Node/Express backend and SQLite database.
+FuelOps Rota is a React frontend with a Node/Express backend. It supports SQLite for local/simple installs and Supabase/Postgres for production by setting `DATABASE_URL`.
 
 ## Requirements
 
 - Node.js 22.5 or newer
 - npm
-- Persistent disk/volume for production SQLite
+- Supabase/Postgres connection string for production, or a persistent disk/volume if using SQLite
 
 ## Local Run
 
@@ -46,6 +46,7 @@ NODE_ENV=production
 PORT=5000
 FRONTEND_URL=https://your-frontend-url
 DB_PATH=/data/fuelops.sqlite
+DATABASE_URL=postgresql://...
 ADMIN_RESET_TOKEN=temporary-only-if-needed
 VAPID_SUBJECT=mailto:admin@example.com
 VAPID_PUBLIC_KEY=optional-fixed-key
@@ -61,9 +62,11 @@ VITE_API_BASE=https://your-backend-url
 Notes:
 
 - Railway provides `PORT`.
-- `DB_PATH` must use persistent storage.
+- Prefer `DATABASE_URL` for Supabase/Postgres production storage.
+- Use `DB_PATH` only when running SQLite with persistent storage.
 - `ADMIN_RESET_TOKEN` should be removed after admin password recovery.
 - `JWT_SECRET` is not required because the app uses server sessions.
+- Never paste or commit real database passwords into source control.
 
 ## Railway Single-Service Deployment
 
@@ -81,16 +84,19 @@ Start command:
 npm start
 ```
 
-Add Railway volume:
-
-```text
-Mount path: /data
-```
-
-Set variables:
+For Supabase/Postgres, set variables:
 
 ```text
 NODE_ENV=production
+DATABASE_URL=your Supabase connection string
+```
+
+The backend creates its required tables on first start.
+
+For SQLite instead, add a Railway volume:
+
+```text
+Mount path: /data
 DB_PATH=/data/fuelops.sqlite
 ```
 
@@ -100,9 +106,11 @@ Backend variables:
 
 ```text
 NODE_ENV=production
-DB_PATH=/data/fuelops.sqlite
+DATABASE_URL=your Supabase connection string
 FRONTEND_URL=https://your-frontend-url
 ```
+
+Use `DB_PATH=/data/fuelops.sqlite` only if you are using a Railway volume instead of Supabase.
 
 Frontend variables:
 
@@ -179,4 +187,3 @@ Back up before:
 - Database migrations
 - Moving host
 - Removing Railway volumes
-

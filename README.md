@@ -6,7 +6,7 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 
 - Frontend: React + Vite
 - Backend: Node.js + Express
-- Database: SQLite
+- Database: SQLite locally, Supabase/Postgres in production when `DATABASE_URL` is set
 - Styling: Tailwind CSS
 - Hosting: Railway-compatible
 - Paid services: none required
@@ -87,7 +87,7 @@ fuelops-rota/
 - Node.js 22.5 or newer
 - npm
 
-Node 22.5+ is required because the backend uses Node's built-in SQLite module.
+Node 22.5+ is required because the backend keeps SQLite as a local fallback using Node's built-in SQLite module.
 
 ## Local Setup
 
@@ -215,6 +215,7 @@ PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url
 DB_PATH=/data/fuelops.sqlite
+DATABASE_URL=postgresql://...
 ADMIN_RESET_TOKEN=temporary-secret-for-admin-recovery
 VAPID_PUBLIC_KEY=optional-fixed-web-push-public-key
 VAPID_PRIVATE_KEY=optional-fixed-web-push-private-key
@@ -230,12 +231,13 @@ VITE_API_BASE=https://your-backend-url.up.railway.app
 Notes:
 
 - Railway provides `PORT` automatically.
-- `DB_PATH` should point to a Railway volume path in production.
+- Use `DATABASE_URL` for Supabase/Postgres production storage.
+- Use `DB_PATH` only for SQLite local development or if you deploy with a persistent volume instead of Supabase.
 - `ADMIN_RESET_TOKEN` should only be added temporarily when recovering admin access.
-- `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` are optional. If they are not set, the app generates and saves free Web Push keys in SQLite.
+- `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` are optional. If they are not set, the app generates and saves free Web Push keys in the configured database.
 - For long-term production, fixed VAPID keys are better because existing phone/browser subscriptions remain valid after database restore or migration.
 - This app uses server-side sessions, not JWT, so `JWT_SECRET` is not required.
-- `DATABASE_URL` is not used unless the app is later migrated from SQLite to a hosted SQL database.
+- Never commit `DATABASE_URL`. Keep it only in Railway/Supabase environment variables.
 
 ## Railway Deployment
 
@@ -268,6 +270,15 @@ DB_PATH=/data/fuelops.sqlite
 NODE_ENV=production
 ```
 
+For Supabase instead of a Railway volume, do not set `DB_PATH`. Set:
+
+```text
+DATABASE_URL=your Supabase connection string
+NODE_ENV=production
+```
+
+The backend will create the required Postgres tables on first start.
+
 ### Separate Frontend And Backend Services
 
 Backend service:
@@ -276,6 +287,12 @@ Backend service:
 DB_PATH=/data/fuelops.sqlite
 NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url
+```
+
+For Supabase, replace `DB_PATH` with:
+
+```text
+DATABASE_URL=your Supabase connection string
 ```
 
 Frontend service:
@@ -288,15 +305,15 @@ Because login uses cookies, `FRONTEND_URL` must match the deployed frontend URL 
 
 ## Other Deployment Options
 
-This app currently uses a Node/Express backend and a SQLite database file. For production, choose a backend host that supports persistent storage, or migrate the database to a hosted database before using serverless hosting.
+This app uses a Node/Express backend. It can run with local SQLite or with Supabase/Postgres by setting `DATABASE_URL`. For production, Supabase/Postgres is better than a local SQLite file because backups, scaling, and multi-tenant SaaS growth are easier.
 
 | Platform | Best use | Current app fit | Notes |
 | --- | --- | --- | --- |
-| Railway | Full-stack single service | Yes | Easiest current setup. Use a volume mounted at `/data` and set `DB_PATH=/data/fuelops.sqlite`. |
-| Render | Full-stack web service | Yes, with persistent disk | Use a Node web service and attach a persistent disk. Set `DB_PATH` to the disk mount path. |
-| Fly.io | Full-stack app with volumes | Yes, with volume | Good if you are comfortable with CLI deployment. Create a volume and point `DB_PATH` to it. |
-| DigitalOcean Droplet/VPS | Long-term full control | Yes | Run Node with PM2 or systemd, use Nginx/Caddy, and back up the SQLite file. |
-| DigitalOcean App Platform | Managed app hosting | Possible | Use only if persistent storage or a managed database is configured. |
+| Railway | Full-stack single service | Yes | Easiest setup. Use `DATABASE_URL` for Supabase, or a volume plus `DB_PATH` for SQLite. |
+| Render | Full-stack web service | Yes | Use Supabase/Postgres via `DATABASE_URL`, or attach a persistent disk for SQLite. |
+| Fly.io | Full-stack app | Yes | Use Supabase/Postgres, or create a Fly volume for SQLite. |
+| DigitalOcean Droplet/VPS | Long-term full control | Yes | Run Node with PM2 or systemd, use Nginx/Caddy, and connect to Supabase/Postgres. |
+| DigitalOcean App Platform | Managed app hosting | Possible | Best with Supabase/Postgres through `DATABASE_URL`. |
 | Netlify | Frontend only | Partial | Host the React frontend here, keep the backend on Railway/Render/Fly/VPS, and set `VITE_API_BASE`. |
 | Vercel | Frontend only | Partial | Same as Netlify. Do not rely on local SQLite inside serverless functions. |
 | Cloudflare Pages | Frontend only | Partial | Host the frontend only unless the backend and database are moved elsewhere. |
@@ -327,7 +344,7 @@ The backend URL must use HTTPS in production because login uses secure cookies.
 
 ### If You Want Serverless Hosting
 
-Move the database away from local SQLite first. Good future options include Postgres, Supabase, Neon, or Turso/libSQL. After that migration, the frontend can live on Netlify/Vercel and the API can be redesigned for serverless functions.
+For future multi-tenant SaaS, keep Supabase/Postgres as the main database, then add tenant/business IDs, billing, invite flows, and row-level data separation before onboarding many businesses.
 
 Official references:
 

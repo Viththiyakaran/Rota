@@ -59,23 +59,30 @@ After recovery:
 
 ## Sessions
 
-Sessions are stored in SQLite.
+Sessions are stored in the configured database.
 
-If the SQLite database is deleted, users must log in again and app data may be lost.
+If the database is deleted, users must log in again and app data may be lost.
 
-## SQLite Operations
+## Database Operations
 
-Production database should be stored on persistent disk:
+For production, prefer Supabase/Postgres and set:
+
+```text
+DATABASE_URL=your Supabase connection string
+```
+
+For SQLite-only deployments, store the database on persistent disk:
 
 ```text
 /data/fuelops.sqlite
 ```
 
 Do not store production data only in the Railway temporary filesystem.
+Never commit database URLs, passwords, or Supabase keys into Git.
 
 ## Backups
 
-Back up:
+Back up either the Supabase/Postgres database or the SQLite file:
 
 ```text
 /data/fuelops.sqlite
@@ -165,4 +172,3 @@ DB_PATH=/data/fuelops.sqlite
 ```
 
 and mount a Railway volume at `/data`.
-

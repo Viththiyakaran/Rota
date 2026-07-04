@@ -2,13 +2,25 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import pg from "pg";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const dbPath = process.env.DB_PATH || path.join(__dirname, "..", "fuelops.sqlite");
+const databaseUrl = process.env.DATABASE_URL || "";
+const isPostgres = Boolean(databaseUrl);
 
-export const db = new DatabaseSync(dbPath);
 export const DEFAULT_TIME_ZONE = "Europe/London";
+export const db = isPostgres
+  ? new pg.Pool({
+      connectionString: databaseUrl,
+      ssl: databaseUrl.includes("supabase.co") || process.env.PGSSLMODE === "require"
+        ? { rejectUnauthorized: false }
+        : undefined
+    })
+  : new DatabaseSync(dbPath);
+
+let businessTimezoneCache = DEFAULT_TIME_ZONE;
 
 const PERMANENT_ROTA_TEMPLATE = [
   ["VITHTHI", 0, "05:30", "19:00", 0, 30, "Shopping"],
@@ -24,7 +36,17 @@ const PERMANENT_ROTA_TEMPLATE = [
   ["Afridi", 6, "05:30", "22:00", 30, 30, ""]
 ];
 
-export function run(sql, params = []) {
+export async function run(sql, params = []) {
+  if (isPostgres) {
+    if (/^\s*PRAGMA\b/i.test(sql)) return { id: 0, changes: 0 };
+    const query = preparePostgresSql(sql);
+    const result = await db.query(query, params);
+    return {
+      id: Number(result.rows?.[0]?.id || 0),
+      changes: result.rowCount || 0
+    };
+  }
+
   const result = db.prepare(sql).run(...params);
   return {
     id: Number(result.lastInsertRowid || 0),
@@ -32,19 +54,98 @@ export function run(sql, params = []) {
   };
 }
 
-export function get(sql, params = []) {
+export async function get(sql, params = []) {
+  if (isPostgres) {
+    const result = await db.query(preparePostgresSql(sql), params);
+    return cameliseRow(result.rows[0]);
+  }
+
   return db.prepare(sql).get(...params);
 }
 
-export function all(sql, params = []) {
+export async function all(sql, params = []) {
+  if (isPostgres) {
+    const result = await db.query(preparePostgresSql(sql), params);
+    return result.rows.map(cameliseRow);
+  }
+
   return db.prepare(sql).all(...params);
 }
 
-export async function initDb() {
-  await run("PRAGMA foreign_keys = ON");
+function preparePostgresSql(sql) {
+  let index = 0;
+  let query = sql
+    .replace(/\?/g, () => `$${++index}`)
+    .replace(/\bCURRENT_TIMESTAMP\b/g, "(CURRENT_TIMESTAMP::text)");
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS staff (
+  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks)\b/i.test(query)
+    && !/\bRETURNING\b/i.test(query)
+    && !/\bON\s+CONFLICT\b/i.test(query)) {
+    query = `${query.trim()} RETURNING id`;
+  }
+
+  return query;
+}
+
+const pgKeyMap = new Map(Object.entries({
+  staffid: "staffId",
+  staffname: "staffName",
+  coverforstaffid: "coverForStaffId",
+  coverforstaffname: "coverForStaffName",
+  assignedstaffid: "assignedStaffId",
+  assignedstaffname: "assignedStaffName",
+  createdby: "createdBy",
+  createdbyusername: "createdByUsername",
+  userid: "userId",
+  username: "username",
+  passwordhash: "passwordHash",
+  mustchangepassword: "mustChangePassword",
+  calendartoken: "calendarToken",
+  starttime: "startTime",
+  endtime: "endTime",
+  breakminutes: "breakMinutes",
+  reminderminutes: "reminderMinutes",
+  remindertime: "reminderTime",
+  remindersentat: "reminderSentAt",
+  startremindersentat: "startReminderSentAt",
+  isextra: "isExtra",
+  googlecalendareventid: "googleCalendarEventId",
+  patterngenerated: "patternGenerated",
+  patternbatchid: "patternBatchId",
+  shiftdate: "shiftDate",
+  shiftid: "shiftId",
+  timeoffrequestid: "timeOffRequestId",
+  startdate: "startDate",
+  enddate: "endDate",
+  reviewedby: "reviewedBy",
+  readat: "readAt",
+  createdat: "createdAt",
+  updatedat: "updatedAt",
+  expiresat: "expiresAt",
+  useragent: "userAgent",
+  duedate: "dueDate",
+  approvedtimeoff: "approvedTimeOff",
+  openingstart: "openingStart",
+  openingend: "openingEnd",
+  businesstimezone: "businessTimezone",
+  logondataurl: "logoDataUrl"
+}));
+
+function cameliseRow(row) {
+  if (!row) return row;
+  return Object.fromEntries(
+    Object.entries(row).map(([key, value]) => [pgKeyMap.get(key) || key, value])
+  );
+}
+
+export async function initDb() {
+  if (isPostgres) {
+    await createPostgresSchema();
+  } else {
+    await run("PRAGMA foreign_keys = ON");
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS staff (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       phone TEXT,
@@ -53,11 +154,11 @@ export async function initDb() {
       active INTEGER NOT NULL DEFAULT 1,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS shifts (
+    await run(`
+      CREATE TABLE IF NOT EXISTS shifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staffId INTEGER NOT NULL,
       shiftDate TEXT NOT NULL,
@@ -76,18 +177,18 @@ export async function initDb() {
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id),
       FOREIGN KEY (coverForStaffId) REFERENCES staff(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS settings (
+    await run(`
+      CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS users (
+    await run(`
+      CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       passwordHash TEXT NOT NULL,
@@ -99,21 +200,21 @@ export async function initDb() {
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS sessions (
+    await run(`
+      CREATE TABLE IF NOT EXISTS sessions (
       token TEXT PRIMARY KEY,
       userId INTEGER NOT NULL,
       expiresAt TEXT NOT NULL,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (userId) REFERENCES users(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS availability (
+    await run(`
+      CREATE TABLE IF NOT EXISTS availability (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staffId INTEGER NOT NULL,
       weekday INTEGER NOT NULL,
@@ -122,11 +223,11 @@ export async function initDb() {
       note TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS timeOffRequests (
+    await run(`
+      CREATE TABLE IF NOT EXISTS timeOffRequests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staffId INTEGER NOT NULL,
       startDate TEXT NOT NULL,
@@ -138,22 +239,22 @@ export async function initDb() {
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id),
       FOREIGN KEY (reviewedBy) REFERENCES users(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS auditLog (
+    await run(`
+      CREATE TABLE IF NOT EXISTS auditLog (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       userId INTEGER,
       action TEXT NOT NULL,
       details TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (userId) REFERENCES users(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS notifications (
+    await run(`
+      CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staffId INTEGER NOT NULL,
       type TEXT NOT NULL,
@@ -164,11 +265,11 @@ export async function initDb() {
       readAt TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS pushSubscriptions (
+    await run(`
+      CREATE TABLE IF NOT EXISTS pushSubscriptions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       staffId INTEGER NOT NULL,
       endpoint TEXT NOT NULL UNIQUE,
@@ -178,11 +279,11 @@ export async function initDb() {
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id)
-    )
-  `);
+      )
+    `);
 
-  await run(`
-    CREATE TABLE IF NOT EXISTS tasks (
+    await run(`
+      CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
@@ -194,8 +295,9 @@ export async function initDb() {
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (assignedStaffId) REFERENCES staff(id),
       FOREIGN KEY (createdBy) REFERENCES users(id)
-    )
-  `);
+      )
+    `);
+  }
 
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("coverForStaffId", "INTEGER");
@@ -234,6 +336,153 @@ export async function initDb() {
   await normaliseLegacyReminderMinutes();
   await refreshFutureReminderTimes();
   await ensurePermanentRotaThroughYear(new Date());
+  await refreshBusinessTimezoneCache();
+}
+
+async function createPostgresSchema() {
+  await run(`
+    CREATE TABLE IF NOT EXISTS staff (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      phone TEXT,
+      email TEXT,
+      role TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS shifts (
+      id SERIAL PRIMARY KEY,
+      staffId INTEGER NOT NULL REFERENCES staff(id),
+      shiftDate TEXT NOT NULL,
+      startTime TEXT NOT NULL,
+      endTime TEXT NOT NULL,
+      breakMinutes INTEGER NOT NULL DEFAULT 0,
+      reminderMinutes INTEGER NOT NULL DEFAULT 30,
+      reminderTime TEXT NOT NULL,
+      notes TEXT,
+      isExtra INTEGER NOT NULL DEFAULT 0,
+      coverForStaffId INTEGER REFERENCES staff(id),
+      googleCalendarEventId TEXT,
+      patternGenerated INTEGER NOT NULL DEFAULT 0,
+      patternBatchId TEXT,
+      reminderSentAt TEXT,
+      startReminderSentAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      passwordHash TEXT NOT NULL,
+      role TEXT NOT NULL CHECK(role IN ('admin', 'staff')),
+      staffId INTEGER REFERENCES staff(id),
+      active INTEGER NOT NULL DEFAULT 1,
+      mustChangePassword INTEGER NOT NULL DEFAULT 1,
+      calendarToken TEXT UNIQUE,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      token TEXT PRIMARY KEY,
+      userId INTEGER NOT NULL REFERENCES users(id),
+      expiresAt TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS availability (
+      id SERIAL PRIMARY KEY,
+      staffId INTEGER NOT NULL REFERENCES staff(id),
+      weekday INTEGER NOT NULL,
+      startTime TEXT NOT NULL DEFAULT '00:00',
+      endTime TEXT NOT NULL DEFAULT '23:59',
+      note TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS timeOffRequests (
+      id SERIAL PRIMARY KEY,
+      staffId INTEGER NOT NULL REFERENCES staff(id),
+      startDate TEXT NOT NULL,
+      endDate TEXT NOT NULL,
+      reason TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'approved', 'rejected')),
+      reviewedBy INTEGER REFERENCES users(id),
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS auditLog (
+      id SERIAL PRIMARY KEY,
+      userId INTEGER REFERENCES users(id),
+      action TEXT NOT NULL,
+      details TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      staffId INTEGER NOT NULL REFERENCES staff(id),
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      shiftId INTEGER,
+      timeOffRequestId INTEGER,
+      readAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS pushSubscriptions (
+      id SERIAL PRIMARY KEY,
+      staffId INTEGER NOT NULL REFERENCES staff(id),
+      endpoint TEXT NOT NULL UNIQUE,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      userAgent TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS tasks (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      dueDate TEXT,
+      status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('backlog', 'todo', 'process', 'done')),
+      assignedStaffId INTEGER REFERENCES staff(id),
+      createdBy INTEGER REFERENCES users(id),
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 }
 
 async function ensureShiftColumn(name, definition) {
@@ -241,6 +490,19 @@ async function ensureShiftColumn(name, definition) {
 }
 
 async function ensureTableColumn(tableName, name, definition) {
+  if (isPostgres) {
+    const row = await get(
+      `SELECT column_name
+       FROM information_schema.columns
+       WHERE table_schema = 'public' AND table_name = ? AND column_name = ?`,
+      [tableName.toLowerCase(), name.toLowerCase()]
+    );
+    if (!row) {
+      await run(`ALTER TABLE ${tableName.toLowerCase()} ADD COLUMN ${name.toLowerCase()} ${definition}`);
+    }
+    return;
+  }
+
   const columns = await all(`PRAGMA table_info(${tableName})`);
   if (!columns.some((column) => column.name === name)) {
     await run(`ALTER TABLE ${tableName} ADD COLUMN ${name} ${definition}`);
@@ -248,6 +510,7 @@ async function ensureTableColumn(tableName, name, definition) {
 }
 
 async function ensureUsersTableShape() {
+  if (isPostgres) return;
   const columns = await all("PRAGMA table_info(users)");
   const columnNames = new Set(columns.map((column) => column.name));
   if (columnNames.has("id") && columnNames.has("username")) return;
@@ -272,6 +535,7 @@ async function ensureUsersTableShape() {
 }
 
 async function ensureSessionsTableShape() {
+  if (isPostgres) return;
   const columns = await all("PRAGMA table_info(sessions)");
   const columnNames = new Set(columns.map((column) => column.name));
   if (columnNames.has("token") && columnNames.has("userId") && columnNames.has("expiresAt")) return;
@@ -421,15 +685,15 @@ async function normaliseLegacyReminderMinutes() {
   }
 }
 
-function refreshFutureReminderTimes() {
+async function refreshFutureReminderTimes() {
   const today = formatUkDate(new Date());
-  const rows = all(
+  const rows = await all(
     "SELECT id, shiftDate, startTime, reminderMinutes FROM shifts WHERE shiftDate >= ?",
     [today]
   );
 
   for (const row of rows) {
-    run(
+    await run(
       `UPDATE shifts
        SET reminderTime = ?,
            updatedAt = CURRENT_TIMESTAMP
@@ -492,7 +756,7 @@ export function decorateShift(row) {
   };
 }
 
-export function findUserByUsername(username) {
+export async function findUserByUsername(username) {
   return get("SELECT * FROM users WHERE lower(username) = lower(?) AND active = 1", [username]);
 }
 
@@ -509,18 +773,18 @@ function isPasswordHash(value) {
   return typeof value === "string" && /^[a-f0-9]{32}:[a-f0-9]{64}$/i.test(value);
 }
 
-export function createSession(userId) {
+export async function createSession(userId) {
   const token = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 14).toISOString();
-  run("INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)", [token, userId, expiresAt]);
+  await run("INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)", [token, userId, expiresAt]);
   return { token, expiresAt };
 }
 
-export function deleteSession(token) {
+export async function deleteSession(token) {
   return run("DELETE FROM sessions WHERE token = ?", [token]);
 }
 
-export function getSessionUser(token) {
+export async function getSessionUser(token) {
   if (!token) return null;
   return get(
     `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
@@ -544,8 +808,8 @@ export function publicUser(user) {
   };
 }
 
-export function getBranding() {
-  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["businessName", "logoDataUrl", "businessTimezone"]);
+export async function getBranding() {
+  const rows = await all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["businessName", "logoDataUrl", "businessTimezone"]);
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
     businessName: values.businessName || "Your Business",
@@ -554,8 +818,8 @@ export function getBranding() {
   };
 }
 
-export function getOpeningHours() {
-  const rows = all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["openingStart", "openingEnd", "businessTimezone"]);
+export async function getOpeningHours() {
+  const rows = await all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["openingStart", "openingEnd", "businessTimezone"]);
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
     openingStart: values.openingStart || "05:30",
@@ -565,38 +829,38 @@ export function getOpeningHours() {
 }
 
 export function getBusinessTimezone() {
-  const value = get("SELECT value FROM settings WHERE key = ?", ["businessTimezone"])?.value;
-  return validTimeZone(value) ? value : DEFAULT_TIME_ZONE;
+  return businessTimezoneCache;
 }
 
-export function updateOpeningHours({ openingStart, openingEnd, businessTimezone }) {
-  run(
+export async function updateOpeningHours({ openingStart, openingEnd, businessTimezone }) {
+  await run(
     `INSERT INTO settings (key, value)
      VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ["openingStart", openingStart || "05:30"]
   );
-  run(
+  await run(
     `INSERT INTO settings (key, value)
      VALUES (?, ?)
      ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ["openingEnd", openingEnd || "22:00"]
   );
   if (businessTimezone !== undefined) {
-    run(
+    await run(
       `INSERT INTO settings (key, value)
        VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
       ["businessTimezone", validTimeZone(businessTimezone) ? businessTimezone : DEFAULT_TIME_ZONE]
     );
-    refreshFutureReminderTimes();
+    businessTimezoneCache = validTimeZone(businessTimezone) ? businessTimezone : DEFAULT_TIME_ZONE;
+    await refreshFutureReminderTimes();
   }
   return getOpeningHours();
 }
 
-export function updateBranding({ businessName, logoDataUrl }) {
+export async function updateBranding({ businessName, logoDataUrl }) {
   if (businessName !== undefined) {
-    run(
+    await run(
       `INSERT INTO settings (key, value)
        VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
@@ -605,7 +869,7 @@ export function updateBranding({ businessName, logoDataUrl }) {
   }
 
   if (logoDataUrl !== undefined) {
-    run(
+    await run(
       `INSERT INTO settings (key, value)
        VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
@@ -616,9 +880,9 @@ export function updateBranding({ businessName, logoDataUrl }) {
   return getBranding();
 }
 
-export function createStaffUser(staffId, name) {
+export async function createStaffUser(staffId, name) {
   const username = toUsername(name);
-  const existing = get("SELECT id FROM users WHERE username = ?", [username]);
+  const existing = await get("SELECT id FROM users WHERE username = ?", [username]);
   if (existing) return existing;
 
   return run(
@@ -633,31 +897,32 @@ export function hashPassword(password) {
   return `${salt}:${key}`;
 }
 
-export function changePassword(userId, newPassword) {
+export async function changePassword(userId, newPassword) {
   return run("UPDATE users SET passwordHash = ?, mustChangePassword = 0, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [hashPassword(newPassword), userId]);
 }
 
-export function listUsers() {
-  return all(
+export async function listUsers() {
+  const users = await all(
     `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
      FROM users
      LEFT JOIN staff ON staff.id = users.staffId
      ORDER BY users.active DESC, users.role ASC, users.username ASC`
-  ).map(publicUserWithActive);
+  );
+  return users.map(publicUserWithActive);
 }
 
-export function createUser({ username, password, role, staffId, active = true }) {
-  const result = run(
+export async function createUser({ username, password, role, staffId, active = true }) {
+  const result = await run(
     "INSERT INTO users (username, passwordHash, role, staffId, active, mustChangePassword) VALUES (?, ?, ?, ?, ?, ?)",
     [username, hashPassword(password), role, staffId || null, active ? 1 : 0, 1]
   );
   return getUser(result.id);
 }
 
-export function updateUser(id, { username, role, staffId, active }) {
-  const current = get("SELECT * FROM users WHERE id = ?", [id]);
+export async function updateUser(id, { username, role, staffId, active }) {
+  const current = await get("SELECT * FROM users WHERE id = ?", [id]);
   if (!current) return null;
-  run(
+  await run(
     `UPDATE users
      SET username = ?, role = ?, staffId = ?, active = ?, updatedAt = CURRENT_TIMESTAMP
      WHERE id = ?`,
@@ -672,29 +937,29 @@ export function updateUser(id, { username, role, staffId, active }) {
   return getUser(id);
 }
 
-export function resetUserPassword(id, password) {
-  const result = changePassword(id, password);
+export async function resetUserPassword(id, password) {
+  const result = await changePassword(id, password);
   if (result.changes > 0) {
-    run("UPDATE users SET mustChangePassword = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [id]);
+    await run("UPDATE users SET mustChangePassword = 1, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [id]);
   }
   return result.changes > 0;
 }
 
-export function ensureUserCalendarToken(userId) {
-  const user = get("SELECT id, calendarToken FROM users WHERE id = ?", [userId]);
+export async function ensureUserCalendarToken(userId) {
+  const user = await get("SELECT id, calendarToken FROM users WHERE id = ?", [userId]);
   if (!user) return "";
   if (user.calendarToken) return user.calendarToken;
 
   const token = crypto.randomBytes(32).toString("hex");
-  run("UPDATE users SET calendarToken = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [token, userId]);
+  await run("UPDATE users SET calendarToken = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [token, userId]);
   return token;
 }
 
-export function addAudit(userId, action, details = "") {
+export async function addAudit(userId, action, details = "") {
   return run("INSERT INTO auditLog (userId, action, details) VALUES (?, ?, ?)", [userId || null, action, details]);
 }
 
-export function listAudit() {
+export async function listAudit() {
   return all(
     `SELECT auditLog.*, users.username
      FROM auditLog
@@ -704,8 +969,8 @@ export function listAudit() {
   );
 }
 
-export function getUser(id) {
-  const user = get(
+export async function getUser(id) {
+  const user = await get(
     `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
      FROM users
      LEFT JOIN staff ON staff.id = users.staffId
@@ -725,6 +990,11 @@ async function ensureDefaultSetting(key, value) {
   if (!existing) {
     await run("INSERT INTO settings (key, value) VALUES (?, ?)", [key, value]);
   }
+}
+
+async function refreshBusinessTimezoneCache() {
+  const value = (await get("SELECT value FROM settings WHERE key = ?", ["businessTimezone"]))?.value;
+  businessTimezoneCache = validTimeZone(value) ? value : DEFAULT_TIME_ZONE;
 }
 
 async function replaceLegacySeedEmails() {
