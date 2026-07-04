@@ -195,15 +195,20 @@ export function RotaAi({ goTo }) {
 function parseRotaText(text, staff) {
   const rows = [];
   const errors = [];
+  const activeStaff = Array.isArray(staff) ? staff.filter((person) => person.active) : [];
   const lines = String(text || "")
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
 
+  if (lines.length && activeStaff.length === 0) {
+    return { rows, errors: ["Staff list is not loaded yet. Open Staff once, or refresh and try again."] };
+  }
+
   for (const line of lines) {
     const day = findDay(line);
-    const staffMember = findStaff(line, staff);
-    const timeRange = findTimeRange(line);
+    const staffMember = findStaff(line, activeStaff);
+    const timeRange = findFlexibleTimeRange(line);
     if (!day || !staffMember || !timeRange) continue;
 
     const notes = line
@@ -226,7 +231,7 @@ function parseRotaText(text, staff) {
   }
 
   if (!rows.length && lines.length) {
-    errors.push("Could not detect shifts. Use lines like: Monday Afridi 6pm-10pm Shopping.");
+    errors.push("Could not detect shifts. Check staff names match Staff List and use lines like: Monday Afridi 6pm-10pm Shopping.");
   }
   return { rows, errors };
 }
@@ -247,6 +252,14 @@ function daysFromWords(words) {
 function findStaff(line, staff) {
   const normalisedLine = normaliseName(line);
   return staff.find((person) => normalisedLine.includes(normaliseName(person.name)));
+}
+
+function findFlexibleTimeRange(line) {
+  const match = line.match(/(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\s*[-\u2013\u2014]\s*(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?/i);
+  if (!match) return null;
+  const start = toTime(match[1], match[2], match[3], match[6], true);
+  const end = toTime(match[4], match[5], match[6], match[3], false);
+  return { raw: match[0], startTime: start, endTime: end };
 }
 
 function findTimeRange(line) {
