@@ -13,13 +13,29 @@ export function Reminders({ branding = {}, currentUser = null }) {
   const [notifications, setNotifications] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+  const [notificationError, setNotificationError] = React.useState("");
+  const [reminderError, setReminderError] = React.useState("");
 
   const load = React.useCallback(() => {
     setLoading(true);
-    Promise.all([api.notifications(), api.reminders()])
-      .then(([notificationRows, reminderRows]) => {
-        setNotifications(notificationRows);
-        setReminders(reminderRows);
+    setError("");
+    setNotificationError("");
+    setReminderError("");
+    Promise.allSettled([api.notifications(), api.reminders()])
+      .then(([notificationResult, reminderResult]) => {
+        if (notificationResult.status === "fulfilled") {
+          setNotifications(notificationResult.value);
+        } else {
+          setNotifications([]);
+          setNotificationError(notificationResult.reason?.message || "Notifications could not load.");
+        }
+
+        if (reminderResult.status === "fulfilled") {
+          setReminders(reminderResult.value);
+        } else {
+          setReminders([]);
+          setReminderError(reminderResult.reason?.message || "Shift reminders could not load.");
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -51,7 +67,26 @@ export function Reminders({ branding = {}, currentUser = null }) {
         )}
       />
 
-      <Status loading={loading} error={error} empty={notifications.length === 0 && reminders.length === 0}>
+      <Status
+        loading={loading}
+        error={error}
+        empty={notifications.length === 0 && reminders.length === 0 && !notificationError && !reminderError}
+      >
+        {(notificationError || reminderError) && (
+          <div className="space-y-2">
+            {notificationError && (
+              <p className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                Rota notifications could not load: {notificationError}
+              </p>
+            )}
+            {reminderError && (
+              <p className="rounded-lg border border-amber-100 bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                Upcoming shift reminders could not load: {reminderError}
+              </p>
+            )}
+          </div>
+        )}
+
         {notifications.length > 0 && (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
