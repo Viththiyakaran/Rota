@@ -41,12 +41,25 @@ export function Settings({ branding, onBrandingSaved }) {
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "admin123" });
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [toast, setToast] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [seeding, setSeeding] = React.useState(false);
 
   React.useEffect(() => {
     setForm(branding);
   }, [branding]);
+
+  React.useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(""), 3500);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const showSavedPopup = (text) => {
+    setMessage(text);
+    setToast(text);
+    window.dispatchEvent(new CustomEvent("localops:settings-saved", { detail: { message: text } }));
+  };
 
   const loadAdminData = React.useCallback(() => {
     Promise.all([api.staff(), api.users(), api.openingHours(), api.ukRotaRules(), api.audit()])
@@ -94,7 +107,7 @@ export function Settings({ branding, onBrandingSaved }) {
     try {
       const saved = await api.updateBranding(form);
       onBrandingSaved(saved);
-      setMessage("Branding updated.");
+      showSavedPopup("Branding updated.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -110,7 +123,7 @@ export function Settings({ branding, onBrandingSaved }) {
       const saved = await api.updateOpeningHours(openingHours);
       setOpeningHours(saved);
       onBrandingSaved({ ...branding, businessTimezone: saved.businessTimezone });
-      setMessage("Opening hours updated.");
+      showSavedPopup("Opening hours updated.");
       loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -124,7 +137,7 @@ export function Settings({ branding, onBrandingSaved }) {
     try {
       const saved = await api.updateUkRotaRules(ukRules);
       setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...saved });
-      setMessage("UK rota rules updated.");
+      showSavedPopup("UK rota rules updated.");
       loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -147,7 +160,7 @@ export function Settings({ branding, onBrandingSaved }) {
     try {
       await api.createUser({ username: adminForm.username, password: adminForm.password, role: "admin", staffId: null, active: true });
       setAdminForm({ username: "", password: "admin123" });
-      setMessage("Admin login created.");
+      showSavedPopup("Admin login created.");
       loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -156,12 +169,13 @@ export function Settings({ branding, onBrandingSaved }) {
 
   const toggleUser = async (user) => {
     await api.updateUser(user.id, { active: !user.active });
+    showSavedPopup(`Login ${user.active ? "disabled" : "enabled"} for ${user.username}.`);
     loadAdminData();
   };
 
   const resetPassword = async (user) => {
     await api.resetPassword(user.id, { password: user.role === "admin" ? "admin123" : "staff123" });
-    setMessage(`Password reset for ${user.username}.`);
+    showSavedPopup(`Password reset for ${user.username}.`);
     loadAdminData();
   };
 
@@ -171,7 +185,7 @@ export function Settings({ branding, onBrandingSaved }) {
     setMessage("");
     try {
       const result = await api.seedDemoData({ count: 20 });
-      setMessage(`Demo data added: ${result.created} shifts created${result.skipped ? `, ${result.skipped} duplicates skipped` : ""}.`);
+      showSavedPopup(`Demo data added: ${result.created} shifts created${result.skipped ? `, ${result.skipped} duplicates skipped` : ""}.`);
       loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -182,6 +196,29 @@ export function Settings({ branding, onBrandingSaved }) {
 
   return (
     <div className="space-y-5 pb-8">
+      {toast && (
+        <div className="fixed right-4 top-20 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-fuel-line bg-white p-4 text-fuel-ink shadow-lift" role="status" aria-live="polite">
+          <div className="flex items-start gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
+              <ShieldCheck size={21} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-black uppercase tracking-[0.12em] text-fuel-green">Saved</p>
+              <p className="mt-1 text-sm font-bold text-slate-700">{toast}</p>
+              <p className="mt-1 text-xs font-semibold text-slate-500">Dashboard checks will use the latest settings.</p>
+            </div>
+            <button
+              type="button"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-fuel-mist text-fuel-green hover:bg-fuel-line"
+              onClick={() => setToast("")}
+              aria-label="Close saved message"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       <PageHeader
         eyebrow="Admin Control"
         title="Business Settings"

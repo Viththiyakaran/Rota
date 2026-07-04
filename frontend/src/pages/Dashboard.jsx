@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Info, Layers, ListChecks, PlusCircle, Printer, Settings, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Info, Layers, ListChecks, PlusCircle, Printer, Sparkles, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -32,6 +32,13 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [error, setError] = React.useState("");
   const [dashboardWeekStart, setDashboardWeekStart] = React.useState(toDateInputValue(getMonday()));
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const [settingsRefreshKey, setSettingsRefreshKey] = React.useState(0);
+
+  React.useEffect(() => {
+    const refreshDashboardSettings = () => setSettingsRefreshKey((value) => value + 1);
+    window.addEventListener("localops:settings-saved", refreshDashboardSettings);
+    return () => window.removeEventListener("localops:settings-saved", refreshDashboardSettings);
+  }, []);
 
   React.useEffect(() => {
     setLoading(true);
@@ -56,7 +63,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [dashboardWeekStart]);
+  }, [dashboardWeekStart, settingsRefreshKey]);
 
   const isAdmin = currentUser?.role === "admin";
   const today = toDateInputValue(new Date());
@@ -287,7 +294,6 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
     { label: "One-off Shift", page: "add-shift", icon: PlusCircle },
     { label: "Weekly Rota", page: "rota", icon: CalendarDays },
     { label: "Tasks", page: "tasks", icon: ListChecks },
-    { label: "Settings", page: "settings", icon: Settings },
     { label: "Print / PDF", page: "rota", icon: Printer }
   ];
 

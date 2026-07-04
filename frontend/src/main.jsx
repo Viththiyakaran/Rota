@@ -29,7 +29,7 @@ const navItems = [
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"], hidden: true },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
-  { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"] },
+  { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"], hidden: true },
   { id: "account", label: "Account", icon: UserRound, roles: ["admin", "staff"] },
   { id: "settings", label: "Settings", icon: SettingsIcon, roles: ["admin"], hidden: true }
 ];
@@ -185,7 +185,7 @@ function App() {
               )}
             </span>
             <span>
-              <h1 className="max-w-[180px] truncate text-xl font-black leading-none text-fuel-ink sm:max-w-sm">
+              <h1 className="max-w-[130px] truncate text-xl font-black leading-none text-fuel-ink sm:max-w-sm">
                 {appTitle}
               </h1>
             </span>
@@ -199,6 +199,30 @@ function App() {
               >
                 <Bot size={18} />
                 Rota AI
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setPage("reminders")}
+              title="Reminders"
+              className={`flex h-11 w-11 items-center justify-center rounded-lg transition sm:w-auto sm:gap-2 sm:px-3 ${
+                page === "reminders" ? "bg-fuel-green text-white shadow-sm" : "bg-fuel-mist text-fuel-green hover:bg-fuel-line"
+              }`}
+            >
+              <Bell size={20} />
+              <span className="hidden text-sm font-black sm:inline">Reminders</span>
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setPage("settings")}
+                title="Settings"
+                className={`flex h-11 w-11 items-center justify-center rounded-lg transition sm:w-auto sm:gap-2 sm:px-3 ${
+                  page === "settings" ? "bg-fuel-green text-white shadow-sm" : "bg-fuel-mist text-fuel-green hover:bg-fuel-line"
+                }`}
+              >
+                <SettingsIcon size={20} />
+                <span className="hidden text-sm font-black sm:inline">Settings</span>
               </button>
             )}
             <div className="hidden text-right sm:block">
