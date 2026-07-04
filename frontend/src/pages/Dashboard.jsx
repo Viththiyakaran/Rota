@@ -1,11 +1,10 @@
 import React from "react";
-import { Bot, CalendarDays, ChevronLeft, ChevronRight, Info, Layers, ListChecks, MessageCircle, PlusCircle, Settings, Users } from "lucide-react";
+import { Bot, CalendarDays, ChevronLeft, ChevronRight, CloudSun, Info, Layers, ListChecks, MapPin, MessageCircle, PlusCircle, RefreshCw, Settings, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
-import { PageHeader, darkButton, primaryButton } from "../components/PageHeader.jsx";
+import { darkButton, primaryButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
-import { whatsappReminderUrl } from "../whatsapp.js";
 
 export function Dashboard({ goTo, currentUser, branding }) {
   const [staff, setStaff] = React.useState([]);
@@ -57,11 +56,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Today"
-        title={branding.appTitle}
-        description="Weekly rota, cover shifts, tasks, and reminders in one place."
-      />
+      <DashboardWelcome branding={branding} currentUser={currentUser} />
 
       {error && !loading && (
         <p className="rounded-md bg-amber-50 p-3 font-bold text-amber-800">
@@ -169,40 +164,132 @@ export function Dashboard({ goTo, currentUser, branding }) {
           />
         </Card>
 
-        <Card>
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-lg font-black">Upcoming reminders</h3>
-            <button className="text-sm font-bold text-fuel-green" onClick={() => goTo("reminders")}>
-              View all
-            </button>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {reminders.slice(0, 4).map((reminder) => (
-              <div key={reminder.id} className="rounded-md bg-fuel-mist p-3">
-                <p className="truncate font-black">{reminder.staffName}</p>
-                <p className="mt-1 text-sm text-slate-700">{displayReminderMessage(reminder, currentUser)}</p>
-                {reminder.isExtra && (
-                  <p className="mt-1 text-xs font-black text-fuel-green">
-                    Extra cover{reminder.coverForStaffName ? ` for ${reminder.coverForStaffName}` : ""}
-                  </p>
-                )}
-                {whatsappReminderUrl(reminder) && (
-                  <a
-                    className="mt-3 inline-flex items-center gap-2 rounded-md bg-[#25D366] px-3 py-2 text-sm font-black text-white"
-                    href={whatsappReminderUrl(reminder)}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    <MessageCircle size={16} />
-                    WhatsApp
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
       </Status>
     </div>
+  );
+}
+
+function DashboardWelcome({ branding, currentUser }) {
+  const greeting = getGreeting();
+  const name = currentUser?.staffName || currentUser?.username || "there";
+  const today = new Intl.DateTimeFormat("en-GB", {
+    weekday: "long",
+    day: "numeric",
+    month: "long"
+  }).format(new Date());
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
+      <Card className="overflow-hidden">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-black uppercase tracking-[0.22em] text-fuel-green">{greeting}</p>
+            <h1 className="mt-2 text-3xl font-black leading-tight text-fuel-ink sm:text-4xl">
+              {name}, welcome back
+            </h1>
+            <p className="mt-2 max-w-2xl text-sm font-bold text-slate-600">
+              {branding.appTitle} is ready for {today}. Review today, update cover, and keep the team informed.
+            </p>
+          </div>
+          <div className="rounded-lg bg-fuel-mist px-4 py-3 text-left sm:text-right">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Today</p>
+            <p className="mt-1 text-lg font-black text-fuel-ink">{today}</p>
+          </div>
+        </div>
+      </Card>
+      <WeatherCard />
+    </div>
+  );
+}
+
+function WeatherCard() {
+  const [weather, setWeather] = React.useState(null);
+  const [status, setStatus] = React.useState("Loading weather...");
+  const [loading, setLoading] = React.useState(false);
+
+  const loadWeather = React.useCallback((coords = { latitude: 51.5072, longitude: -0.1276, label: "London" }) => {
+    setLoading(true);
+    setStatus("Loading weather...");
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.latitude}&longitude=${coords.longitude}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`;
+    fetch(url)
+      .then((response) => {
+        if (!response.ok) throw new Error("Weather unavailable");
+        return response.json();
+      })
+      .then((data) => {
+        setWeather({
+          label: coords.label,
+          temperature: Math.round(Number(data.current?.temperature_2m || 0)),
+          wind: Math.round(Number(data.current?.wind_speed_10m || 0)),
+          condition: weatherCodeLabel(data.current?.weather_code)
+        });
+        setStatus("");
+      })
+      .catch(() => {
+        setWeather(null);
+        setStatus("Weather is unavailable right now.");
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  React.useEffect(() => {
+    loadWeather();
+  }, [loadWeather]);
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) {
+      setStatus("Location is not supported on this browser.");
+      return;
+    }
+    setLoading(true);
+    setStatus("Checking your location...");
+    navigator.geolocation.getCurrentPosition(
+      (position) => loadWeather({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        label: "Your area"
+      }),
+      () => {
+        setLoading(false);
+        setStatus("Location denied. Showing London weather.");
+        loadWeather();
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 30 * 60 * 1000 }
+    );
+  };
+
+  return (
+    <Card className="bg-fuel-ink text-white">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.18em] text-fuel-lime">Current weather</p>
+          {weather ? (
+            <>
+              <p className="mt-2 text-4xl font-black">{weather.temperature}°C</p>
+              <p className="mt-1 text-sm font-bold text-white/80">{weather.condition}</p>
+              <p className="mt-3 flex items-center gap-1 text-xs font-bold text-white/70">
+                <MapPin size={14} />
+                {weather.label} · wind {weather.wind} km/h
+              </p>
+            </>
+          ) : (
+            <p className="mt-3 text-sm font-bold text-white/75">{status}</p>
+          )}
+        </div>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/10 text-fuel-lime">
+          <CloudSun size={26} />
+        </span>
+      </div>
+      <button
+        type="button"
+        className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-white/10 px-3 py-2 text-sm font-black text-white transition hover:bg-white/20"
+        onClick={useMyLocation}
+        disabled={loading}
+      >
+        <RefreshCw size={15} className={loading ? "animate-spin" : ""} />
+        {loading ? "Updating" : "Use my location"}
+      </button>
+    </Card>
   );
 }
 
@@ -358,9 +445,22 @@ function isPasswordChangeRequired(message) {
   return message === "Please change your temporary password before using the rota.";
 }
 
-function displayReminderMessage(reminder, currentUser) {
-  if (currentUser?.role === "admin") {
-    return String(reminder.reminderMessage || "").replace(/^Your shift starts/i, `${reminder.staffName || "Staff"}'s shift starts`);
-  }
-  return reminder.reminderMessage;
+function getGreeting(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+function weatherCodeLabel(code) {
+  const value = Number(code);
+  if ([0].includes(value)) return "Clear sky";
+  if ([1, 2].includes(value)) return "Partly cloudy";
+  if ([3].includes(value)) return "Cloudy";
+  if ([45, 48].includes(value)) return "Foggy";
+  if ([51, 53, 55, 56, 57].includes(value)) return "Drizzle";
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(value)) return "Rain";
+  if ([71, 73, 75, 77, 85, 86].includes(value)) return "Snow";
+  if ([95, 96, 99].includes(value)) return "Thunderstorm";
+  return "Weather update";
 }
