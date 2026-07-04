@@ -171,11 +171,20 @@ function isStaffShiftReminder(type) {
 
 function formatNotificationDate(value) {
   if (!value) return "";
+  const date = parseNotificationDate(value);
+  if (Number.isNaN(date.getTime())) return "";
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
     hour12: false
-  }).format(new Date(`${value.replace(" ", "T")}Z`));
+  }).format(date);
+}
+
+function parseNotificationDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return new Date("");
+  if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) return new Date(text);
+  return new Date(`${text.replace(" ", "T")}Z`);
 }
