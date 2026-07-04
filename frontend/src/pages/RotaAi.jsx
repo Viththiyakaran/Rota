@@ -124,7 +124,7 @@ export function RotaAi({ goTo }) {
               )}
             </div>
             <div className="rounded-md bg-fuel-mist p-4 text-sm font-bold text-slate-700">
-              Best format: one shift per line, for example `Monday Afridi 6pm-10pm Shopping`.
+              Best format: one shift per line, for example `Monday Afridi 6pm-10pm Shopping`. Dot times like `5.30am-7pm` are supported.
             </div>
           </div>
         </div>
