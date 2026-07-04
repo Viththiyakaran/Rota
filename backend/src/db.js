@@ -11,6 +11,21 @@ const databaseUrl = process.env.DATABASE_URL || "";
 const isPostgres = Boolean(databaseUrl);
 
 export const DEFAULT_TIME_ZONE = "Europe/London";
+export const DEFAULT_UK_ROTA_RULES = {
+  warnShiftOver6HoursNoBreak: true,
+  thresholdHours: 6,
+  minimumBreakMinutes: 20,
+  warnLessThan11HoursRest: true,
+  dailyRestHours: 11,
+  warnHighWeeklyHours: false,
+  weeklyHoursThreshold: 48,
+  warnBelowMinimumWage: false,
+  minimumHourlyRate: 12.21,
+  clockInEnabled: false,
+  locationCheckEnabled: false,
+  wageCostEnabled: false,
+  showWageCostOnDashboard: false
+};
 export const db = isPostgres
   ? new pg.Pool({
       connectionString: databaseUrl,
@@ -325,6 +340,7 @@ export async function initDb() {
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
   await ensureDefaultSetting("businessTimezone", DEFAULT_TIME_ZONE);
+  await ensureDefaultSetting("ukRotaRules", JSON.stringify(DEFAULT_UK_ROTA_RULES));
   await replaceLegacySeedEmails();
 
   const staffCount = await get("SELECT COUNT(*) AS count FROM staff");
@@ -856,6 +872,65 @@ export async function updateOpeningHours({ openingStart, openingEnd, businessTim
     await refreshFutureReminderTimes();
   }
   return getOpeningHours();
+}
+
+export async function getUkRotaRules() {
+  const row = await get("SELECT value FROM settings WHERE key = ?", ["ukRotaRules"]);
+  return normaliseUkRotaRules(row?.value);
+}
+
+export async function updateUkRotaRules(payload = {}) {
+  const rules = normaliseUkRotaRules(payload);
+  await run(
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ["ukRotaRules", JSON.stringify(rules)]
+  );
+  return rules;
+}
+
+function normaliseUkRotaRules(value) {
+  const parsed = typeof value === "string" ? parseJsonSetting(value) : value;
+  const source = parsed && typeof parsed === "object" ? parsed : {};
+  return {
+    warnShiftOver6HoursNoBreak: toBooleanSetting(source.warnShiftOver6HoursNoBreak, DEFAULT_UK_ROTA_RULES.warnShiftOver6HoursNoBreak),
+    thresholdHours: toNumberSetting(source.thresholdHours, DEFAULT_UK_ROTA_RULES.thresholdHours),
+    minimumBreakMinutes: toNumberSetting(source.minimumBreakMinutes, DEFAULT_UK_ROTA_RULES.minimumBreakMinutes),
+    warnLessThan11HoursRest: toBooleanSetting(source.warnLessThan11HoursRest, DEFAULT_UK_ROTA_RULES.warnLessThan11HoursRest),
+    dailyRestHours: toNumberSetting(source.dailyRestHours, DEFAULT_UK_ROTA_RULES.dailyRestHours),
+    warnHighWeeklyHours: toBooleanSetting(source.warnHighWeeklyHours, DEFAULT_UK_ROTA_RULES.warnHighWeeklyHours),
+    weeklyHoursThreshold: toNumberSetting(source.weeklyHoursThreshold, DEFAULT_UK_ROTA_RULES.weeklyHoursThreshold),
+    warnBelowMinimumWage: toBooleanSetting(source.warnBelowMinimumWage, DEFAULT_UK_ROTA_RULES.warnBelowMinimumWage),
+    minimumHourlyRate: toNumberSetting(source.minimumHourlyRate, DEFAULT_UK_ROTA_RULES.minimumHourlyRate),
+    clockInEnabled: toBooleanSetting(source.clockInEnabled, DEFAULT_UK_ROTA_RULES.clockInEnabled),
+    locationCheckEnabled: toBooleanSetting(source.clockInEnabled, DEFAULT_UK_ROTA_RULES.clockInEnabled)
+      ? toBooleanSetting(source.locationCheckEnabled, DEFAULT_UK_ROTA_RULES.locationCheckEnabled)
+      : false,
+    wageCostEnabled: toBooleanSetting(source.wageCostEnabled, DEFAULT_UK_ROTA_RULES.wageCostEnabled),
+    showWageCostOnDashboard: toBooleanSetting(source.wageCostEnabled, DEFAULT_UK_ROTA_RULES.wageCostEnabled)
+      ? toBooleanSetting(source.showWageCostOnDashboard, DEFAULT_UK_ROTA_RULES.showWageCostOnDashboard)
+      : false
+  };
+}
+
+function parseJsonSetting(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function toBooleanSetting(value, fallback) {
+  if (value === true || value === "true" || value === 1 || value === "1") return true;
+  if (value === false || value === "false" || value === 0 || value === "0") return false;
+  return fallback;
+}
+
+function toNumberSetting(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
 export async function updateBranding({ businessName, logoDataUrl }) {

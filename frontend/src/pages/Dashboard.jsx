@@ -5,13 +5,29 @@ import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 
+const DEFAULT_UK_ROTA_RULES = {
+  warnShiftOver6HoursNoBreak: true,
+  thresholdHours: 6,
+  minimumBreakMinutes: 20,
+  warnLessThan11HoursRest: true,
+  dailyRestHours: 11,
+  warnHighWeeklyHours: false,
+  weeklyHoursThreshold: 48,
+  warnBelowMinimumWage: false,
+  minimumHourlyRate: 12.21,
+  clockInEnabled: false,
+  locationCheckEnabled: false,
+  wageCostEnabled: false,
+  showWageCostOnDashboard: false
+};
+
 export function Dashboard({ goTo, currentUser, branding }) {
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
   const [reminders, setReminders] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
   const [tasks, setTasks] = React.useState([]);
-  const [availability, setAvailability] = React.useState([]);
+  const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [dashboardWeekStart, setDashboardWeekStart] = React.useState(toDateInputValue(getMonday()));
@@ -26,16 +42,16 @@ export function Dashboard({ goTo, currentUser, branding }) {
       api.reminders(),
       api.timeOff(),
       api.tasks(),
-      api.availability()
+      api.ukRotaRules()
     ])
-      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, availabilityResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
         if (timeOffResult.status === "fulfilled") setTimeOff(timeOffResult.value);
         if (taskResult.status === "fulfilled") setTasks(taskResult.value);
-        if (availabilityResult.status === "fulfilled") setAvailability(availabilityResult.value);
-        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, availabilityResult].find((result) => result.status === "rejected");
+        if (ukRulesResult.status === "fulfilled") setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...ukRulesResult.value });
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult].find((result) => result.status === "rejected");
         if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
@@ -56,7 +72,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const moveDashboardWeek = (weeks) => {
     setDashboardWeekStart(toDateInputValue(addDays(weekStart, weeks * 7)));
   };
-  const attentionItems = getAttentionItems({ shifts, timeOff, tasks, availability, today });
+  const attentionItems = getAttentionItems({ shifts, ukRules, weekDays });
   const workingNow = getWorkingNow(shifts, today);
   const nextShift = getNextShiftToday(shifts, today);
   const tasksDueToday = tasks.filter((task) => task.status !== "done" && task.dueDate === today);
@@ -208,7 +224,7 @@ function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow 
           icon={hasAlerts ? AlertTriangle : CheckCircle2}
           title="Needs attention"
           value={hasAlerts ? `${attentionItems.length} warning${attentionItems.length === 1 ? "" : "s"}` : "All good today"}
-          detail={hasAlerts ? attentionItems[0] : "All good today."}
+          detail={hasAlerts ? attentionItems[0] : "All good today ✅"}
           tone={hasAlerts ? "warning" : "good"}
         />
       </div>
@@ -425,39 +441,79 @@ function SummaryPill({ label, value }) {
   );
 }
 
-function getAttentionItems({ shifts, timeOff, tasks, availability, today }) {
+function getAttentionItems({ shifts, ukRules, weekDays }) {
   const items = [];
-  const pendingTimeOff = timeOff.filter((request) => request.status === "pending").length;
-  const longShiftsWithoutBreak = shifts.filter((shift) =>
-    !shift.approvedTimeOff &&
-    shift.shiftDate >= today &&
-    Number(shift.paidHours || shift.totalHours || 0) > 6 &&
-    Number(shift.breakMinutes || 0) === 0
-  ).length;
-  const missedTasks = tasks.filter((task) => task.status !== "done" && task.dueDate && task.dueDate < today).length;
-  const availabilityConflicts = getAvailabilityConflicts(shifts, availability, today).length;
+  const visibleShifts = shifts.filter((shift) => !shift.approvedTimeOff);
 
-  if (pendingTimeOff) items.push(`${pendingTimeOff} pending time-off request${pendingTimeOff === 1 ? "" : "s"}.`);
-  if (availabilityConflicts) items.push(`${availabilityConflicts} rota conflict${availabilityConflicts === 1 ? "" : "s"} with staff availability.`);
-  if (longShiftsWithoutBreak) items.push(`${longShiftsWithoutBreak} shift${longShiftsWithoutBreak === 1 ? "" : "s"} over 6 hours without a break.`);
-  if (missedTasks) items.push(`${missedTasks} missed task${missedTasks === 1 ? "" : "s"} need review.`);
+  if (ukRules.warnShiftOver6HoursNoBreak) {
+    const longShiftsWithoutBreak = visibleShifts.filter((shift) =>
+      Number(shift.totalHours || shift.paidHours || 0) > Number(ukRules.thresholdHours || 6) &&
+      Number(shift.breakMinutes || 0) < Number(ukRules.minimumBreakMinutes || 20)
+    ).length;
+    if (longShiftsWithoutBreak) {
+      items.push(`${longShiftsWithoutBreak} shift${longShiftsWithoutBreak === 1 ? "" : "s"} over ${ukRules.thresholdHours} hours with less than ${ukRules.minimumBreakMinutes} minutes break.`);
+    }
+  }
+
+  if (ukRules.warnLessThan11HoursRest) {
+    const dailyRestWarnings = getDailyRestWarnings(visibleShifts, Number(ukRules.dailyRestHours || 11));
+    if (dailyRestWarnings.length) {
+      items.push(`${dailyRestWarnings.length} staff rest gap${dailyRestWarnings.length === 1 ? "" : "s"} below ${ukRules.dailyRestHours} hours.`);
+    }
+  }
+
+  if (ukRules.warnHighWeeklyHours) {
+    const weeklyWarnings = getWeeklyHoursWarnings(visibleShifts, weekDays, Number(ukRules.weeklyHoursThreshold || 48));
+    if (weeklyWarnings.length) {
+      items.push(`${weeklyWarnings.length} staff member${weeklyWarnings.length === 1 ? "" : "s"} over ${ukRules.weeklyHoursThreshold} planned paid hours this week.`);
+    }
+  }
 
   return items;
 }
 
-function getAvailabilityConflicts(shifts, availability, today) {
-  return shifts.filter((shift) => {
-    if (shift.approvedTimeOff || shift.shiftDate < today) return false;
-    const shiftDay = new Date(`${shift.shiftDate}T00:00:00`).getDay();
-    const shiftStart = timeToMinutes(shift.startTime);
-    const shiftEnd = timeToMinutes(shift.endTime);
+function getDailyRestWarnings(shifts, restHours) {
+  const byStaff = groupByStaff(shifts);
+  const warnings = [];
+  byStaff.forEach((staffShifts, staffId) => {
+    const sorted = staffShifts
+      .map((shift) => ({
+        ...shift,
+        start: shiftDateTime(shift.shiftDate, shift.startTime),
+        end: shiftEndDateTime(shift.shiftDate, shift.startTime, shift.endTime)
+      }))
+      .sort((left, right) => left.start - right.start);
 
-    return availability.some((slot) => {
-      const slotWeekday = Number(slot.weekday);
-      if (!sameStaff(slot.staffId, shift.staffId) || slotWeekday !== shiftDay) return false;
-      return rangesOverlap(shiftStart, shiftEnd, timeToMinutes(slot.startTime), timeToMinutes(slot.endTime));
-    });
+    for (let index = 1; index < sorted.length; index += 1) {
+      const restMs = sorted[index].start - sorted[index - 1].end;
+      if (restMs >= 0 && restMs < restHours * 60 * 60 * 1000) {
+        warnings.push({ staffId, shift: sorted[index] });
+        break;
+      }
+    }
   });
+  return warnings;
+}
+
+function getWeeklyHoursWarnings(shifts, weekDays, threshold) {
+  const weekStart = weekDays[0];
+  const weekEnd = weekDays[6];
+  const totals = new Map();
+  shifts
+    .filter((shift) => shift.shiftDate >= weekStart && shift.shiftDate <= weekEnd)
+    .forEach((shift) => {
+      const staffId = String(shift.staffId);
+      totals.set(staffId, (totals.get(staffId) || 0) + Number(shift.paidHours || 0));
+    });
+  return Array.from(totals.entries()).filter(([, hours]) => hours > threshold);
+}
+
+function groupByStaff(shifts) {
+  return shifts.reduce((groups, shift) => {
+    const key = String(shift.staffId);
+    groups.set(key, [...(groups.get(key) || []), shift]);
+    return groups;
+  }, new Map());
 }
 
 function getWorkingNow(shifts, today, now = new Date()) {
@@ -489,15 +545,20 @@ function isTimeInShift(currentMinutes, startTime, endTime) {
   return currentMinutes >= start && currentMinutes < end;
 }
 
-function rangesOverlap(startA, endA, startB, endB) {
-  if (endA <= startA) endA += 24 * 60;
-  if (endB <= startB) endB += 24 * 60;
-  return Math.max(startA, startB) < Math.min(endA, endB);
-}
-
 function timeToMinutes(value) {
   const [hours = 0, minutes = 0] = String(value || "00:00").split(":").map(Number);
   return hours * 60 + minutes;
+}
+
+function shiftDateTime(dateString, timeString) {
+  return new Date(`${dateString}T${timeString || "00:00"}:00`);
+}
+
+function shiftEndDateTime(dateString, startTime, endTime) {
+  const start = shiftDateTime(dateString, startTime);
+  const end = shiftDateTime(dateString, endTime);
+  if (end <= start) end.setDate(end.getDate() + 1);
+  return end;
 }
 
 function formatTimeLabel(value) {

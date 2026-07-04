@@ -22,6 +22,7 @@ import {
   getBranding,
   getOpeningHours,
   getSessionUser,
+  getUkRotaRules,
   hashPassword,
   initDb,
   listAudit,
@@ -31,6 +32,7 @@ import {
   resetUserPassword,
   shiftStartInstant,
   updateOpeningHours,
+  updateUkRotaRules,
   updateUser,
   updateBranding,
   validTimeZone,
@@ -107,6 +109,8 @@ app.get("/api", (_req, res) => {
       "GET /api",
       "GET /api/health",
       "GET /api/settings/branding",
+      "GET /api/settings/uk-rules",
+      "PUT /api/settings/uk-rules",
       "POST /api/auth/login",
       "POST /api/auth/recover-admin",
       "GET /api/auth/me",
@@ -150,6 +154,24 @@ app.get("/api", (_req, res) => {
 app.get("/api/settings/branding", async (_req, res, next) => {
   try {
     res.json(await getBranding());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/settings/uk-rules", requireAuth, async (_req, res, next) => {
+  try {
+    res.json(await getUkRotaRules());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/settings/uk-rules", requireAdmin, async (req, res, next) => {
+  try {
+    const saved = await updateUkRotaRules(req.body);
+    await addAudit(req.user.id, "update_uk_rota_rules", "Updated UK rota warning settings");
+    res.json(saved);
   } catch (error) {
     next(error);
   }

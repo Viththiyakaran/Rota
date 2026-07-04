@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, Database, History, ImagePlus, KeyRound, RotateCcw, Save, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock, Database, History, ImagePlus, KeyRound, MapPin, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -15,12 +15,29 @@ const TIMEZONE_OPTIONS = [
   { value: "America/New_York", label: "US Eastern - America/New_York" }
 ];
 
+const DEFAULT_UK_ROTA_RULES = {
+  warnShiftOver6HoursNoBreak: true,
+  thresholdHours: 6,
+  minimumBreakMinutes: 20,
+  warnLessThan11HoursRest: true,
+  dailyRestHours: 11,
+  warnHighWeeklyHours: false,
+  weeklyHoursThreshold: 48,
+  warnBelowMinimumWage: false,
+  minimumHourlyRate: 12.21,
+  clockInEnabled: false,
+  locationCheckEnabled: false,
+  wageCostEnabled: false,
+  showWageCostOnDashboard: false
+};
+
 export function Settings({ branding, onBrandingSaved }) {
   const [form, setForm] = React.useState(branding);
   const [staff, setStaff] = React.useState([]);
   const [users, setUsers] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", businessTimezone: "Europe/London" });
+  const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "admin123" });
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -32,12 +49,13 @@ export function Settings({ branding, onBrandingSaved }) {
   }, [branding]);
 
   const loadAdminData = React.useCallback(() => {
-    Promise.all([api.staff(), api.users(), api.openingHours(), api.audit()])
-      .then(([staffRows, userRows, hours, auditRows]) => {
+    Promise.all([api.staff(), api.users(), api.openingHours(), api.ukRotaRules(), api.audit()])
+      .then(([staffRows, userRows, hours, rules, auditRows]) => {
         const activeStaff = staffRows.filter((person) => person.active);
         setStaff(activeStaff);
         setUsers(userRows);
         setOpeningHours(hours);
+        setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...rules });
         setAudit(auditRows);
       })
       .catch((err) => setError(err.message));
@@ -97,6 +115,29 @@ export function Settings({ branding, onBrandingSaved }) {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const saveUkRules = async (event) => {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    try {
+      const saved = await api.updateUkRotaRules(ukRules);
+      setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...saved });
+      setMessage("UK rota rules updated.");
+      loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const updateUkRule = (key, value) => {
+    setUkRules((current) => {
+      const next = { ...current, [key]: value };
+      if (key === "clockInEnabled" && !value) next.locationCheckEnabled = false;
+      if (key === "wageCostEnabled" && !value) next.showWageCostOnDashboard = false;
+      return next;
+    });
   };
 
   const createAdmin = async (event) => {
@@ -252,6 +293,99 @@ export function Settings({ branding, onBrandingSaved }) {
 
       <Card className="p-0">
         <SectionHeader
+          icon={<AlertTriangle size={20} />}
+          title="UK Rota Rules"
+          description="Optional planning warnings for common UK rota and working-time checks."
+        />
+        <form className="space-y-4 px-5 pb-5" onSubmit={saveUkRules}>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <RuleCard
+              checked={ukRules.warnShiftOver6HoursNoBreak}
+              onChange={(value) => updateUkRule("warnShiftOver6HoursNoBreak", value)}
+              title="Break warning"
+              description="Warn when a shift is over the threshold and the break is too short."
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <NumberInput label="Threshold hours" value={ukRules.thresholdHours} onChange={(value) => updateUkRule("thresholdHours", value)} />
+                <NumberInput label="Minimum break mins" value={ukRules.minimumBreakMinutes} onChange={(value) => updateUkRule("minimumBreakMinutes", value)} />
+              </div>
+            </RuleCard>
+
+            <RuleCard
+              checked={ukRules.warnLessThan11HoursRest}
+              onChange={(value) => updateUkRule("warnLessThan11HoursRest", value)}
+              title="Daily rest warning"
+              description="Warn when the gap between two shifts is below the configured rest hours."
+            >
+              <NumberInput label="Daily rest hours" value={ukRules.dailyRestHours} onChange={(value) => updateUkRule("dailyRestHours", value)} />
+            </RuleCard>
+
+            <RuleCard
+              checked={ukRules.warnHighWeeklyHours}
+              onChange={(value) => updateUkRule("warnHighWeeklyHours", value)}
+              title="Weekly hours warning"
+              description="Warn when a staff member's weekly paid hours are above the threshold."
+            >
+              <NumberInput label="Weekly hours threshold" value={ukRules.weeklyHoursThreshold} onChange={(value) => updateUkRule("weeklyHoursThreshold", value)} />
+            </RuleCard>
+
+            <RuleCard
+              checked={ukRules.warnBelowMinimumWage}
+              onChange={(value) => updateUkRule("warnBelowMinimumWage", value)}
+              title="Minimum wage warning"
+              description="Prepare for hourly-rate checks when wage planning is enabled."
+              helper="Check current rates on GOV.UK."
+            >
+              <NumberInput label="Minimum hourly rate" step="0.01" value={ukRules.minimumHourlyRate} onChange={(value) => updateUkRule("minimumHourlyRate", value)} prefix="GBP" />
+            </RuleCard>
+
+            <RuleCard
+              checked={ukRules.clockInEnabled}
+              onChange={(value) => updateUkRule("clockInEnabled", value)}
+              title="Clock In / Out"
+              description="Enable clock-in features when the business is ready to use them."
+            />
+
+            <RuleCard
+              checked={ukRules.locationCheckEnabled}
+              disabled={!ukRules.clockInEnabled}
+              onChange={(value) => updateUkRule("locationCheckEnabled", value)}
+              title="Location Check"
+              description="Require location permission when staff clock in or out."
+              helper="Location is only checked when staff clock in or out. The app does not track staff continuously."
+              icon={<MapPin size={18} />}
+            />
+
+            <RuleCard
+              checked={ukRules.wageCostEnabled}
+              onChange={(value) => updateUkRule("wageCostEnabled", value)}
+              title="Estimated Wage Cost"
+              description="Enable estimated wage planning fields and summaries."
+              helper="Estimated wage cost is for planning only and does not replace payroll."
+            />
+
+            <RuleCard
+              checked={ukRules.showWageCostOnDashboard}
+              disabled={!ukRules.wageCostEnabled}
+              onChange={(value) => updateUkRule("showWageCostOnDashboard", value)}
+              title="Show wage cost on dashboard"
+              description="Display estimated wage cost only when wage planning is enabled."
+            />
+          </div>
+
+          <div className="rounded-lg bg-amber-50 p-4 text-sm font-semibold text-amber-900">
+            LocalOps Planner provides rota, reminder, task and estimated wage planning tools only. It does not replace legal, HR, payroll, tax or employment advice. Employers remain responsible for following UK employment law and payroll rules.
+          </div>
+
+          <button className={`${primaryButton} w-full sm:w-auto`}>
+            <Save size={18} />
+            Save UK Rota Rules
+          </button>
+        </form>
+      </Card>
+
+      <Card className="p-0">
+        <SectionHeader
           icon={<KeyRound size={20} />}
           title="Login Access"
           description="Staff logins are created automatically when staff are added. Create extra admin users here."
@@ -335,5 +469,48 @@ function SectionHeader({ icon, title, description }) {
         <p className="mt-1 text-sm font-bold text-slate-600">{description}</p>
       </div>
     </div>
+  );
+}
+
+function RuleCard({ checked, children, description, disabled = false, helper, icon, onChange, title }) {
+  return (
+    <div className={`rounded-lg border border-fuel-line bg-white p-4 ${disabled ? "opacity-60" : ""}`}>
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          className="mt-1 h-5 w-5 accent-fuel-green"
+          checked={Boolean(checked)}
+          disabled={disabled}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2 text-base font-black text-fuel-ink">
+            {icon}
+            {title}
+          </span>
+          <span className="mt-1 block text-sm font-semibold text-slate-600">{description}</span>
+          {helper && <span className="mt-2 block rounded-md bg-fuel-mist px-3 py-2 text-xs font-bold text-slate-600">{helper}</span>}
+        </span>
+      </label>
+      {children && <div className="mt-4 border-t border-fuel-line pt-4">{children}</div>}
+    </div>
+  );
+}
+
+function NumberInput({ label, onChange, prefix, step = "1", value }) {
+  return (
+    <Field label={label}>
+      <div className="flex items-center gap-2">
+        {prefix && <span className="rounded-md bg-fuel-mist px-3 py-3 text-sm font-black text-fuel-green">{prefix}</span>}
+        <input
+          type="number"
+          min="0"
+          step={step}
+          className={inputClass}
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value))}
+        />
+      </div>
+    </Field>
   );
 }
