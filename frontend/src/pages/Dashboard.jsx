@@ -1,8 +1,7 @@
 import React from "react";
-import { Bot, CalendarDays, ChevronLeft, ChevronRight, CloudSun, Info, Layers, ListChecks, MapPin, MessageCircle, PlusCircle, RefreshCw, Settings, Users } from "lucide-react";
+import { AlertTriangle, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, CloudSun, Clock, Info, Layers, ListChecks, MapPin, MessageCircle, PlusCircle, Printer, RefreshCw, Settings, Sparkles, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
-import { darkButton, primaryButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 
@@ -12,9 +11,11 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [reminders, setReminders] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
   const [tasks, setTasks] = React.useState([]);
+  const [availability, setAvailability] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [dashboardWeekStart, setDashboardWeekStart] = React.useState(toDateInputValue(getMonday()));
+  const [moreOpen, setMoreOpen] = React.useState(false);
 
   React.useEffect(() => {
     setLoading(true);
@@ -24,15 +25,17 @@ export function Dashboard({ goTo, currentUser, branding }) {
       api.week(dashboardWeekStart),
       api.reminders(),
       api.timeOff(),
-      api.tasks()
+      api.tasks(),
+      api.availability()
     ])
-      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, availabilityResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
         if (timeOffResult.status === "fulfilled") setTimeOff(timeOffResult.value);
         if (taskResult.status === "fulfilled") setTasks(taskResult.value);
-        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult].find((result) => result.status === "rejected");
+        if (availabilityResult.status === "fulfilled") setAvailability(availabilityResult.value);
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, availabilityResult].find((result) => result.status === "rejected");
         if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
@@ -41,6 +44,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
 
   const activeStaff = staff.filter((person) => person.active).length;
   const isAdmin = currentUser?.role === "admin";
+  const today = toDateInputValue(new Date());
   const weekStart = new Date(`${dashboardWeekStart}T00:00:00`);
   const weekDays = Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index)));
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
@@ -53,6 +57,16 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const moveDashboardWeek = (weeks) => {
     setDashboardWeekStart(toDateInputValue(addDays(weekStart, weeks * 7)));
   };
+  const dashboardStats = [
+    { icon: Users, label: "Staff", value: activeStaff, subtext: "active" },
+    { icon: CalendarDays, label: "Week shifts", value: shifts.length, subtext: "planned" },
+    { icon: MessageCircle, label: "Reminders", value: reminders.length, subtext: "upcoming" },
+    { icon: ListChecks, label: "Tasks", value: weekTasks.length, subtext: "due this week" }
+  ];
+  const attentionItems = getAttentionItems({ shifts, timeOff, tasks, availability, today });
+  const workingNow = getWorkingNow(shifts, today);
+  const nextShift = getNextShiftToday(shifts, today);
+  const tasksDueToday = tasks.filter((task) => task.status !== "done" && task.dueDate === today);
 
   return (
     <div className="space-y-5">
@@ -65,58 +79,31 @@ export function Dashboard({ goTo, currentUser, branding }) {
       )}
 
       <Status loading={loading} error="">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric icon={Users} label="Active staff" value={activeStaff} />
-          <Metric icon={CalendarDays} label="Shifts this week" value={shifts.length} />
-          <Metric icon={MessageCircle} label="Reminders" value={reminders.length} />
-          <Metric icon={ListChecks} label="Week tasks" value={weekTasks.length} />
-        </div>
+        <TodayActionPlan
+          attentionItems={attentionItems}
+          nextShift={nextShift}
+          tasksDueToday={tasksDueToday}
+          workingNow={workingNow}
+        />
 
-        <div className={`grid gap-3 ${isAdmin ? "sm:grid-cols-2 lg:grid-cols-6" : "sm:grid-cols-3"}`}>
-          {isAdmin && (
-            <button onClick={() => goTo("rota-ai")} className={primaryButton}>
-              <Bot size={18} />
-              Rota AI
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => goTo("rota-pattern")} className={primaryButton}>
-              <Layers size={18} />
-              Rota Pattern
-            </button>
-          )}
-          {isAdmin && (
-            <button onClick={() => goTo("add-shift")} className={darkButton}>
-              <PlusCircle size={18} />
-              One-off Shift
-            </button>
-          )}
-          <button onClick={() => goTo("rota")} className="inline-flex min-h-11 items-center justify-center rounded-md bg-fuel-lime px-4 py-2.5 text-sm font-black text-fuel-ink shadow-sm transition hover:bg-fuel-gold">
-            <CalendarDays size={18} className="mr-2" />
-            Weekly Rota
-          </button>
-          <button onClick={() => goTo("tasks")} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-2.5 text-sm font-black text-fuel-green transition hover:bg-fuel-line">
-            <ListChecks size={18} />
-            Tasks
-          </button>
-          {isAdmin && (
-            <button onClick={() => goTo("settings")} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-2.5 text-sm font-black text-fuel-green transition hover:bg-fuel-line">
-              <Settings size={18} />
-              Settings
-            </button>
-          )}
-          {!isAdmin && (
-            <button onClick={() => goTo("reminders")} className={primaryButton}>
-              My Reminders
-            </button>
-          )}
+        <QuickActions
+          goTo={goTo}
+          isAdmin={isAdmin}
+          moreOpen={moreOpen}
+          onToggleMore={() => setMoreOpen((value) => !value)}
+        />
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {dashboardStats.map((item) => (
+            <Metric key={item.label} icon={item.icon} label={item.label} value={item.value} subtext={item.subtext} />
+          ))}
         </div>
 
         <Card>
           <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black">Week at a glance</h3>
+                <h3 className="text-xl font-black">This Week</h3>
                 <span className="group relative inline-flex">
                   <button
                     type="button"
@@ -130,7 +117,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
                   </span>
                 </span>
               </div>
-              <p className="mt-1 text-sm font-bold text-slate-600">{weekRange}</p>
+              <p className="mt-1 text-sm font-medium text-slate-600">{weekRange}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -164,6 +151,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
           />
         </Card>
 
+        <WeatherCard compact />
       </Status>
     </div>
   );
@@ -171,7 +159,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
 
 function DashboardWelcome({ branding, currentUser }) {
   const greeting = getGreeting();
-  const name = currentUser?.staffName || currentUser?.username || "there";
+  const name = currentUser?.staffName || currentUser?.username || "admin";
   const today = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -179,30 +167,223 @@ function DashboardWelcome({ branding, currentUser }) {
   }).format(new Date());
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-      <Card className="overflow-hidden">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-black uppercase tracking-[0.22em] text-fuel-green">{greeting}</p>
-            <h1 className="mt-2 text-3xl font-black leading-tight text-fuel-ink sm:text-4xl">
-              {name}, welcome back
-            </h1>
-            <p className="mt-2 max-w-2xl text-sm font-bold text-slate-600">
-              {branding.appTitle} is ready for {today}. Review today, update cover, and keep the team informed.
-            </p>
-          </div>
-          <div className="rounded-lg bg-fuel-mist px-4 py-3 text-left sm:text-right">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Today</p>
-            <p className="mt-1 text-lg font-black text-fuel-ink">{today}</p>
-          </div>
+    <Card>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-fuel-green">
+            {greeting}, {name}
+          </p>
+          <h1 className="mt-1 text-2xl font-black leading-tight text-fuel-ink sm:text-3xl">
+            {branding.appTitle}
+          </h1>
+          <p className="mt-2 text-sm font-medium text-slate-600">
+            Review today's rota, tasks and reminders.
+          </p>
         </div>
-      </Card>
-      <WeatherCard />
+        <div className="rounded-lg bg-fuel-mist px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Today</p>
+          <p className="mt-1 text-base font-bold text-fuel-ink">{today}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow }) {
+  const hasAlerts = attentionItems.length > 0;
+  const workingLabel = workingNow.length ? `${workingNow.length} staff` : "No one scheduled now";
+  const nextShiftLabel = nextShift ? `${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today";
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h2 className="text-xl font-black text-fuel-ink">Today's Action Plan</h2>
+        <p className="text-sm font-medium text-slate-600">The four checks that matter most before the day gets busy.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ActionMiniCard
+          icon={Users}
+          title="Working now"
+          value={workingLabel}
+          detail={workingNow[0] ? `${workingNow[0].staffName} ${formatShiftRange(workingNow[0].startTime, workingNow[0].endTime)}` : "No one is currently clocked/scheduled in."}
+        />
+        <ActionMiniCard
+          icon={Clock}
+          title="Next shift"
+          value={nextShiftLabel}
+          detail={nextShift ? formatShiftRange(nextShift.startTime, nextShift.endTime) : "All remaining staff are off."}
+        />
+        <ActionMiniCard
+          icon={ListChecks}
+          title="Tasks due today"
+          value={tasksDueToday.length}
+          detail={tasksDueToday.length ? "Open Tasks to review today's work." : "No tasks due today."}
+        />
+        <ActionMiniCard
+          icon={hasAlerts ? AlertTriangle : CheckCircle2}
+          title="Needs attention"
+          value={hasAlerts ? `${attentionItems.length} warning${attentionItems.length === 1 ? "" : "s"}` : "All good today"}
+          detail={hasAlerts ? attentionItems[0] : "All good today."}
+          tone={hasAlerts ? "warning" : "good"}
+        />
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <WorkingNowCard nextShift={nextShift} workingNow={workingNow} />
+        <NeedsAttentionCard items={attentionItems} />
+      </div>
+    </section>
+  );
+}
+
+function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) {
+  const toneClass = tone === "warning" ? "bg-amber-50 text-amber-700" : tone === "good" ? "bg-emerald-50 text-fuel-green" : "bg-fuel-mist text-fuel-green";
+
+  return (
+    <Card className="p-4">
+      <div className="flex items-start gap-3">
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
+          <Icon size={21} />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-600">{title}</p>
+          <p className="mt-1 text-lg font-black text-fuel-ink">{value}</p>
+          <p className="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{detail}</p>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function WorkingNowCard({ nextShift, workingNow }) {
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-black text-fuel-ink">Working Now</h3>
+          <p className="text-sm font-medium text-slate-600">Live view from today's rota.</p>
+        </div>
+        <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-fuel-green">{workingNow.length} active</span>
+      </div>
+      {workingNow.length ? (
+        <div className="space-y-2">
+          {workingNow.slice(0, 4).map((shift) => (
+            <div key={shift.id} className="flex items-center justify-between gap-3 rounded-lg bg-fuel-mist px-3 py-2">
+              <div>
+                <p className="font-bold text-fuel-ink">{shift.staffName}</p>
+                <p className="text-xs font-semibold text-slate-600">{formatShiftRange(shift.startTime, shift.endTime)}</p>
+              </div>
+              {shift.notes && <span className="max-w-[140px] truncate rounded bg-white px-2 py-1 text-xs font-semibold text-slate-600">{shift.notes}</span>}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-lg border border-dashed border-fuel-line bg-white px-3 py-4 text-sm font-medium text-slate-500">
+          No one is currently clocked/scheduled in.
+        </p>
+      )}
+      <div className="mt-3 rounded-lg bg-white px-3 py-2 text-sm">
+        <span className="font-semibold text-slate-500">Next staff today: </span>
+        <span className="font-bold text-fuel-ink">
+          {nextShift ? `${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today"}
+        </span>
+      </div>
+    </Card>
+  );
+}
+
+function NeedsAttentionCard({ items }) {
+  return (
+    <Card className="p-4">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-black text-fuel-ink">Needs Attention</h3>
+          <p className="text-sm font-medium text-slate-600">Admin alerts for rota quality.</p>
+        </div>
+        <span className={`rounded-md px-2 py-1 text-xs font-bold ${items.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-fuel-green"}`}>
+          {items.length ? `${items.length} alerts` : "All good"}
+        </span>
+      </div>
+      {items.length ? (
+        <div className="space-y-2">
+          {items.slice(0, 5).map((item) => (
+            <div key={item} className="flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
+              <AlertTriangle className="mt-0.5 shrink-0" size={16} />
+              <span>{item}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="rounded-lg bg-emerald-50 px-3 py-4 text-sm font-bold text-fuel-green">All good today.</p>
+      )}
+    </Card>
+  );
+}
+
+function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
+  const moreActions = [
+    { label: "Rota AI", page: "rota-ai", icon: Bot },
+    { label: "Rota Pattern", page: "rota-pattern", icon: Layers },
+    { label: "One-off Shift", page: "add-shift", icon: PlusCircle },
+    { label: "Weekly Rota", page: "rota", icon: CalendarDays },
+    { label: "Tasks", page: "tasks", icon: ListChecks },
+    { label: "Settings", page: "settings", icon: Settings },
+    { label: "Print / PDF", page: "rota", icon: Printer }
+  ];
+
+  return (
+    <div className="relative">
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+        <button
+          type="button"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-green px-4 py-3 text-base font-black text-white shadow-sm transition hover:bg-emerald-800"
+          onClick={() => goTo(isAdmin ? "add-shift" : "my-shifts")}
+        >
+          <PlusCircle size={19} />
+          {isAdmin ? "Add Shift" : "My Shifts"}
+        </button>
+        <button
+          type="button"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-ink px-4 py-3 text-base font-black text-white shadow-sm transition hover:bg-slate-900"
+          onClick={() => goTo(isAdmin ? "rota-pattern" : "time-off")}
+        >
+          <Sparkles size={19} />
+          {isAdmin ? "Generate Rota" : "Request Time Off"}
+        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 text-base font-black text-fuel-ink transition hover:bg-emerald-100"
+            onClick={onToggleMore}
+            aria-expanded={moreOpen}
+          >
+            More Actions
+            <ChevronDown size={18} />
+          </button>
+        )}
+      </div>
+      {isAdmin && moreOpen && (
+        <div className="absolute right-0 z-30 mt-2 grid w-full gap-1 rounded-lg border border-fuel-line bg-white p-2 shadow-lift sm:w-72">
+          {moreActions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <button
+                key={action.label}
+                type="button"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-bold text-fuel-ink transition hover:bg-fuel-mist"
+                onClick={() => goTo(action.page)}
+              >
+                <Icon size={17} className="text-fuel-green" />
+                {action.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
 
-function WeatherCard() {
+function WeatherCard({ compact = false }) {
   const [weather, setWeather] = React.useState(null);
   const [status, setStatus] = React.useState("Loading weather...");
   const [loading, setLoading] = React.useState(false);
@@ -259,30 +440,30 @@ function WeatherCard() {
   };
 
   return (
-    <Card className="bg-fuel-ink text-white">
+    <Card className={compact ? "p-4" : "bg-fuel-ink text-white"}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-black uppercase tracking-[0.18em] text-fuel-lime">Current weather</p>
+          <p className={`text-xs font-black uppercase tracking-[0.18em] ${compact ? "text-fuel-green" : "text-fuel-lime"}`}>Current weather</p>
           {weather ? (
             <>
-              <p className="mt-2 text-4xl font-black">{weather.temperature}°C</p>
-              <p className="mt-1 text-sm font-bold text-white/80">{weather.condition}</p>
-              <p className="mt-3 flex items-center gap-1 text-xs font-bold text-white/70">
+              <p className={`mt-2 font-black ${compact ? "text-2xl text-fuel-ink" : "text-4xl"}`}>{weather.temperature} deg C</p>
+              <p className={`mt-1 text-sm font-bold ${compact ? "text-slate-700" : "text-white/80"}`}>{weather.condition}</p>
+              <p className={`mt-3 flex items-center gap-1 text-xs font-bold ${compact ? "text-slate-500" : "text-white/70"}`}>
                 <MapPin size={14} />
-                {weather.label} · wind {weather.wind} km/h
+                {weather.label} - wind {weather.wind} km/h
               </p>
             </>
           ) : (
-            <p className="mt-3 text-sm font-bold text-white/75">{status}</p>
+            <p className={`mt-3 text-sm font-bold ${compact ? "text-slate-600" : "text-white/75"}`}>{status}</p>
           )}
         </div>
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white/10 text-fuel-lime">
+        <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg ${compact ? "bg-fuel-mist text-fuel-green" : "bg-white/10 text-fuel-lime"}`}>
           <CloudSun size={26} />
         </span>
       </div>
       <button
         type="button"
-        className="mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-md bg-white/10 px-3 py-2 text-sm font-black text-white transition hover:bg-white/20"
+        className={`mt-4 inline-flex min-h-10 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-black transition ${compact ? "bg-fuel-mist text-fuel-green hover:bg-emerald-100" : "bg-white/10 text-white hover:bg-white/20"}`}
         onClick={useMyLocation}
         disabled={loading}
       >
@@ -293,16 +474,17 @@ function WeatherCard() {
   );
 }
 
-function Metric({ icon: Icon, label, value }) {
+function Metric({ icon: Icon, label, subtext, value }) {
   return (
-    <Card className="relative overflow-hidden">
+    <Card className="relative overflow-hidden p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-bold text-slate-600">{label}</p>
-          <p className="mt-2 text-4xl font-black text-fuel-ink">{value}</p>
+          <p className="text-sm font-semibold text-slate-600">{label}</p>
+          <p className="mt-2 text-3xl font-black text-fuel-ink">{value}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">{subtext}</p>
         </div>
-        <span className="flex h-12 w-12 items-center justify-center rounded-md bg-fuel-mist text-fuel-green">
-          <Icon size={26} />
+        <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
+          <Icon size={23} />
         </span>
       </div>
     </Card>
@@ -340,20 +522,20 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, weekDays, o
           const hiddenShiftCount = Math.max(dayShifts.length - previewShifts.length, 0);
 
           return (
-            <div key={day} className="rounded-md border border-fuel-line bg-white p-3 shadow-sm">
+            <div key={day} className="rounded-xl border border-fuel-line/80 bg-fuel-mist/40 p-3 shadow-sm">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="font-black">{formatWeekday(day)}</p>
                   <p className="text-xs font-bold text-slate-500">{formatDayLabel(day)}</p>
                 </div>
-                <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-black text-fuel-green">
+                <span className="rounded-md bg-white px-2 py-1 text-xs font-bold text-fuel-green">
                   {dayShifts.length} shifts
                 </span>
               </div>
 
               <div className="min-h-[112px] space-y-2">
                 {previewShifts.length > 0 ? previewShifts.map((shift) => (
-                  <div key={shift.id} className="rounded-md bg-fuel-mist px-2 py-2">
+                  <div key={shift.id} className="rounded-lg bg-white px-2 py-2 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-black">{shift.staffName}</p>
                       {shift.isExtra && (
@@ -384,10 +566,10 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, weekDays, o
               </div>
 
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-slate-600">
-                <span className="rounded-md bg-slate-50 px-2 py-1">{dayStaff} staff</span>
-                <span className="rounded-md bg-slate-50 px-2 py-1">{dayNotes} notes</span>
-                <span className="rounded-md bg-slate-50 px-2 py-1">{dayTasks.length} tasks</span>
-                <span className="rounded-md bg-slate-50 px-2 py-1">{dayTimeOff.length} off</span>
+                <span className="rounded-md bg-white px-2 py-1">{dayStaff} staff</span>
+                <span className="rounded-md bg-white px-2 py-1">{dayNotes} notes</span>
+                <span className="rounded-md bg-white px-2 py-1">{dayTasks.length} tasks</span>
+                <span className="rounded-md bg-white px-2 py-1">{dayTimeOff.length} off</span>
               </div>
             </div>
           );
@@ -400,10 +582,92 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, weekDays, o
 function SummaryPill({ label, value }) {
   return (
     <div className="rounded-md border border-fuel-line bg-fuel-mist px-3 py-2">
-      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-xl font-black text-fuel-ink">{value}</p>
     </div>
   );
+}
+
+function getAttentionItems({ shifts, timeOff, tasks, availability, today }) {
+  const items = [];
+  const pendingTimeOff = timeOff.filter((request) => request.status === "pending").length;
+  const longShiftsWithoutBreak = shifts.filter((shift) =>
+    !shift.approvedTimeOff &&
+    shift.shiftDate >= today &&
+    Number(shift.paidHours || shift.totalHours || 0) > 6 &&
+    Number(shift.breakMinutes || 0) === 0
+  ).length;
+  const missedTasks = tasks.filter((task) => task.status !== "done" && task.dueDate && task.dueDate < today).length;
+  const availabilityConflicts = getAvailabilityConflicts(shifts, availability, today).length;
+
+  if (pendingTimeOff) items.push(`${pendingTimeOff} pending time-off request${pendingTimeOff === 1 ? "" : "s"}.`);
+  if (availabilityConflicts) items.push(`${availabilityConflicts} rota conflict${availabilityConflicts === 1 ? "" : "s"} with staff availability.`);
+  if (longShiftsWithoutBreak) items.push(`${longShiftsWithoutBreak} shift${longShiftsWithoutBreak === 1 ? "" : "s"} over 6 hours without a break.`);
+  if (missedTasks) items.push(`${missedTasks} missed task${missedTasks === 1 ? "" : "s"} need review.`);
+
+  return items;
+}
+
+function getAvailabilityConflicts(shifts, availability, today) {
+  return shifts.filter((shift) => {
+    if (shift.approvedTimeOff || shift.shiftDate < today) return false;
+    const shiftDay = new Date(`${shift.shiftDate}T00:00:00`).getDay();
+    const shiftStart = timeToMinutes(shift.startTime);
+    const shiftEnd = timeToMinutes(shift.endTime);
+
+    return availability.some((slot) => {
+      const slotWeekday = Number(slot.weekday);
+      if (!sameStaff(slot.staffId, shift.staffId) || slotWeekday !== shiftDay) return false;
+      return rangesOverlap(shiftStart, shiftEnd, timeToMinutes(slot.startTime), timeToMinutes(slot.endTime));
+    });
+  });
+}
+
+function getWorkingNow(shifts, today, now = new Date()) {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  return shifts
+    .filter((shift) =>
+      shift.shiftDate === today &&
+      !shift.approvedTimeOff &&
+      isTimeInShift(currentMinutes, shift.startTime, shift.endTime)
+    )
+    .sort((left, right) => timeToMinutes(left.startTime) - timeToMinutes(right.startTime));
+}
+
+function getNextShiftToday(shifts, today, now = new Date()) {
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  return shifts
+    .filter((shift) =>
+      shift.shiftDate === today &&
+      !shift.approvedTimeOff &&
+      timeToMinutes(shift.startTime) > currentMinutes
+    )
+    .sort((left, right) => timeToMinutes(left.startTime) - timeToMinutes(right.startTime))[0];
+}
+
+function isTimeInShift(currentMinutes, startTime, endTime) {
+  const start = timeToMinutes(startTime);
+  const end = timeToMinutes(endTime);
+  if (end <= start) return currentMinutes >= start || currentMinutes < end;
+  return currentMinutes >= start && currentMinutes < end;
+}
+
+function rangesOverlap(startA, endA, startB, endB) {
+  if (endA <= startA) endA += 24 * 60;
+  if (endB <= startB) endB += 24 * 60;
+  return Math.max(startA, startB) < Math.min(endA, endB);
+}
+
+function timeToMinutes(value) {
+  const [hours = 0, minutes = 0] = String(value || "00:00").split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function formatTimeLabel(value) {
+  const [hours = "00", minutes = "00"] = String(value || "00:00").split(":");
+  const date = new Date();
+  date.setHours(Number(hours), Number(minutes), 0, 0);
+  return new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit" }).format(date).toLowerCase();
 }
 
 function formatHourTotal(value) {
