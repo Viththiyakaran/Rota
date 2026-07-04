@@ -121,7 +121,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
           <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black">Rota calendar</h3>
+                <h3 className="text-lg font-black">Week at a glance</h3>
                 <span className="group relative inline-flex">
                   <button
                     type="button"
@@ -131,7 +131,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
                     <Info size={16} />
                   </button>
                   <span className="pointer-events-none absolute left-1/2 top-9 z-20 hidden w-64 -translate-x-1/2 rounded-md bg-fuel-ink px-3 py-2 text-xs font-bold text-white shadow-lift group-hover:block group-focus-within:block">
-                    Hover a day cell to review rota notes, extra cover, and approved time off.
+                    Dashboard shows a compact summary. Open Weekly Rota for every shift detail.
                   </span>
                 </span>
               </div>
@@ -159,93 +159,14 @@ export function Dashboard({ goTo, currentUser, branding }) {
               </button>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-[720px] w-full border-collapse text-left">
-              <thead>
-                <tr>
-                  <th className="border border-fuel-line bg-fuel-mist px-3 py-3 text-sm font-black">Days</th>
-                  {staff.filter((person) => person.active).map((person) => (
-                    <th key={person.id} className="border border-fuel-line bg-fuel-mist px-3 py-3 text-sm font-black">
-                      {person.name}
-                    </th>
-                  ))}
-                  <th className="border border-fuel-line bg-fuel-mist px-3 py-3 text-sm font-black">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {weekDays.map((day) => {
-                  const dayShifts = shifts.filter((shift) => shift.shiftDate === day);
-                  const visibleDayShifts = dayShifts.filter((shift) => !isApprovedOffShift(shift, timeOff, day));
-                  const dayTimeOff = approvedTimeOffForDay(timeOff, day);
-                  const dayNotes = [
-                    ...new Set([
-                      ...visibleDayShifts.map((shift) => shift.notes).filter(Boolean),
-                      ...dayTimeOff.map((item) => `Time off: ${item.staffName || "Staff"}`)
-                    ])
-                  ];
-                  return (
-                    <tr key={day}>
-                      <td className="border border-fuel-line px-3 py-3 font-bold">{formatWeekday(day)}</td>
-                      {staff.filter((person) => person.active).map((person) => {
-                        const personTimeOff = dayTimeOff.filter((item) => sameStaff(item.staffId, person.id));
-                        const personShifts = personTimeOff.length > 0
-                          ? []
-                          : visibleDayShifts.filter((shift) => sameStaff(shift.staffId, person.id));
-                        return (
-                          <td key={person.id} className="border border-fuel-line px-3 py-3">
-                            {personShifts.length > 0 || personTimeOff.length > 0 ? (
-                              <div className="space-y-2">
-                                {personTimeOff.length > 0 && (
-                                  <p className="text-xs font-black uppercase text-amber-700" title={`Approved time off for ${person.name}`}>
-                                    Time off
-                                  </p>
-                                )}
-                                {personShifts.map((personShift) => (
-                                  <div key={personShift.id} className="space-y-1">
-                                    <p className="font-bold text-fuel-green">
-                                      {formatShiftRange(personShift.startTime, personShift.endTime)}
-                                    </p>
-                                    {personShift.isExtra && (
-                                      <p className="rounded-md bg-fuel-lime px-2 py-1 text-xs font-black text-fuel-ink">
-                                        Extra cover{personShift.coverForStaffName ? ` for ${personShift.coverForStaffName}` : ""}
-                                      </p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-slate-400">Off</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                      <td className="border border-fuel-line px-3 py-3 font-bold">
-                        <div className="space-y-1">
-                          {dayNotes.length > 0 ? dayNotes.map((note) => (
-                            <p key={note}>{note}</p>
-                          )) : <span className="text-slate-400">-</span>}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                <tr>
-                  <td className="border border-fuel-line bg-fuel-mist px-3 py-3 font-black">Total Hours</td>
-                  {staff.filter((person) => person.active).map((person) => {
-                    const total = shifts
-                      .filter((shift) => sameStaff(shift.staffId, person.id) && !isApprovedOffShift(shift, timeOff, shift.shiftDate))
-                      .reduce((sum, shift) => sum + shift.paidHours, 0);
-                    return (
-                      <td key={person.id} className="border border-fuel-line bg-fuel-mist px-3 py-3 font-black">
-                        {Number.isInteger(total) ? total : total.toFixed(2)}
-                      </td>
-                    );
-                  })}
-                  <td className="border border-fuel-line bg-fuel-mist px-3 py-3" />
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <DashboardRotaSummary
+            activeStaff={staff.filter((person) => person.active)}
+            shifts={shifts}
+            tasks={weekTasks}
+            timeOff={timeOff}
+            weekDays={weekDays}
+            onOpenWeek={() => goTo("rota")}
+          />
         </Card>
 
         <Card>
@@ -299,6 +220,107 @@ function Metric({ icon: Icon, label, value }) {
       </div>
     </Card>
   );
+}
+
+function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, weekDays, onOpenWeek }) {
+  const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
+  const staffOnRota = new Set(visibleShifts.map((shift) => String(shift.staffId))).size;
+  const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+  const noteCount = new Set(visibleShifts.map((shift) => shift.notes).filter(Boolean)).size;
+  const approvedTimeOffCount = timeOff.filter((request) =>
+    request.status === "approved" &&
+    request.endDate >= request.startDate &&
+    weekDays.some((day) => day >= request.startDate && day <= request.endDate)
+  ).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <SummaryPill label="Working staff" value={`${staffOnRota}/${activeStaff.length}`} />
+        <SummaryPill label="Week shifts" value={visibleShifts.length} />
+        <SummaryPill label="Paid hours" value={formatHourTotal(totalHours)} />
+        <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
+        {weekDays.map((day) => {
+          const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
+          const dayTasks = tasks.filter((task) => task.dueDate === day);
+          const dayTimeOff = approvedTimeOffForDay(timeOff, day);
+          const dayStaff = new Set(dayShifts.map((shift) => String(shift.staffId))).size;
+          const dayNotes = new Set(dayShifts.map((shift) => shift.notes).filter(Boolean)).size;
+          const previewShifts = dayShifts.slice(0, 3);
+          const hiddenShiftCount = Math.max(dayShifts.length - previewShifts.length, 0);
+
+          return (
+            <div key={day} className="rounded-md border border-fuel-line bg-white p-3 shadow-sm">
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <div>
+                  <p className="font-black">{formatWeekday(day)}</p>
+                  <p className="text-xs font-bold text-slate-500">{formatDayLabel(day)}</p>
+                </div>
+                <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-black text-fuel-green">
+                  {dayShifts.length} shifts
+                </span>
+              </div>
+
+              <div className="min-h-[112px] space-y-2">
+                {previewShifts.length > 0 ? previewShifts.map((shift) => (
+                  <div key={shift.id} className="rounded-md bg-fuel-mist px-2 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-sm font-black">{shift.staffName}</p>
+                      {shift.isExtra && (
+                        <span className="rounded bg-fuel-lime px-1.5 py-0.5 text-[10px] font-black uppercase text-fuel-ink">
+                          Extra
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs font-black text-fuel-green">
+                      {formatShiftRange(shift.startTime, shift.endTime)}
+                    </p>
+                  </div>
+                )) : (
+                  <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-fuel-line text-sm font-bold text-slate-400">
+                    No shifts
+                  </div>
+                )}
+
+                {hiddenShiftCount > 0 && (
+                  <button
+                    type="button"
+                    className="w-full rounded-md bg-fuel-ink px-2 py-2 text-xs font-black text-white"
+                    onClick={onOpenWeek}
+                  >
+                    +{hiddenShiftCount} more on Weekly Rota
+                  </button>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-slate-600">
+                <span className="rounded-md bg-slate-50 px-2 py-1">{dayStaff} staff</span>
+                <span className="rounded-md bg-slate-50 px-2 py-1">{dayNotes} notes</span>
+                <span className="rounded-md bg-slate-50 px-2 py-1">{dayTasks.length} tasks</span>
+                <span className="rounded-md bg-slate-50 px-2 py-1">{dayTimeOff.length} off</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function SummaryPill({ label, value }) {
+  return (
+    <div className="rounded-md border border-fuel-line bg-fuel-mist px-3 py-2">
+      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-xl font-black text-fuel-ink">{value}</p>
+    </div>
+  );
+}
+
+function formatHourTotal(value) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
 function formatWeekday(dateString) {
