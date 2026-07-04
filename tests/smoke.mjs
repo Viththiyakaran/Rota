@@ -111,6 +111,13 @@ async function runSmoke() {
   const users = await request("/api/users", { cookie: admin.cookie });
   assert(users.some((user) => user.username === "smokestaff"), "staff login auto-created");
 
+  const demoSeed = await request("/api/demo/seed", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: { count: 20 }
+  });
+  assert(demoSeed.created === 20, "demo seed creates 20 shifts");
+
   await request("/api/users", {
     cookie: admin.cookie,
     method: "POST",

@@ -129,6 +129,7 @@ app.get("/api", (_req, res) => {
       "POST /api/push/test",
       "GET /api/calendar/my-feed",
       "GET /calendar/:token.ics",
+      "POST /api/demo/seed",
       "GET /api/notifications",
       "POST /api/notifications/read-all",
       "GET /api/time-off",
@@ -918,6 +919,64 @@ app.post("/api/rota-patterns/generate", requireAdmin, async (req, res, next) => 
     res.status(201).json({ created, skipped, deleted, startDate: cleanStart, endDate: cleanEnd, batchId });
   } catch (error) {
     if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+    next(error);
+  }
+});
+
+app.post("/api/demo/seed", requireAdmin, async (req, res, next) => {
+  try {
+    const count = Math.min(Math.max(Number(req.body.count || 20), 1), 50);
+    const staffRows = await all("SELECT id, name FROM staff WHERE active = 1 ORDER BY id ASC");
+    if (staffRows.length === 0) {
+      return res.status(400).json({ error: "Add at least one active staff member before seeding demo shifts." });
+    }
+
+    const weekStart = mondayForDate(toDateString(new Date()));
+    const slots = [
+      ["05:30", "14:00", "Morning demo cover"],
+      ["06:00", "15:00", "Opening demo shift"],
+      ["09:00", "17:00", "Day demo shift"],
+      ["13:00", "22:00", "Closing demo shift"],
+      ["14:00", "22:00", "Evening demo cover"]
+    ];
+    let created = 0;
+    let skipped = 0;
+
+    for (let attempt = 0; created < count && attempt < count * 8; attempt += 1) {
+      const staff = staffRows[attempt % staffRows.length];
+      const shiftDate = addDays(weekStart, Math.floor(attempt / staffRows.length) % 21);
+      const [startTime, endTime, label] = slots[attempt % slots.length];
+      const existing = await get(
+        "SELECT id FROM shifts WHERE staffId = ? AND shiftDate = ? AND startTime = ? AND endTime = ?",
+        [staff.id, shiftDate, startTime, endTime]
+      );
+      if (existing) {
+        skipped += 1;
+        continue;
+      }
+
+      await run(
+        `INSERT INTO shifts
+          (staffId, shiftDate, startTime, endTime, breakMinutes, reminderMinutes, reminderTime, notes,
+           isExtra, coverForStaffId, googleCalendarEventId, patternGenerated, patternBatchId)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NULL, NULL, 0, NULL)`,
+        [
+          staff.id,
+          shiftDate,
+          startTime,
+          endTime,
+          startTime === "05:30" || startTime === "13:00" ? 30 : 0,
+          30,
+          calculateReminderTime(shiftDate, startTime, 30),
+          `${label} ${created + 1}`
+        ]
+      );
+      created += 1;
+    }
+
+    await addAudit(req.user.id, "seed_demo_data", `Created ${created} demo shifts`);
+    res.status(201).json({ created, skipped, requested: count });
+  } catch (error) {
     next(error);
   }
 });

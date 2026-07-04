@@ -1,5 +1,5 @@
 import React from "react";
-import { Clock, History, ImagePlus, KeyRound, RotateCcw, Save, ShieldCheck } from "lucide-react";
+import { Clock, Database, History, ImagePlus, KeyRound, RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -25,6 +25,7 @@ export function Settings({ branding, onBrandingSaved }) {
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [saving, setSaving] = React.useState(false);
+  const [seeding, setSeeding] = React.useState(false);
 
   React.useEffect(() => {
     setForm(branding);
@@ -121,6 +122,21 @@ export function Settings({ branding, onBrandingSaved }) {
     await api.resetPassword(user.id, { password: user.role === "admin" ? "admin123" : "staff123" });
     setMessage(`Password reset for ${user.username}.`);
     loadAdminData();
+  };
+
+  const seedDemoData = async () => {
+    setSeeding(true);
+    setError("");
+    setMessage("");
+    try {
+      const result = await api.seedDemoData({ count: 20 });
+      setMessage(`Demo data added: ${result.created} shifts created${result.skipped ? `, ${result.skipped} duplicates skipped` : ""}.`);
+      loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSeeding(false);
+    }
   };
 
   return (
@@ -267,6 +283,23 @@ export function Settings({ branding, onBrandingSaved }) {
               </button>
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card className="p-0">
+        <SectionHeader
+          icon={<Database size={20} />}
+          title="Demo Data"
+          description="Create test shifts in the current database so you can check rota, reminders, and Supabase rows."
+        />
+        <div className="space-y-3 px-5 pb-5">
+          <p className="text-sm font-bold text-slate-600">
+            This adds 20 demo shifts across active staff. It skips exact duplicates and records the action in the audit log.
+          </p>
+          <button type="button" className={primaryButton} onClick={seedDemoData} disabled={seeding || staff.length === 0}>
+            <Database size={18} />
+            {seeding ? "Adding demo shifts..." : "Seed 20 demo shifts"}
+          </button>
         </div>
       </Card>
 
