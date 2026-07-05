@@ -30,6 +30,28 @@ const DEFAULT_UK_ROTA_RULES = {
   wageCostEnabled: false,
   showWageCostOnDashboard: false
 };
+const UK_ROTA_RULES_CACHE_KEY = "localops.ukRotaRules";
+
+function normaliseUkRules(rules = {}) {
+  return { ...DEFAULT_UK_ROTA_RULES, ...rules };
+}
+
+function readCachedUkRules() {
+  try {
+    const cached = window.localStorage.getItem(UK_ROTA_RULES_CACHE_KEY);
+    return cached ? normaliseUkRules(JSON.parse(cached)) : DEFAULT_UK_ROTA_RULES;
+  } catch {
+    return DEFAULT_UK_ROTA_RULES;
+  }
+}
+
+function cacheUkRules(rules) {
+  try {
+    window.localStorage.setItem(UK_ROTA_RULES_CACHE_KEY, JSON.stringify(rules));
+  } catch {
+    // Local cache is only a convenience; database save is still the source of truth.
+  }
+}
 
 export function Settings({ branding, onBrandingSaved }) {
   const [form, setForm] = React.useState(branding);
@@ -37,8 +59,8 @@ export function Settings({ branding, onBrandingSaved }) {
   const [users, setUsers] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", businessTimezone: "Europe/London" });
-  const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
-  const [savedUkRules, setSavedUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
+  const [ukRules, setUkRules] = React.useState(readCachedUkRules);
+  const [savedUkRules, setSavedUkRules] = React.useState(readCachedUkRules);
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "admin123" });
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -76,9 +98,10 @@ export function Settings({ branding, onBrandingSaved }) {
         setStaff(activeStaff);
         setUsers(userRows);
         setOpeningHours(hours);
-        const loadedRules = { ...DEFAULT_UK_ROTA_RULES, ...rules };
+        const loadedRules = normaliseUkRules(rules);
         setUkRules(loadedRules);
         setSavedUkRules(loadedRules);
+        cacheUkRules(loadedRules);
         setAudit(auditRows);
       })
       .catch((err) => setError(err.message));
@@ -142,6 +165,7 @@ export function Settings({ branding, onBrandingSaved }) {
 
   const saveUkRules = async (event) => {
     event.preventDefault();
+    if (savingUkRules) return;
     if (!ukRulesChanged) {
       showSavedPopup("UK rota rules are already saved.");
       return;
@@ -150,16 +174,18 @@ export function Settings({ branding, onBrandingSaved }) {
   };
 
   const confirmSaveUkRules = async () => {
+    const rulesToSave = normaliseUkRules(ukRules);
+    setConfirmUkRulesSave(false);
     setSavingUkRules(true);
     setError("");
     setMessage("");
     try {
-      const saved = await api.updateUkRotaRules(ukRules);
-      const savedRules = { ...DEFAULT_UK_ROTA_RULES, ...saved };
+      const saved = await api.updateUkRotaRules(rulesToSave);
+      const savedRules = normaliseUkRules(saved);
       setUkRules(savedRules);
       setSavedUkRules(savedRules);
+      cacheUkRules(savedRules);
       showSavedPopup("UK rota rules updated.");
-      setConfirmUkRulesSave(false);
       loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -411,10 +437,12 @@ export function Settings({ branding, onBrandingSaved }) {
           }`}>
             <div>
               <p className="font-black">
-                {ukRulesChanged ? "Unsaved UK rota rule changes" : "UK rota rules saved"}
+                {savingUkRules ? "Saving UK rota rules..." : ukRulesChanged ? "Unsaved UK rota rule changes" : "UK rota rules saved"}
               </p>
               <p className="text-sm font-semibold">
-                {ukRulesChanged
+                {savingUkRules
+                  ? "Please wait while the latest settings are stored."
+                  : ukRulesChanged
                   ? "Press Save Rules before refreshing or leaving this page."
                   : "Dashboard checks are using these saved options."}
               </p>
@@ -422,10 +450,10 @@ export function Settings({ branding, onBrandingSaved }) {
             <button
               type="submit"
               className={`${ukRulesChanged ? primaryButton : softButton} shrink-0`}
-              disabled={!ukRulesChanged}
+              disabled={!ukRulesChanged || savingUkRules}
             >
               <Save size={18} />
-              Save Rules
+              {savingUkRules ? "Saving..." : "Save Rules"}
             </button>
           </div>
 
@@ -508,9 +536,9 @@ export function Settings({ branding, onBrandingSaved }) {
             LocalOps Planner provides rota, reminder, task and estimated wage planning tools only. It does not replace legal, HR, payroll, tax or employment advice. Employers remain responsible for following UK employment law and payroll rules.
           </div>
 
-          <button className={`${primaryButton} w-full sm:w-auto`} disabled={!ukRulesChanged}>
+          <button className={`${primaryButton} w-full sm:w-auto`} disabled={!ukRulesChanged || savingUkRules}>
             <Save size={18} />
-            {ukRulesChanged ? "Save UK Rota Rules" : "UK Rota Rules Saved"}
+            {savingUkRules ? "Saving..." : ukRulesChanged ? "Save UK Rota Rules" : "UK Rota Rules Saved"}
           </button>
         </form>
       </Card>
