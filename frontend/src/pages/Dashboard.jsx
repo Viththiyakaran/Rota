@@ -339,6 +339,7 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, we
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
   const staffOnRota = new Set(visibleShifts.map((shift) => String(shift.staffId))).size;
   const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+  const showDashboardWageCost = Boolean(ukRules.wageCostEnabled && ukRules.showWageCostOnDashboard);
   const estimatedWageCost = totalHours * Number(ukRules.minimumHourlyRate || 0);
   const noteCount = new Set(visibleShifts.map((shift) => shift.notes).filter(Boolean)).size;
   const approvedTimeOffCount = timeOff.filter((request) =>
@@ -353,7 +354,7 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, we
         <SummaryPill label="Working staff" value={`${staffOnRota}/${activeStaff.length}`} />
         <SummaryPill label="Week shifts" value={visibleShifts.length} />
         <SummaryPill label="Paid hours" value={formatHourTotal(totalHours)} />
-        {ukRules.showWageCostOnDashboard ? (
+        {showDashboardWageCost ? (
           <SummaryPill label="Est. wage cost" value={formatCurrency(estimatedWageCost)} />
         ) : (
           <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
@@ -587,9 +588,9 @@ function getEnabledUkRuleLabels(ukRules) {
   if (ukRules.warnHighWeeklyHours) labels.push(`Weekly > ${ukRules.weeklyHoursThreshold || 48}h`);
   if (ukRules.warnBelowMinimumWage) labels.push(`Min wage GBP ${Number(ukRules.minimumHourlyRate || 0).toFixed(2)}`);
   if (ukRules.clockInEnabled) labels.push("Clock in/out");
-  if (ukRules.locationCheckEnabled) labels.push("Location check");
+  if (ukRules.clockInEnabled && ukRules.locationCheckEnabled) labels.push("Location check");
   if (ukRules.wageCostEnabled) labels.push("Wage estimate");
-  if (ukRules.showWageCostOnDashboard) labels.push("Dashboard wage cost");
+  if (ukRules.wageCostEnabled && ukRules.showWageCostOnDashboard) labels.push("Dashboard wage cost");
   return labels;
 }
 

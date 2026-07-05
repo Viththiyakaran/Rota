@@ -156,7 +156,20 @@ export function Settings({ branding, onBrandingSaved }) {
 
   const updateUkRule = (key, value) => {
     setUkRules((current) => {
-      return { ...current, [key]: value };
+      const next = { ...current, [key]: value };
+      if (key === "clockInEnabled" && !value) {
+        next.locationCheckEnabled = false;
+      }
+      if (key === "locationCheckEnabled" && value) {
+        next.clockInEnabled = true;
+      }
+      if (key === "wageCostEnabled" && !value) {
+        next.showWageCostOnDashboard = false;
+      }
+      if (key === "showWageCostOnDashboard" && value) {
+        next.wageCostEnabled = true;
+      }
+      return next;
     });
   };
 
@@ -434,6 +447,7 @@ export function Settings({ branding, onBrandingSaved }) {
               description="Require location permission when staff clock in or out."
               helper="Location is only checked when staff clock in or out. The app does not track staff continuously."
               icon={<MapPin size={18} />}
+              disabled={!ukRules.clockInEnabled}
             />
 
             <RuleCard
@@ -449,6 +463,7 @@ export function Settings({ branding, onBrandingSaved }) {
               onChange={(value) => updateUkRule("showWageCostOnDashboard", value)}
               title="Show wage cost on dashboard"
               description="Display estimated wage cost only when wage planning is enabled."
+              disabled={!ukRules.wageCostEnabled}
             />
           </div>
 
