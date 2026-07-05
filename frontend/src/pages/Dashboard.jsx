@@ -86,7 +86,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
 
   return (
     <div className="space-y-5">
-      <DashboardWelcome branding={branding} currentUser={currentUser} />
+      <DashboardWelcome currentUser={currentUser} />
 
       {error && !loading && (
         <p className="rounded-md bg-amber-50 p-3 font-bold text-amber-800">
@@ -99,7 +99,6 @@ export function Dashboard({ goTo, currentUser, branding }) {
           attentionItems={attentionItems}
           nextShift={nextShift}
           tasksDueToday={tasksDueToday}
-          ukRules={ukRules}
           workingNow={workingNow}
         />
 
@@ -167,7 +166,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   );
 }
 
-function DashboardWelcome({ branding, currentUser }) {
+function DashboardWelcome({ currentUser }) {
   const greeting = getGreeting();
   const name = currentUser?.staffName || currentUser?.username || "admin";
   const today = new Intl.DateTimeFormat("en-GB", {
@@ -177,20 +176,15 @@ function DashboardWelcome({ branding, currentUser }) {
   }).format(new Date());
 
   return (
-    <Card>
+    <Card className="p-4 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-semibold text-fuel-green">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-black leading-tight text-fuel-ink">
             {greeting}, {name}
-          </p>
-          <h1 className="mt-1 text-2xl font-black leading-tight text-fuel-ink sm:text-3xl">
-            {branding.appTitle}
           </h1>
-          <p className="mt-2 text-sm font-medium text-slate-600">
-            Review today's rota, tasks and reminders.
-          </p>
+          <p className="mt-1 text-sm font-medium text-slate-600">Review today's rota, tasks and reminders.</p>
         </div>
-        <div className="rounded-lg bg-fuel-mist px-4 py-3">
+        <div className="w-fit rounded-lg bg-fuel-mist px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Today</p>
           <p className="mt-1 text-base font-bold text-fuel-ink">{today}</p>
         </div>
@@ -199,17 +193,16 @@ function DashboardWelcome({ branding, currentUser }) {
   );
 }
 
-function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, ukRules, workingNow }) {
+function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow }) {
   const hasAlerts = attentionItems.length > 0;
   const workingLabel = workingNow.length ? `${workingNow.length} staff` : "No one scheduled now";
   const nextShiftLabel = nextShift ? `${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today";
-  const enabledRules = getEnabledUkRuleLabels(ukRules);
 
   return (
     <section className="space-y-3">
       <div>
         <h2 className="text-xl font-black text-fuel-ink">Today's Action Plan</h2>
-        <p className="text-sm font-medium text-slate-600">The four checks that matter most before the day gets busy.</p>
+        <p className="text-sm font-medium text-slate-600">Four quick checks before the day gets busy.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ActionMiniCard
@@ -237,17 +230,6 @@ function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, ukRules, wo
           detail={hasAlerts ? attentionItems[0] : "UK rota rules are up to date."}
           tone={hasAlerts ? "warning" : "good"}
         />
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {enabledRules.length ? enabledRules.map((rule) => (
-          <span key={rule} className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-fuel-green">
-            {rule}
-          </span>
-        )) : (
-          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
-            UK rota checks off
-          </span>
-        )}
       </div>
     </section>
   );
@@ -304,11 +286,12 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
         {isAdmin && (
           <button
             type="button"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 text-base font-black text-fuel-ink transition hover:bg-emerald-100"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 text-base font-black text-fuel-ink transition hover:bg-emerald-100 sm:w-14 sm:px-0"
             onClick={onToggleMore}
             aria-expanded={moreOpen}
+            title="More actions"
           >
-            More Actions
+            <span className="sm:hidden">More Actions</span>
             <ChevronDown size={18} />
           </button>
         )}
@@ -372,7 +355,7 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, we
           const hiddenShiftCount = Math.max(dayShifts.length - previewShifts.length, 0);
 
           return (
-            <div key={day} className="rounded-xl border border-fuel-line/80 bg-fuel-mist/40 p-3 shadow-sm">
+            <div key={day} className="rounded-lg border border-fuel-line/80 bg-fuel-mist/40 p-3 shadow-sm">
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="font-black">{formatWeekday(day)}</p>
@@ -383,9 +366,9 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, we
                 </span>
               </div>
 
-              <div className="min-h-[112px] space-y-2">
+              <div className="min-h-[92px] space-y-2">
                 {previewShifts.length > 0 ? previewShifts.map((shift) => (
-                  <div key={shift.id} className="rounded-lg bg-white px-2 py-2 shadow-sm">
+                  <div key={shift.id} className="rounded-md bg-white px-2 py-2 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-black">{shift.staffName}</p>
                       {shift.isExtra && (
@@ -415,7 +398,7 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, we
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-bold text-slate-600">
+              <div className="mt-3 grid grid-cols-2 gap-1.5 text-xs font-bold text-slate-600">
                 <span className="rounded-md bg-white px-2 py-1">{dayStaff} staff</span>
                 <span className="rounded-md bg-white px-2 py-1">{dayNotes} notes</span>
                 <span className="rounded-md bg-white px-2 py-1">{dayTasks.length} tasks</span>
@@ -579,19 +562,6 @@ function formatCurrency(value) {
     currency: "GBP",
     maximumFractionDigits: 0
   }).format(Number(value || 0));
-}
-
-function getEnabledUkRuleLabels(ukRules) {
-  const labels = [];
-  if (ukRules.warnShiftOver6HoursNoBreak) labels.push(`Break > ${ukRules.thresholdHours || 6}h`);
-  if (ukRules.warnLessThan11HoursRest) labels.push(`${ukRules.dailyRestHours || 11}h daily rest`);
-  if (ukRules.warnHighWeeklyHours) labels.push(`Weekly > ${ukRules.weeklyHoursThreshold || 48}h`);
-  if (ukRules.warnBelowMinimumWage) labels.push(`Min wage GBP ${Number(ukRules.minimumHourlyRate || 0).toFixed(2)}`);
-  if (ukRules.clockInEnabled) labels.push("Clock in/out");
-  if (ukRules.clockInEnabled && ukRules.locationCheckEnabled) labels.push("Location check");
-  if (ukRules.wageCostEnabled) labels.push("Wage estimate");
-  if (ukRules.wageCostEnabled && ukRules.showWageCostOnDashboard) labels.push("Dashboard wage cost");
-  return labels;
 }
 
 function formatWeekday(dateString) {

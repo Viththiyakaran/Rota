@@ -205,24 +205,22 @@ function App() {
               type="button"
               onClick={() => setPage("reminders")}
               title="Reminders"
-              className={`flex h-11 w-11 items-center justify-center rounded-lg transition sm:w-auto sm:gap-2 sm:px-3 ${
+              className={`relative flex h-11 w-11 items-center justify-center rounded-lg transition ${
                 page === "reminders" ? "bg-fuel-green text-white shadow-sm" : "bg-fuel-mist text-fuel-green hover:bg-fuel-line"
               }`}
             >
               <Bell size={20} />
-              <span className="hidden text-sm font-black sm:inline">Reminders</span>
             </button>
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setPage("settings")}
                 title="Settings"
-                className={`flex h-11 w-11 items-center justify-center rounded-lg transition sm:w-auto sm:gap-2 sm:px-3 ${
+                className={`flex h-11 w-11 items-center justify-center rounded-lg transition ${
                   page === "settings" ? "bg-fuel-green text-white shadow-sm" : "bg-fuel-mist text-fuel-green hover:bg-fuel-line"
                 }`}
               >
                 <SettingsIcon size={20} />
-                <span className="hidden text-sm font-black sm:inline">Settings</span>
               </button>
             )}
             <div className="hidden text-right sm:block">
