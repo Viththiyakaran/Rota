@@ -256,20 +256,18 @@ function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) 
 
 function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
   const moreActions = [
-    { label: "Rota AI", page: "rota-ai", icon: Bot },
     { label: "Rota Pattern", page: "rota-pattern", icon: Layers },
     { label: "One-off Shift", page: "add-shift", icon: PlusCircle },
     { label: "Weekly Rota", page: "rota", icon: CalendarDays },
-    { label: "Tasks", page: "tasks", icon: ListChecks },
-    { label: "Print / PDF", page: "rota", icon: Printer }
+    { label: "Tasks", page: "tasks", icon: ListChecks }
   ];
 
   return (
     <div className="relative">
-      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto_auto_auto]">
         <button
           type="button"
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-green px-4 py-3 text-base font-black text-white shadow-sm transition hover:bg-emerald-800"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-emerald-800"
           onClick={() => goTo(isAdmin ? "add-shift" : "my-shifts")}
         >
           <PlusCircle size={19} />
@@ -277,21 +275,41 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
         </button>
         <button
           type="button"
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-ink px-4 py-3 text-base font-black text-white shadow-sm transition hover:bg-slate-900"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-fuel-line bg-white px-4 py-3 text-base font-bold text-fuel-ink shadow-sm transition hover:bg-fuel-mist hover:text-fuel-green"
           onClick={() => goTo(isAdmin ? "rota-pattern" : "time-off")}
         >
           <Sparkles size={19} />
           {isAdmin ? "Generate Rota" : "Request Time Off"}
         </button>
         {isAdmin && (
+          <>
+            <button
+              type="button"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-emerald-100"
+              onClick={() => goTo("rota")}
+            >
+              <Printer size={18} />
+              Print Rota
+            </button>
+            <button
+              type="button"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-emerald-100"
+              onClick={() => goTo("rota-ai")}
+            >
+              <Bot size={18} />
+              Rota AI
+            </button>
+          </>
+        )}
+        {isAdmin && (
           <button
             type="button"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-fuel-mist px-4 py-3 text-base font-black text-fuel-ink transition hover:bg-emerald-100 sm:w-14 sm:px-0"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-ink transition hover:bg-emerald-100 xl:w-14 xl:px-0"
             onClick={onToggleMore}
             aria-expanded={moreOpen}
             title="More actions"
           >
-            <span className="sm:hidden">More Actions</span>
+            <span className="xl:hidden">More Actions</span>
             <ChevronDown size={18} />
           </button>
         )}

@@ -558,7 +558,7 @@ function PlannerShiftCard({
         ) : (
           <div className="flex items-start justify-between gap-2">
             {shift.notes ? (
-              <p className="min-w-0 truncate rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-slate-700">{shift.notes}</p>
+              <p className={`min-w-0 truncate rounded-md px-2 py-1 text-xs font-bold ${noteToneClass(shift.notes)}`}>{shift.notes}</p>
             ) : (
               <p className="text-xs font-bold text-slate-400">No note</p>
             )}
@@ -581,6 +581,14 @@ function PlannerShiftCard({
 
 function formatHourTotal(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function noteToneClass(note = "") {
+  const text = String(note).toLowerCase();
+  if (text.includes("clean")) return "bg-sky-50 text-sky-800";
+  if (text.includes("shop")) return "bg-emerald-50 text-emerald-800";
+  if (text.includes("cover") || text.includes("extra")) return "bg-fuel-lime text-fuel-ink";
+  return "bg-slate-100 text-slate-700";
 }
 
 function approvedTimeOffForDay(requests, day) {

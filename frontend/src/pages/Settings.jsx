@@ -61,7 +61,7 @@ export function Settings({ branding, onBrandingSaved }) {
   const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", businessTimezone: "Europe/London" });
   const [ukRules, setUkRules] = React.useState(readCachedUkRules);
   const [savedUkRules, setSavedUkRules] = React.useState(readCachedUkRules);
-  const [adminForm, setAdminForm] = React.useState({ username: "", password: "admin123" });
+  const [adminForm, setAdminForm] = React.useState({ username: "", password: "" });
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [toast, setToast] = React.useState("");
@@ -222,7 +222,7 @@ export function Settings({ branding, onBrandingSaved }) {
     setMessage("");
     try {
       await api.createUser({ username: adminForm.username, password: adminForm.password, role: "admin", staffId: null, active: true });
-      setAdminForm({ username: "", password: "admin123" });
+      setAdminForm({ username: "", password: "" });
       showSavedPopup("Admin login created.");
       loadAdminData();
     } catch (err) {
@@ -237,8 +237,10 @@ export function Settings({ branding, onBrandingSaved }) {
   };
 
   const resetPassword = async (user) => {
-    await api.resetPassword(user.id, { password: user.role === "admin" ? "admin123" : "staff123" });
-    showSavedPopup(`Password reset for ${user.username}.`);
+    const confirmed = window.confirm(`Create a new temporary password for ${user.username}? They will need to change it after login.`);
+    if (!confirmed) return;
+    await api.resetPassword(user.id, { password: user.role === "admin" ? "AdminTemp123!" : "StaffTemp123!" });
+    showSavedPopup(`Temporary password reset for ${user.username}.`);
     loadAdminData();
   };
 
@@ -555,12 +557,12 @@ export function Settings({ branding, onBrandingSaved }) {
 
         <form className="grid gap-4 px-5 pb-5 md:grid-cols-[1fr_1fr_auto]" onSubmit={createAdmin}>
           <Field label="Username">
-            <input className={inputClass} value={adminForm.username} onChange={(e) => setAdminForm({ ...adminForm, username: e.target.value })} />
+            <input className={inputClass} value={adminForm.username} onChange={(e) => setAdminForm({ ...adminForm, username: e.target.value })} placeholder="manager-name" required />
           </Field>
-          <Field label="Password">
-            <input className={inputClass} value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} />
+          <Field label="Temporary password">
+            <input className={inputClass} type="password" autoComplete="new-password" value={adminForm.password} onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })} placeholder="Set a temporary password" required minLength={8} />
           </Field>
-          <button className={`${darkButton} self-end`}>Create Admin</button>
+          <button className={`${primaryButton} self-end`}>Create Admin</button>
         </form>
 
         <div className="space-y-2 border-t border-fuel-line px-5 py-5">
@@ -572,9 +574,9 @@ export function Settings({ branding, onBrandingSaved }) {
                 <p className="text-sm font-bold text-slate-600">{user.role}{user.staffName ? ` - ${user.staffName}` : ""}</p>
               </div>
               <button className={softButton} onClick={() => resetPassword(user)}>
-                Reset
+                Reset temp password
               </button>
-              <button className={user.active ? "inline-flex min-h-11 items-center justify-center rounded-md bg-red-50 px-4 py-2.5 text-sm font-black text-red-700" : primaryButton} onClick={() => toggleUser(user)}>
+              <button className={user.active ? "inline-flex min-h-11 items-center justify-center rounded-lg bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700" : primaryButton} onClick={() => toggleUser(user)}>
                 {user.active ? "Disable" : "Enable"}
               </button>
             </div>

@@ -176,7 +176,8 @@ function App() {
     <div className="min-h-screen bg-fuel-cream">
       <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
+          <div className="flex min-w-0 items-center gap-5">
+            <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-deep text-lg font-black text-fuel-lime shadow-sm">
               {branding.logoDataUrl ? (
                 <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-lg object-contain p-1" />
@@ -189,13 +190,32 @@ function App() {
                 {appTitle}
               </h1>
             </span>
-          </button>
+            </button>
+            <nav className="hidden items-center gap-1 lg:flex">
+              {visibleNav.map((item) => {
+                const Icon = item.icon;
+                const active = page === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setPage(item.id)}
+                    className={`inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition ${
+                      active ? "bg-fuel-green text-white shadow-sm" : "text-slate-600 hover:bg-fuel-mist hover:text-fuel-green"
+                    }`}
+                  >
+                    <Icon size={17} />
+                    {item.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
           <div className="flex items-center justify-end gap-2">
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => setPage("rota-ai")}
-                className="hidden min-h-11 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-2 text-sm font-black text-white shadow-sm transition hover:bg-fuel-deep sm:inline-flex"
+                className="hidden min-h-10 items-center justify-center gap-2 rounded-lg bg-fuel-green px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-fuel-deep sm:inline-flex"
               >
                 <Bot size={18} />
                 Rota AI
@@ -238,7 +258,7 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:pt-5">
+      <main className="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:pt-5 lg:pb-8">
         {page === "dashboard" && <Dashboard {...pageProps} />}
         {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
@@ -285,7 +305,7 @@ function App() {
         </div>
       )}
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/90 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/90 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 py-2 sm:gap-2">
           {visibleNav.map((item) => {
             const Icon = item.icon;

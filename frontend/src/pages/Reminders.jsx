@@ -15,6 +15,7 @@ export function Reminders({ branding = {}, currentUser = null }) {
   const [error, setError] = React.useState("");
   const [notificationError, setNotificationError] = React.useState("");
   const [reminderError, setReminderError] = React.useState("");
+  const [filter, setFilter] = React.useState("all");
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -51,6 +52,14 @@ export function Reminders({ branding = {}, currentUser = null }) {
   };
 
   const unreadCount = notifications.filter((notification) => notification.unread).length;
+  const filteredNotifications = notifications.filter((notification) => {
+    if (filter === "all") return true;
+    if (filter === "unread") return notification.unread;
+    if (filter === "shift") return isStaffShiftReminder(notification.type) || /shift/i.test(notification.title || "");
+    if (filter === "time-off") return /time.?off|holiday|unavailable/i.test(`${notification.type} ${notification.title} ${notification.message}`);
+    if (filter === "system") return !isStaffShiftReminder(notification.type) && !/time.?off|holiday|unavailable/i.test(`${notification.type} ${notification.title} ${notification.message}`);
+    return true;
+  });
 
   return (
     <div className="space-y-4">
@@ -72,6 +81,27 @@ export function Reminders({ branding = {}, currentUser = null }) {
         error={error}
         empty={notifications.length === 0 && reminders.length === 0 && !notificationError && !reminderError}
       >
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {[
+            ["all", "All"],
+            ["unread", "Unread"],
+            ["shift", "Shift"],
+            ["time-off", "Time Off"],
+            ["system", "System"]
+          ].map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setFilter(id)}
+              className={`shrink-0 rounded-full px-4 py-2 text-sm font-bold transition ${
+                filter === id ? "bg-fuel-green text-white shadow-sm" : "bg-white text-slate-600 ring-1 ring-fuel-line hover:bg-fuel-mist hover:text-fuel-green"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {(notificationError || reminderError) && (
           <div className="space-y-2">
             {notificationError && (
@@ -93,15 +123,20 @@ export function Reminders({ branding = {}, currentUser = null }) {
               <h3 className="text-xl font-black">Rota notifications</h3>
               {unreadCount > 0 && <span className="rounded-full bg-fuel-lime px-3 py-1 text-sm font-black">{unreadCount} unread</span>}
             </div>
-            {notifications.map((notification) => (
+            {filteredNotifications.length === 0 ? (
+              <Card className="text-sm font-semibold text-slate-500">No notifications in this filter.</Card>
+            ) : filteredNotifications.map((notification) => (
               <Card key={notification.id} className={notification.unread ? "border-fuel-green bg-fuel-mist" : ""}>
                 <div className="flex gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-fuel-lime">
-                    <Bell size={24} />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-fuel-lime">
+                    <Bell size={20} />
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-lg font-black">{displayNotificationTitle(notification, currentUser)}</p>
-                    <p className="font-bold text-fuel-green">{displayNotificationMessage(notification, currentUser)}</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-extrabold">{displayNotificationTitle(notification, currentUser)}</p>
+                      {notification.unread && <Pill tone="lime">Unread</Pill>}
+                    </div>
+                    <p className="mt-1 font-semibold text-fuel-green">{displayNotificationMessage(notification, currentUser)}</p>
                     <p className="mt-1 text-sm text-slate-600">
                       {notification.staffName} - {formatNotificationDate(notification.createdAt)}
                     </p>
@@ -118,12 +153,12 @@ export function Reminders({ branding = {}, currentUser = null }) {
             {reminders.map((reminder) => (
               <Card key={reminder.id}>
                 <div className="flex gap-3">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-fuel-lime">
-                    <Bell size={24} />
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-fuel-lime">
+                    <Bell size={20} />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-lg font-black">{reminder.staffName}</p>
-                    <p className="font-bold text-fuel-green">{displayReminderMessage(reminder, currentUser)}</p>
+                    <p className="text-base font-extrabold">{reminder.staffName}</p>
+                    <p className="font-semibold text-fuel-green">{displayReminderMessage(reminder, currentUser)}</p>
                     {reminder.isExtra && (
                       <p className="text-sm font-black text-fuel-ink">
                         Extra cover{reminder.coverForStaffName ? ` for ${reminder.coverForStaffName}` : ""}

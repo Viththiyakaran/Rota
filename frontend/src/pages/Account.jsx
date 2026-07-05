@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, CalendarDays, Copy, ExternalLink, KeyRound } from "lucide-react";
+import { Bell, CalendarDays, Copy, ExternalLink, Eye, EyeOff, KeyRound } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -16,6 +16,7 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
   const [savingPush, setSavingPush] = React.useState(false);
   const [calendarFeed, setCalendarFeed] = React.useState(null);
   const [calendarMessage, setCalendarMessage] = React.useState("");
+  const [showPasswords, setShowPasswords] = React.useState(false);
 
   React.useEffect(() => {
     if (!currentUser.staffId) return;
@@ -36,6 +37,16 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
     event.preventDefault();
     setMessage("");
     setError("");
+
+    if (!form.currentPassword || !form.newPassword || !form.confirmPassword) {
+      setError("Please complete all password fields.");
+      return;
+    }
+
+    if (form.newPassword.length < 8) {
+      setError("New password must be at least 8 characters.");
+      return;
+    }
 
     if (form.newPassword !== form.confirmPassword) {
       setError("New passwords do not match.");
@@ -85,18 +96,32 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
         title="My Account"
         description={forced ? "Please change your temporary password before using the rota." : "Manage your password, phone notifications, and calendar sync."}
       />
-      <Card>
+      <Card className="mx-auto max-w-2xl">
         <form className="space-y-4" onSubmit={submit}>
           {message && <p className="rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{message}</p>}
           {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700">{error}</p>}
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-extrabold">Password</h3>
+              <p className="text-sm text-slate-500">Use a strong password before real staff use.</p>
+            </div>
+            <button
+              type="button"
+              className={softButton}
+              onClick={() => setShowPasswords((value) => !value)}
+            >
+              {showPasswords ? <EyeOff size={17} /> : <Eye size={17} />}
+              {showPasswords ? "Hide" : "Show"}
+            </button>
+          </div>
           <Field label="Current password">
-            <input className={inputClass} type="password" value={form.currentPassword} onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} />
+            <input className={inputClass} type={showPasswords ? "text" : "password"} autoComplete="current-password" value={form.currentPassword} onChange={(e) => setForm({ ...form, currentPassword: e.target.value })} />
           </Field>
           <Field label="New password">
-            <input className={inputClass} type="password" value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} />
+            <input className={inputClass} type={showPasswords ? "text" : "password"} autoComplete="new-password" value={form.newPassword} onChange={(e) => setForm({ ...form, newPassword: e.target.value })} />
           </Field>
           <Field label="Confirm new password">
-            <input className={inputClass} type="password" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} />
+            <input className={inputClass} type={showPasswords ? "text" : "password"} autoComplete="new-password" value={form.confirmPassword} onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })} />
           </Field>
           <button className={`${primaryButton} w-full`}>
             <KeyRound size={18} />

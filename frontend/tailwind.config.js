@@ -5,19 +5,19 @@ export default {
     extend: {
       colors: {
         fuel: {
-          ink: "#17201b",
-          green: "#0b6b4b",
-          deep: "#063f32",
-          lime: "#d7f75b",
-          mist: "#eef7f1",
-          line: "#d8e4dc",
-          cream: "#fafcf8",
-          gold: "#f2c94c"
+          ink: "#0f172a",
+          green: "#047857",
+          deep: "#065f46",
+          lime: "#d9f99d",
+          mist: "#ecfdf5",
+          line: "#dbe7e2",
+          cream: "#f8fafc",
+          gold: "#f59e0b"
         }
       },
       boxShadow: {
-        soft: "0 14px 40px rgba(23, 32, 27, 0.08)",
-        lift: "0 18px 50px rgba(6, 63, 50, 0.14)"
+        soft: "0 10px 28px rgba(15, 23, 42, 0.06)",
+        lift: "0 18px 44px rgba(15, 23, 42, 0.14)"
       }
     }
   },
