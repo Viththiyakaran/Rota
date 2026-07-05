@@ -179,6 +179,9 @@ export function Settings({ branding, onBrandingSaved }) {
     setSavingUkRules(true);
     setError("");
     setMessage("");
+    setUkRules(rulesToSave);
+    setSavedUkRules(rulesToSave);
+    cacheUkRules(rulesToSave);
     try {
       const saved = await api.updateUkRotaRules(rulesToSave);
       const savedRules = normaliseUkRules(saved);

@@ -50,7 +50,6 @@ async function runSmoke() {
   assert(publicBranding.businessName, "public branding works");
 
   let admin = await login("admin", "admin123");
-  const staff = await login("afridi", "staff123");
 
   const changedAdmin = await request("/api/auth/change-password", {
     cookie: admin.cookie,
@@ -58,6 +57,33 @@ async function runSmoke() {
     body: { currentPassword: "admin123", newPassword: "admin456" }
   });
   assert(changedAdmin.user?.mustChangePassword === false, "admin first password change");
+
+  const savedUkRules = await request("/api/settings/uk-rules", {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: {
+      warnShiftOver6HoursNoBreak: false,
+      thresholdHours: 6,
+      minimumBreakMinutes: 20,
+      warnLessThan11HoursRest: false,
+      dailyRestHours: 11,
+      warnHighWeeklyHours: false,
+      weeklyHoursThreshold: 48,
+      warnBelowMinimumWage: false,
+      minimumHourlyRate: 12.21,
+      clockInEnabled: false,
+      locationCheckEnabled: false,
+      wageCostEnabled: false,
+      showWageCostOnDashboard: false
+    }
+  });
+  assert(savedUkRules.warnShiftOver6HoursNoBreak === false, "uk break warning saves false");
+  assert(savedUkRules.warnLessThan11HoursRest === false, "uk daily rest warning saves false");
+  const reloadedUkRules = await request("/api/settings/uk-rules", { cookie: admin.cookie });
+  assert(reloadedUkRules.warnShiftOver6HoursNoBreak === false, "uk break warning reloads false");
+  assert(reloadedUkRules.warnLessThan11HoursRest === false, "uk daily rest warning reloads false");
+
+  const staff = await login("afridi", "staff123");
 
   await expectStatus("/api/auth/recover-admin", 403, {
     method: "POST",
@@ -76,6 +102,7 @@ async function runSmoke() {
     body: { currentPassword: "admin789", newPassword: "admin456" }
   });
   assert(changedRecoveredAdmin.user?.mustChangePassword === false, "admin recovered password changed");
+  admin = await login("admin", "admin456");
 
   const changedStaff = await request("/api/auth/change-password", {
     cookie: staff.cookie,

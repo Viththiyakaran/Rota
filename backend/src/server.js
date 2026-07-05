@@ -167,7 +167,7 @@ app.get("/api/settings/uk-rules", requireAuth, async (_req, res, next) => {
   }
 });
 
-app.put("/api/settings/uk-rules", requireAdmin, async (req, res, next) => {
+app.put("/api/settings/uk-rules", requireAuth, requirePasswordChange, requireAdmin, async (req, res, next) => {
   try {
     const saved = await updateUkRotaRules(req.body);
     await addAudit(req.user.id, "update_uk_rota_rules", "Updated UK rota warning settings");
