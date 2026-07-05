@@ -1,4 +1,4 @@
-import React from "react";
+﻿import React from "react";
 import { CalendarDays, Check, ChevronLeft, ChevronRight, Layers, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
 import { api } from "../api.js";
 import { PageHeader, Pill, darkButton, primaryButton } from "../components/PageHeader.jsx";
@@ -307,17 +307,34 @@ function PlannerGrid({
         <div>
           <h2 className="text-xl font-black text-fuel-ink">Staff planner</h2>
           <p className="text-sm font-bold text-slate-600">
-            {activeStaff.length} staff · {visibleShifts.length} shifts · {formatHourTotal(totalHours)} paid hours
+            {activeStaff.length} staff - {visibleShifts.length} shifts - {formatHourTotal(totalHours)} paid hours
           </p>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center text-xs font-black text-slate-600 sm:flex">
-          <span className="rounded-md bg-fuel-mist px-3 py-2">Staff rows</span>
-          <span className="rounded-md bg-fuel-mist px-3 py-2">Day columns</span>
-          <span className="rounded-md bg-fuel-mist px-3 py-2">Scroll sideways</span>
+          <span className="rounded-md bg-fuel-mist px-3 py-2">{activeStaff.length} staff</span>
+          <span className="rounded-md bg-fuel-mist px-3 py-2">{visibleShifts.length} shifts</span>
+          <span className="rounded-md bg-fuel-mist px-3 py-2">{formatHourTotal(totalHours)} hrs</span>
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <MobileWeekCards
+        editingNoteId={editingNoteId}
+        isAdmin={isAdmin}
+        noteDraft={noteDraft}
+        noteError={noteError}
+        onCancelNote={onCancelNote}
+        onDeleteShift={onDeleteShift}
+        onEditNote={onEditNote}
+        onNoteDraftChange={onNoteDraftChange}
+        onSaveNote={onSaveNote}
+        savingNoteId={savingNoteId}
+        tasks={tasks}
+        timeOff={timeOff}
+        visibleShifts={visibleShifts}
+        weekDays={weekDays}
+      />
+
+      <div className="hidden overflow-x-auto lg:block">
         <div className="min-w-[1080px]">
           <div className="grid grid-cols-[220px_repeat(7,minmax(126px,1fr))] border-b border-fuel-line bg-fuel-mist/80">
             <div className="sticky left-0 z-10 border-r border-fuel-line bg-fuel-mist/95 px-4 py-3">
@@ -369,6 +386,97 @@ function PlannerGrid({
         </div>
       </div>
     </section>
+  );
+}
+
+function MobileWeekCards({
+  editingNoteId,
+  isAdmin,
+  noteDraft,
+  noteError,
+  onCancelNote,
+  onDeleteShift,
+  onEditNote,
+  onNoteDraftChange,
+  onSaveNote,
+  savingNoteId,
+  tasks,
+  timeOff,
+  visibleShifts,
+  weekDays
+}) {
+  return (
+    <div className="space-y-3 p-3 lg:hidden">
+      {weekDays.map((day) => {
+        const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
+        const dayTasks = tasks.filter((task) => task.dueDate === day);
+        const dayTimeOff = approvedTimeOffForDay(timeOff, day);
+        const dayHours = dayShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+
+        return (
+          <article key={day} className="rounded-xl border border-fuel-line bg-fuel-cream/80 p-3">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-fuel-ink">{formatDayLabel(day)}</h3>
+                <p className="text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
+              </div>
+              <div className="text-right">
+                <p className="rounded-md bg-white px-2 py-1 text-xs font-black text-fuel-green">{dayShifts.length} shifts</p>
+                <p className="mt-1 text-xs font-bold text-slate-500">{formatHourTotal(dayHours)} hrs</p>
+              </div>
+            </div>
+
+            {dayTimeOff.length > 0 && (
+              <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+                <p className="text-xs font-black uppercase text-amber-700">Time off</p>
+                <p className="text-sm font-bold text-slate-700">
+                  {dayTimeOff.map((item) => item.staffName || "Staff").join(", ")}
+                </p>
+              </div>
+            )}
+
+            {dayShifts.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-fuel-line bg-white px-3 py-6 text-center text-sm font-bold text-slate-400">
+                No shifts planned
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {dayShifts.map((shift) => (
+                  <PlannerShiftCard
+                    editingNoteId={editingNoteId}
+                    isAdmin={isAdmin}
+                    key={shift.id}
+                    noteDraft={noteDraft}
+                    noteError={noteError}
+                    onCancelNote={onCancelNote}
+                    onDeleteShift={onDeleteShift}
+                    onEditNote={onEditNote}
+                    onNoteDraftChange={onNoteDraftChange}
+                    onSaveNote={onSaveNote}
+                    savingNoteId={savingNoteId}
+                    shift={shift}
+                    showStaffName
+                  />
+                ))}
+              </div>
+            )}
+
+            {dayTasks.length > 0 && (
+              <div className="mt-3 rounded-lg bg-white px-3 py-2">
+                <p className="text-xs font-black uppercase text-slate-500">Tasks</p>
+                <div className="mt-2 space-y-1">
+                  {dayTasks.slice(0, 3).map((task) => (
+                    <p key={task.id} className="truncate text-sm font-bold text-fuel-ink">
+                      {task.title}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
@@ -437,7 +545,7 @@ function StaffPlannerRow({
             <p className="truncate font-black text-fuel-ink">{person.name}</p>
             <p className="truncate text-xs font-bold text-slate-500">{person.role || "Staff"}</p>
             <p className="mt-1 text-xs font-black text-fuel-green">
-              {formatHourTotal(total)} hrs · {staffShifts.length} shifts
+              {formatHourTotal(total)} hrs - {staffShifts.length} shifts
             </p>
           </div>
         </div>
@@ -450,8 +558,11 @@ function StaffPlannerRow({
         return (
           <div key={`${person.id}-${day}`} className="min-h-28 border-r border-fuel-line bg-slate-50/40 p-2 last:border-r-0">
             {dayTimeOff.length > 0 && (
-              <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-700">
-                Approved off
+              <div
+                className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-700"
+                title={`${person.name} has approved time off on ${formatDateLabel(day)}`}
+              >
+                Time off
               </div>
             )}
             {cellShifts.length === 0 ? (
@@ -496,7 +607,8 @@ function PlannerShiftCard({
   onNoteDraftChange,
   onSaveNote,
   savingNoteId,
-  shift
+  shift,
+  showStaffName = false
 }) {
   const isEditing = editingNoteId === shift.id;
 
@@ -504,6 +616,7 @@ function PlannerShiftCard({
     <article className={`rounded-md border-l-4 bg-white p-2 shadow-sm ${shift.isExtra ? "border-l-fuel-lime ring-1 ring-fuel-lime/50" : "border-l-fuel-green ring-1 ring-fuel-line"}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
+          {showStaffName && <p className="truncate text-base font-black text-fuel-ink">{shift.staffName}</p>}
           <p className="text-sm font-black text-fuel-ink">{formatShiftRange(shift.startTime, shift.endTime)}</p>
           <p className="mt-0.5 text-xs font-bold text-slate-500">{shift.totalHours} hrs</p>
         </div>
@@ -558,7 +671,7 @@ function PlannerShiftCard({
         ) : (
           <div className="flex items-start justify-between gap-2">
             {shift.notes ? (
-              <p className={`min-w-0 truncate rounded-md px-2 py-1 text-xs font-bold ${noteToneClass(shift.notes)}`}>{shift.notes}</p>
+              <p className={`min-w-0 truncate rounded-md px-2 py-1 text-xs font-bold ${noteToneClass(shift.notes)}`} title={shift.notes}>{shift.notes}</p>
             ) : (
               <p className="text-xs font-bold text-slate-400">No note</p>
             )}
