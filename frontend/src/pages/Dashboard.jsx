@@ -99,6 +99,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
           attentionItems={attentionItems}
           nextShift={nextShift}
           tasksDueToday={tasksDueToday}
+          ukRules={ukRules}
           workingNow={workingNow}
         />
 
@@ -156,6 +157,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
             shifts={shifts}
             tasks={weekTasks}
             timeOff={timeOff}
+            ukRules={ukRules}
             weekDays={weekDays}
             onOpenWeek={() => goTo("rota")}
           />
@@ -197,10 +199,11 @@ function DashboardWelcome({ branding, currentUser }) {
   );
 }
 
-function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow }) {
+function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, ukRules, workingNow }) {
   const hasAlerts = attentionItems.length > 0;
   const workingLabel = workingNow.length ? `${workingNow.length} staff` : "No one scheduled now";
   const nextShiftLabel = nextShift ? `${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today";
+  const enabledRules = getEnabledUkRuleLabels(ukRules);
 
   return (
     <section className="space-y-3">
@@ -231,11 +234,11 @@ function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow 
           icon={hasAlerts ? AlertTriangle : CheckCircle2}
           title="Needs attention"
           value={hasAlerts ? `${attentionItems.length} warning${attentionItems.length === 1 ? "" : "s"}` : "All good today"}
-          detail={hasAlerts ? attentionItems[0] : "All good today ✅"}
+          detail={hasAlerts ? attentionItems[0] : "UK rota rules are up to date."}
           tone={hasAlerts ? "warning" : "good"}
         />
       </div>
-      {hasAlerts && <NeedsAttentionCard items={attentionItems} />}
+      <NeedsAttentionCard enabledRules={enabledRules} items={attentionItems} />
     </section>
   );
 }
@@ -259,7 +262,7 @@ function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) 
   );
 }
 
-function NeedsAttentionCard({ items }) {
+function NeedsAttentionCard({ enabledRules, items }) {
   return (
     <Card className="p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -283,6 +286,17 @@ function NeedsAttentionCard({ items }) {
       ) : (
         <p className="rounded-lg bg-emerald-50 px-3 py-4 text-sm font-bold text-fuel-green">All good today.</p>
       )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        {enabledRules.length ? enabledRules.map((rule) => (
+          <span key={rule} className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-fuel-green">
+            {rule}
+          </span>
+        )) : (
+          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
+            UK rota checks off
+          </span>
+        )}
+      </div>
     </Card>
   );
 }
@@ -350,10 +364,11 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
   );
 }
 
-function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, weekDays, onOpenWeek }) {
+function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek }) {
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
   const staffOnRota = new Set(visibleShifts.map((shift) => String(shift.staffId))).size;
   const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+  const estimatedWageCost = totalHours * Number(ukRules.minimumHourlyRate || 0);
   const noteCount = new Set(visibleShifts.map((shift) => shift.notes).filter(Boolean)).size;
   const approvedTimeOffCount = timeOff.filter((request) =>
     request.status === "approved" &&
@@ -367,7 +382,11 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, weekDays, o
         <SummaryPill label="Working staff" value={`${staffOnRota}/${activeStaff.length}`} />
         <SummaryPill label="Week shifts" value={visibleShifts.length} />
         <SummaryPill label="Paid hours" value={formatHourTotal(totalHours)} />
-        <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
+        {ukRules.wageCostEnabled && ukRules.showWageCostOnDashboard ? (
+          <SummaryPill label="Est. wage cost" value={formatCurrency(estimatedWageCost)} />
+        ) : (
+          <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
+        )}
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
@@ -475,6 +494,10 @@ function getAttentionItems({ shifts, ukRules, weekDays }) {
     }
   }
 
+  if (ukRules.warnBelowMinimumWage && ukRules.wageCostEnabled) {
+    items.push("Minimum wage warning is enabled. Add staff hourly rates before using wage compliance checks.");
+  }
+
   return items;
 }
 
@@ -576,6 +599,26 @@ function formatTimeLabel(value) {
 
 function formatHourTotal(value) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    maximumFractionDigits: 0
+  }).format(Number(value || 0));
+}
+
+function getEnabledUkRuleLabels(ukRules) {
+  const labels = [];
+  if (ukRules.warnShiftOver6HoursNoBreak) labels.push(`Break > ${ukRules.thresholdHours || 6}h`);
+  if (ukRules.warnLessThan11HoursRest) labels.push(`${ukRules.dailyRestHours || 11}h daily rest`);
+  if (ukRules.warnHighWeeklyHours) labels.push(`Weekly > ${ukRules.weeklyHoursThreshold || 48}h`);
+  if (ukRules.warnBelowMinimumWage) labels.push(`Min wage £${Number(ukRules.minimumHourlyRate || 0).toFixed(2)}`);
+  if (ukRules.clockInEnabled) labels.push("Clock in/out");
+  if (ukRules.locationCheckEnabled) labels.push("Location check");
+  if (ukRules.wageCostEnabled) labels.push("Wage estimate");
+  return labels;
 }
 
 function formatWeekday(dateString) {
