@@ -904,13 +904,9 @@ function normaliseUkRotaRules(value) {
     warnBelowMinimumWage: toBooleanSetting(source.warnBelowMinimumWage, DEFAULT_UK_ROTA_RULES.warnBelowMinimumWage),
     minimumHourlyRate: toNumberSetting(source.minimumHourlyRate, DEFAULT_UK_ROTA_RULES.minimumHourlyRate),
     clockInEnabled: toBooleanSetting(source.clockInEnabled, DEFAULT_UK_ROTA_RULES.clockInEnabled),
-    locationCheckEnabled: toBooleanSetting(source.clockInEnabled, DEFAULT_UK_ROTA_RULES.clockInEnabled)
-      ? toBooleanSetting(source.locationCheckEnabled, DEFAULT_UK_ROTA_RULES.locationCheckEnabled)
-      : false,
+    locationCheckEnabled: toBooleanSetting(source.locationCheckEnabled, DEFAULT_UK_ROTA_RULES.locationCheckEnabled),
     wageCostEnabled: toBooleanSetting(source.wageCostEnabled, DEFAULT_UK_ROTA_RULES.wageCostEnabled),
-    showWageCostOnDashboard: toBooleanSetting(source.wageCostEnabled, DEFAULT_UK_ROTA_RULES.wageCostEnabled)
-      ? toBooleanSetting(source.showWageCostOnDashboard, DEFAULT_UK_ROTA_RULES.showWageCostOnDashboard)
-      : false
+    showWageCostOnDashboard: toBooleanSetting(source.showWageCostOnDashboard, DEFAULT_UK_ROTA_RULES.showWageCostOnDashboard)
   };
 }
 

@@ -382,7 +382,7 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, we
         <SummaryPill label="Working staff" value={`${staffOnRota}/${activeStaff.length}`} />
         <SummaryPill label="Week shifts" value={visibleShifts.length} />
         <SummaryPill label="Paid hours" value={formatHourTotal(totalHours)} />
-        {ukRules.wageCostEnabled && ukRules.showWageCostOnDashboard ? (
+        {ukRules.showWageCostOnDashboard ? (
           <SummaryPill label="Est. wage cost" value={formatCurrency(estimatedWageCost)} />
         ) : (
           <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
@@ -494,7 +494,7 @@ function getAttentionItems({ shifts, ukRules, weekDays }) {
     }
   }
 
-  if (ukRules.warnBelowMinimumWage && ukRules.wageCostEnabled) {
+  if (ukRules.warnBelowMinimumWage) {
     items.push("Minimum wage warning is enabled. Add staff hourly rates before using wage compliance checks.");
   }
 
@@ -618,6 +618,7 @@ function getEnabledUkRuleLabels(ukRules) {
   if (ukRules.clockInEnabled) labels.push("Clock in/out");
   if (ukRules.locationCheckEnabled) labels.push("Location check");
   if (ukRules.wageCostEnabled) labels.push("Wage estimate");
+  if (ukRules.showWageCostOnDashboard) labels.push("Dashboard wage cost");
   return labels;
 }
 

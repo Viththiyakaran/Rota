@@ -132,12 +132,15 @@ export function Settings({ branding, onBrandingSaved }) {
 
   const saveUkRules = async (event) => {
     event.preventDefault();
+    const shouldSave = window.confirm("Save these UK Rota Rules?");
+    if (!shouldSave) return;
     setError("");
     setMessage("");
     try {
       const saved = await api.updateUkRotaRules(ukRules);
       setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...saved });
       showSavedPopup("UK rota rules updated.");
+      window.alert("UK Rota Rules saved. Dashboard checks will use the latest settings.");
       loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -146,10 +149,7 @@ export function Settings({ branding, onBrandingSaved }) {
 
   const updateUkRule = (key, value) => {
     setUkRules((current) => {
-      const next = { ...current, [key]: value };
-      if (key === "clockInEnabled" && !value) next.locationCheckEnabled = false;
-      if (key === "wageCostEnabled" && !value) next.showWageCostOnDashboard = false;
-      return next;
+      return { ...current, [key]: value };
     });
   };
 
@@ -385,7 +385,6 @@ export function Settings({ branding, onBrandingSaved }) {
 
             <RuleCard
               checked={ukRules.locationCheckEnabled}
-              disabled={!ukRules.clockInEnabled}
               onChange={(value) => updateUkRule("locationCheckEnabled", value)}
               title="Location Check"
               description="Require location permission when staff clock in or out."
@@ -403,7 +402,6 @@ export function Settings({ branding, onBrandingSaved }) {
 
             <RuleCard
               checked={ukRules.showWageCostOnDashboard}
-              disabled={!ukRules.wageCostEnabled}
               onChange={(value) => updateUkRule("showWageCostOnDashboard", value)}
               title="Show wage cost on dashboard"
               description="Display estimated wage cost only when wage planning is enabled."
