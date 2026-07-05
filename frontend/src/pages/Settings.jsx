@@ -38,6 +38,7 @@ export function Settings({ branding, onBrandingSaved }) {
   const [audit, setAudit] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", businessTimezone: "Europe/London" });
   const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
+  const [savedUkRules, setSavedUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "admin123" });
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
@@ -57,6 +58,11 @@ export function Settings({ branding, onBrandingSaved }) {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
+  const ukRulesChanged = React.useMemo(
+    () => JSON.stringify(ukRules) !== JSON.stringify(savedUkRules),
+    [savedUkRules, ukRules]
+  );
+
   const showSavedPopup = (text) => {
     setMessage(text);
     setToast(text);
@@ -70,7 +76,9 @@ export function Settings({ branding, onBrandingSaved }) {
         setStaff(activeStaff);
         setUsers(userRows);
         setOpeningHours(hours);
-        setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...rules });
+        const loadedRules = { ...DEFAULT_UK_ROTA_RULES, ...rules };
+        setUkRules(loadedRules);
+        setSavedUkRules(loadedRules);
         setAudit(auditRows);
       })
       .catch((err) => setError(err.message));
@@ -134,6 +142,10 @@ export function Settings({ branding, onBrandingSaved }) {
 
   const saveUkRules = async (event) => {
     event.preventDefault();
+    if (!ukRulesChanged) {
+      showSavedPopup("UK rota rules are already saved.");
+      return;
+    }
     setConfirmUkRulesSave(true);
   };
 
@@ -143,7 +155,9 @@ export function Settings({ branding, onBrandingSaved }) {
     setMessage("");
     try {
       const saved = await api.updateUkRotaRules(ukRules);
-      setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...saved });
+      const savedRules = { ...DEFAULT_UK_ROTA_RULES, ...saved };
+      setUkRules(savedRules);
+      setSavedUkRules(savedRules);
       showSavedPopup("UK rota rules updated.");
       setConfirmUkRulesSave(false);
       loadAdminData();
@@ -392,6 +406,29 @@ export function Settings({ branding, onBrandingSaved }) {
           description="Optional planning warnings for common UK rota and working-time checks."
         />
         <form className="space-y-4 px-5 pb-5" onSubmit={saveUkRules}>
+          <div className={`sticky top-16 z-20 flex flex-col gap-3 rounded-lg border px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between ${
+            ukRulesChanged ? "border-amber-200 bg-amber-50 text-amber-900" : "border-fuel-line bg-fuel-mist text-fuel-ink"
+          }`}>
+            <div>
+              <p className="font-black">
+                {ukRulesChanged ? "Unsaved UK rota rule changes" : "UK rota rules saved"}
+              </p>
+              <p className="text-sm font-semibold">
+                {ukRulesChanged
+                  ? "Press Save Rules before refreshing or leaving this page."
+                  : "Dashboard checks are using these saved options."}
+              </p>
+            </div>
+            <button
+              type="submit"
+              className={`${ukRulesChanged ? primaryButton : softButton} shrink-0`}
+              disabled={!ukRulesChanged}
+            >
+              <Save size={18} />
+              Save Rules
+            </button>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-2">
             <RuleCard
               checked={ukRules.warnShiftOver6HoursNoBreak}
@@ -471,9 +508,9 @@ export function Settings({ branding, onBrandingSaved }) {
             LocalOps Planner provides rota, reminder, task and estimated wage planning tools only. It does not replace legal, HR, payroll, tax or employment advice. Employers remain responsible for following UK employment law and payroll rules.
           </div>
 
-          <button className={`${primaryButton} w-full sm:w-auto`}>
+          <button className={`${primaryButton} w-full sm:w-auto`} disabled={!ukRulesChanged}>
             <Save size={18} />
-            Save UK Rota Rules
+            {ukRulesChanged ? "Save UK Rota Rules" : "UK Rota Rules Saved"}
           </button>
         </form>
       </Card>
