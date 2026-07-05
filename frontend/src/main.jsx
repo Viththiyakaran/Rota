@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
+import { Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { AddShift } from "./pages/AddShift.jsx";
@@ -42,6 +42,10 @@ function App() {
   const [popupNotification, setPopupNotification] = React.useState(null);
   const isAdmin = currentUser?.role === "admin";
   const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && !item.hidden);
+  const desktopNav = navItems.filter((item) =>
+    item.roles.includes(currentUser?.role) &&
+    ["dashboard", "my-shifts", "staff", "rota", "time-off", "tasks", "reminders", "settings"].includes(item.id)
+  );
   const appTitle = buildRotaTitle(branding.businessName);
   const pageProps = { goTo: setPage, currentUser, branding: { ...branding, appTitle } };
 
@@ -173,42 +177,79 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-fuel-cream">
-      <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-5">
-            <button className="flex min-w-0 items-center gap-3 text-left" onClick={() => setPage("dashboard")}>
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-deep text-lg font-black text-fuel-lime shadow-sm">
-              {branding.logoDataUrl ? (
-                <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-lg object-contain p-1" />
-              ) : (
-                getBrandInitial(branding.businessName)
-              )}
+    <div className="min-h-screen bg-[#f7faf9]">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-gradient-to-b from-fuel-deep via-fuel-green to-[#064e3b] px-3 py-4 text-white shadow-lift lg:flex">
+        <button className="mb-6 flex items-center gap-3 rounded-xl px-2 py-2 text-left" onClick={() => setPage("dashboard")}>
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/12 text-lg font-black text-fuel-lime ring-1 ring-white/15">
+            {branding.logoDataUrl ? (
+              <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-xl object-contain p-1.5" />
+            ) : (
+              getBrandInitial(branding.businessName)
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-base font-black">{appTitle}</span>
+            <span className="text-xs font-semibold text-emerald-100">LocalOps Planner</span>
+          </span>
+        </button>
+
+        <nav className="space-y-1">
+          {desktopNav.map((item) => {
+            const Icon = item.icon;
+            const active = page === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setPage(item.id)}
+                className={`flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
+                  active ? "bg-white/16 text-white shadow-sm" : "text-emerald-50/90 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Icon size={18} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mt-auto rounded-xl border border-white/10 bg-white/10 p-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-fuel-green text-sm font-black ring-1 ring-white/20">
+              {String(currentUser.staffName || currentUser.username || "A").charAt(0).toUpperCase()}
             </span>
-            <span>
-              <h1 className="max-w-[130px] truncate text-xl font-black leading-none text-fuel-ink sm:max-w-sm">
-                {appTitle}
-              </h1>
-            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-black">{currentUser.staffName || currentUser.username}</p>
+              <p className="text-xs font-semibold capitalize text-emerald-100">{currentUser.role}</p>
+            </div>
+            <button onClick={logout} title="Log out" className="rounded-lg p-2 text-emerald-50 hover:bg-white/10">
+              <LogOut size={18} />
             </button>
-            <nav className="hidden items-center gap-1 lg:flex">
-              {visibleNav.map((item) => {
-                const Icon = item.icon;
-                const active = page === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setPage(item.id)}
-                    className={`inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition ${
-                      active ? "bg-fuel-green text-white shadow-sm" : "text-slate-600 hover:bg-fuel-mist hover:text-fuel-green"
-                    }`}
-                  >
-                    <Icon size={17} />
-                    {item.label}
-                  </button>
-                );
-              })}
-            </nav>
+          </div>
+        </div>
+      </aside>
+
+      <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl lg:ml-64">
+        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <button className="flex h-10 w-10 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green lg:hidden">
+              <Menu size={20} />
+            </button>
+            <button className="flex min-w-0 items-center gap-3 text-left lg:hidden" onClick={() => setPage("dashboard")}>
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-deep text-lg font-black text-fuel-lime shadow-sm">
+                {branding.logoDataUrl ? (
+                  <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-lg object-contain p-1" />
+                ) : (
+                  getBrandInitial(branding.businessName)
+                )}
+              </span>
+              <span>
+                <h1 className="max-w-[150px] truncate text-lg font-black leading-none text-fuel-ink sm:max-w-sm">{appTitle}</h1>
+              </span>
+            </button>
+            <div className="hidden lg:block">
+              <p className="text-sm font-black text-fuel-ink">{branding.businessName || "Your Business"}</p>
+              <p className="text-xs font-semibold text-slate-500">Rota, tasks and staff planning</p>
+            </div>
           </div>
           <div className="flex items-center justify-end gap-2">
             {isAdmin && (
@@ -258,7 +299,7 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:pt-5 lg:pb-8">
+      <main className="mx-auto max-w-[1500px] px-4 pb-28 pt-4 sm:pt-5 lg:ml-64 lg:pb-8">
         {page === "dashboard" && <Dashboard {...pageProps} />}
         {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}

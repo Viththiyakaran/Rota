@@ -153,6 +153,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
           </div>
           <DashboardRotaSummary
             activeStaff={staff.filter((person) => person.active)}
+            reminders={reminders}
             shifts={shifts}
             tasks={weekTasks}
             timeOff={timeOff}
@@ -336,7 +337,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
   );
 }
 
-function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek }) {
+function DashboardRotaSummary({ activeStaff, reminders, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek }) {
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
   const staffOnRota = new Set(visibleShifts.map((shift) => String(shift.staffId))).size;
   const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
@@ -351,15 +352,43 @@ function DashboardRotaSummary({ activeStaff, shifts, tasks, timeOff, ukRules, we
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryPill label="Working staff" value={`${staffOnRota}/${activeStaff.length}`} />
-        <SummaryPill label="Week shifts" value={visibleShifts.length} />
-        <SummaryPill label="Paid hours" value={formatHourTotal(totalHours)} />
-        {showDashboardWageCost ? (
-          <SummaryPill label="Est. wage cost" value={formatCurrency(estimatedWageCost)} />
-        ) : (
-          <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
-        )}
+      <div className="grid gap-4 xl:grid-cols-[1fr_0.75fr]">
+        <div className="rounded-xl border border-fuel-line bg-white p-4">
+          <h4 className="text-base font-extrabold text-fuel-ink">This Week Overview</h4>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryPill label="Total shifts" value={visibleShifts.length} />
+            <SummaryPill label="Paid hours" value={formatHourTotal(totalHours)} />
+            <SummaryPill label="Staff working" value={`${staffOnRota}/${activeStaff.length}`} />
+            {showDashboardWageCost ? (
+              <SummaryPill label="Est. wage cost" value={formatCurrency(estimatedWageCost)} />
+            ) : (
+              <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-fuel-line bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-base font-extrabold text-fuel-ink">Recent Notifications</h4>
+            <button type="button" className="text-sm font-bold text-fuel-green" onClick={onOpenWeek}>View rota</button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {reminders.slice(0, 3).map((reminder) => (
+              <div key={reminder.id} className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2">
+                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
+                  <Clock size={16} />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-fuel-ink">{reminder.staffName} shift reminder</p>
+                  <p className="text-xs font-medium text-slate-500">Starts at {formatTimeLabel(reminder.startTime)} on {formatDayLabel(reminder.shiftDate)}</p>
+                </div>
+              </div>
+            ))}
+            {reminders.length === 0 && (
+              <p className="rounded-lg bg-slate-50 px-3 py-4 text-sm font-semibold text-slate-500">No reminders upcoming.</p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
