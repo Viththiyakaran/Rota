@@ -42,6 +42,8 @@ export function Settings({ branding, onBrandingSaved }) {
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
   const [toast, setToast] = React.useState("");
+  const [confirmUkRulesSave, setConfirmUkRulesSave] = React.useState(false);
+  const [savingUkRules, setSavingUkRules] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [seeding, setSeeding] = React.useState(false);
 
@@ -132,18 +134,23 @@ export function Settings({ branding, onBrandingSaved }) {
 
   const saveUkRules = async (event) => {
     event.preventDefault();
-    const shouldSave = window.confirm("Save these UK Rota Rules?");
-    if (!shouldSave) return;
+    setConfirmUkRulesSave(true);
+  };
+
+  const confirmSaveUkRules = async () => {
+    setSavingUkRules(true);
     setError("");
     setMessage("");
     try {
       const saved = await api.updateUkRotaRules(ukRules);
       setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...saved });
       showSavedPopup("UK rota rules updated.");
-      window.alert("UK Rota Rules saved. Dashboard checks will use the latest settings.");
+      setConfirmUkRulesSave(false);
       loadAdminData();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSavingUkRules(false);
     }
   };
 
@@ -196,6 +203,43 @@ export function Settings({ branding, onBrandingSaved }) {
 
   return (
     <div className="space-y-5 pb-8">
+      {confirmUkRulesSave && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4">
+          <div className="w-full max-w-md rounded-xl border border-fuel-line bg-white p-5 text-fuel-ink shadow-lift">
+            <div className="flex items-start gap-3">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
+                <AlertTriangle size={22} />
+              </span>
+              <div>
+                <h3 className="text-xl font-black">Save UK Rota Rules?</h3>
+                <p className="mt-2 text-sm font-semibold text-slate-600">
+                  These optional checks will update dashboard warnings and planning summaries.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                className={softButton}
+                onClick={() => setConfirmUkRulesSave(false)}
+                disabled={savingUkRules}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={primaryButton}
+                onClick={confirmSaveUkRules}
+                disabled={savingUkRules}
+              >
+                <Save size={18} />
+                {savingUkRules ? "Saving..." : "Save Rules"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {toast && (
         <div className="fixed right-4 top-20 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-fuel-line bg-white p-4 text-fuel-ink shadow-lift" role="status" aria-live="polite">
           <div className="flex items-start gap-3">
@@ -213,7 +257,7 @@ export function Settings({ branding, onBrandingSaved }) {
               onClick={() => setToast("")}
               aria-label="Close saved message"
             >
-              ×
+              X
             </button>
           </div>
         </div>
@@ -343,8 +387,8 @@ export function Settings({ branding, onBrandingSaved }) {
               description="Warn when a shift is over the threshold and the break is too short."
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <NumberInput label="Threshold hours" value={ukRules.thresholdHours} onChange={(value) => updateUkRule("thresholdHours", value)} />
-                <NumberInput label="Minimum break mins" value={ukRules.minimumBreakMinutes} onChange={(value) => updateUkRule("minimumBreakMinutes", value)} />
+                <NumberInput disabled={!ukRules.warnShiftOver6HoursNoBreak} label="Threshold hours" value={ukRules.thresholdHours} onChange={(value) => updateUkRule("thresholdHours", value)} />
+                <NumberInput disabled={!ukRules.warnShiftOver6HoursNoBreak} label="Minimum break mins" value={ukRules.minimumBreakMinutes} onChange={(value) => updateUkRule("minimumBreakMinutes", value)} />
               </div>
             </RuleCard>
 
@@ -354,7 +398,7 @@ export function Settings({ branding, onBrandingSaved }) {
               title="Daily rest warning"
               description="Warn when the gap between two shifts is below the configured rest hours."
             >
-              <NumberInput label="Daily rest hours" value={ukRules.dailyRestHours} onChange={(value) => updateUkRule("dailyRestHours", value)} />
+              <NumberInput disabled={!ukRules.warnLessThan11HoursRest} label="Daily rest hours" value={ukRules.dailyRestHours} onChange={(value) => updateUkRule("dailyRestHours", value)} />
             </RuleCard>
 
             <RuleCard
@@ -363,7 +407,7 @@ export function Settings({ branding, onBrandingSaved }) {
               title="Weekly hours warning"
               description="Warn when a staff member's weekly paid hours are above the threshold."
             >
-              <NumberInput label="Weekly hours threshold" value={ukRules.weeklyHoursThreshold} onChange={(value) => updateUkRule("weeklyHoursThreshold", value)} />
+              <NumberInput disabled={!ukRules.warnHighWeeklyHours} label="Weekly hours threshold" value={ukRules.weeklyHoursThreshold} onChange={(value) => updateUkRule("weeklyHoursThreshold", value)} />
             </RuleCard>
 
             <RuleCard
@@ -373,7 +417,7 @@ export function Settings({ branding, onBrandingSaved }) {
               description="Prepare for hourly-rate checks when wage planning is enabled."
               helper="Check current rates on GOV.UK."
             >
-              <NumberInput label="Minimum hourly rate" step="0.01" value={ukRules.minimumHourlyRate} onChange={(value) => updateUkRule("minimumHourlyRate", value)} prefix="GBP" />
+              <NumberInput disabled={!ukRules.warnBelowMinimumWage} label="Minimum hourly rate" step="0.01" value={ukRules.minimumHourlyRate} onChange={(value) => updateUkRule("minimumHourlyRate", value)} prefix="GBP" />
             </RuleCard>
 
             <RuleCard
@@ -508,13 +552,15 @@ function SectionHeader({ icon, title, description }) {
 }
 
 function RuleCard({ checked, children, description, disabled = false, helper, icon, onChange, title }) {
+  const isOn = Boolean(checked);
+
   return (
     <div className={`rounded-lg border border-fuel-line bg-white p-4 ${disabled ? "opacity-60" : ""}`}>
-      <label className="flex cursor-pointer items-start gap-3">
+      <label className={`flex items-start gap-3 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}>
         <input
           type="checkbox"
           className="mt-1 h-5 w-5 accent-fuel-green"
-          checked={Boolean(checked)}
+          checked={isOn}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
         />
@@ -527,21 +573,27 @@ function RuleCard({ checked, children, description, disabled = false, helper, ic
           {helper && <span className="mt-2 block rounded-md bg-fuel-mist px-3 py-2 text-xs font-bold text-slate-600">{helper}</span>}
         </span>
       </label>
-      {children && <div className="mt-4 border-t border-fuel-line pt-4">{children}</div>}
+      {children && isOn && <div className="mt-4 border-t border-fuel-line pt-4">{children}</div>}
+      {children && !isOn && (
+        <div className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-xs font-bold text-slate-500">
+          This rule is off and will not affect dashboard warnings.
+        </div>
+      )}
     </div>
   );
 }
 
-function NumberInput({ label, onChange, prefix, step = "1", value }) {
+function NumberInput({ disabled = false, label, onChange, prefix, step = "1", value }) {
   return (
     <Field label={label}>
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center gap-2 ${disabled ? "opacity-50" : ""}`}>
         {prefix && <span className="rounded-md bg-fuel-mist px-3 py-3 text-sm font-black text-fuel-green">{prefix}</span>}
         <input
           type="number"
           min="0"
           step={step}
           className={inputClass}
+          disabled={disabled}
           value={value}
           onChange={(event) => onChange(Number(event.target.value))}
         />

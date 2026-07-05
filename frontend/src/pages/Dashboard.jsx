@@ -238,7 +238,17 @@ function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, ukRules, wo
           tone={hasAlerts ? "warning" : "good"}
         />
       </div>
-      <NeedsAttentionCard enabledRules={enabledRules} items={attentionItems} />
+      <div className="flex flex-wrap gap-2">
+        {enabledRules.length ? enabledRules.map((rule) => (
+          <span key={rule} className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-fuel-green">
+            {rule}
+          </span>
+        )) : (
+          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
+            UK rota checks off
+          </span>
+        )}
+      </div>
     </section>
   );
 }
@@ -257,45 +267,6 @@ function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) 
           <p className="mt-1 text-lg font-black text-fuel-ink">{value}</p>
           <p className="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{detail}</p>
         </div>
-      </div>
-    </Card>
-  );
-}
-
-function NeedsAttentionCard({ enabledRules, items }) {
-  return (
-    <Card className="p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-base font-black text-fuel-ink">Needs Attention</h3>
-          <p className="text-sm font-medium text-slate-600">Admin alerts for rota quality.</p>
-        </div>
-        <span className={`rounded-md px-2 py-1 text-xs font-bold ${items.length ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-fuel-green"}`}>
-          {items.length ? `${items.length} alerts` : "All good"}
-        </span>
-      </div>
-      {items.length ? (
-        <div className="space-y-2">
-          {items.slice(0, 5).map((item) => (
-            <div key={item} className="flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800">
-              <AlertTriangle className="mt-0.5 shrink-0" size={16} />
-              <span>{item}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="rounded-lg bg-emerald-50 px-3 py-4 text-sm font-bold text-fuel-green">All good today.</p>
-      )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {enabledRules.length ? enabledRules.map((rule) => (
-          <span key={rule} className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-fuel-green">
-            {rule}
-          </span>
-        )) : (
-          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
-            UK rota checks off
-          </span>
-        )}
       </div>
     </Card>
   );
@@ -614,7 +585,7 @@ function getEnabledUkRuleLabels(ukRules) {
   if (ukRules.warnShiftOver6HoursNoBreak) labels.push(`Break > ${ukRules.thresholdHours || 6}h`);
   if (ukRules.warnLessThan11HoursRest) labels.push(`${ukRules.dailyRestHours || 11}h daily rest`);
   if (ukRules.warnHighWeeklyHours) labels.push(`Weekly > ${ukRules.weeklyHoursThreshold || 48}h`);
-  if (ukRules.warnBelowMinimumWage) labels.push(`Min wage £${Number(ukRules.minimumHourlyRate || 0).toFixed(2)}`);
+  if (ukRules.warnBelowMinimumWage) labels.push(`Min wage GBP ${Number(ukRules.minimumHourlyRate || 0).toFixed(2)}`);
   if (ukRules.clockInEnabled) labels.push("Clock in/out");
   if (ukRules.locationCheckEnabled) labels.push("Location check");
   if (ukRules.wageCostEnabled) labels.push("Wage estimate");
