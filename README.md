@@ -1,6 +1,6 @@
-# FuelOps Rota
+# LocalOps Planner / FuelOps Rota
 
-FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for small UK businesses. It was originally built for a UK fuel station, but the branding can be changed from the admin settings so other SMEs can use it too.
+LocalOps Planner is a mobile-friendly rota, staff, time-off, task, calendar, and reminder app for small UK businesses. It was originally built as FuelOps Rota for a UK fuel station, but the business name, logo, opening hours, timezone, and rota rules can be changed from admin settings so other SMEs can use it too.
 
 ## Tech Stack
 
@@ -44,13 +44,14 @@ FuelOps Rota is a mobile-friendly rota, staff, time-off, and reminder app for sm
 
 Detailed documentation lives in the `docs/` folder:
 
+- [Complete Product Manual](docs/PRODUCT_MANUAL.md)
 - [Admin Guide](docs/ADMIN_GUIDE.md)
 - [Staff Guide](docs/STAFF_GUIDE.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
 - [API Reference](docs/API.md)
 - [Security And Operations](docs/SECURITY_AND_OPERATIONS.md)
 
-Use the README for quick setup. Use the docs folder for handover, deployment, and day-to-day operating instructions.
+Use the README for quick setup. Use the Complete Product Manual for handover, daily operation, deployment, security, Supabase, UK rota rules, and troubleshooting.
 
 ## UK Standards
 
@@ -159,7 +160,10 @@ Runs an end-to-end smoke test against a temporary SQLite database.
 
 ## Database
 
-The app uses SQLite.
+The app supports two database modes:
+
+- SQLite for local development and simple single-business installs.
+- Supabase/Postgres for production and future multi-tenant SaaS growth.
 
 Local default database:
 
@@ -174,6 +178,8 @@ Production recommended database path:
 ```
 
 On first startup, the backend creates the database tables and seeds sample staff, logins, and rota data if the database is empty.
+
+When `DATABASE_URL` is set, the app uses Postgres/Supabase instead of SQLite. Do not commit a real Supabase connection string into Git.
 
 ## First Login
 

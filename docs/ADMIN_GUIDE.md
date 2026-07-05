@@ -1,4 +1,4 @@
-# FuelOps Rota Admin Guide
+# LocalOps Planner Admin Guide
 
 This guide is for business owners, managers, and rota administrators.
 
@@ -182,4 +182,3 @@ Staff can:
 - Enable phone/browser push notifications.
 
 Push reminders are sent before shifts and at shift start when staff enable notifications.
-

@@ -1,4 +1,4 @@
-# FuelOps Rota Staff Guide
+# LocalOps Planner Staff Guide
 
 This guide is for staff users.
 
@@ -109,4 +109,3 @@ Keep this feed private.
 Open Account to change your password.
 
 Use a password that is not shared with other systems.
-

@@ -1,4 +1,4 @@
-# FuelOps Rota API Reference
+# LocalOps Planner API Reference
 
 Base URL:
 
@@ -260,4 +260,3 @@ done
 - `GET /api/audit`
 
 Admin only.
-

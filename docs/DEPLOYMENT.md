@@ -1,6 +1,6 @@
-# FuelOps Rota Deployment Guide
+# LocalOps Planner Deployment Guide
 
-FuelOps Rota is a React frontend with a Node/Express backend. It supports SQLite for local/simple installs and Supabase/Postgres for production by setting `DATABASE_URL`.
+LocalOps Planner is a React frontend with a Node/Express backend. It supports SQLite for local/simple installs and Supabase/Postgres for production by setting `DATABASE_URL`.
 
 ## Requirements
 

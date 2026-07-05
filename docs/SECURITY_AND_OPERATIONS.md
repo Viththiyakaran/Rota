@@ -1,4 +1,4 @@
-# Security And Operations
+# LocalOps Planner Security And Operations
 
 This document covers production security and operational checks.
 
