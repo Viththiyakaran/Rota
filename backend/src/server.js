@@ -136,6 +136,10 @@ app.get("/api", (_req, res) => {
       "POST /api/demo/seed",
       "GET /api/notifications",
       "POST /api/notifications/read-all",
+      "GET /api/attendance/status",
+      "GET /api/attendance",
+      "POST /api/attendance/clock-in",
+      "POST /api/attendance/clock-out",
       "GET /api/time-off",
       "POST /api/time-off",
       "PUT /api/time-off/:id",
@@ -532,6 +536,115 @@ app.post("/api/notifications/read-all", async (req, res, next) => {
       await run("UPDATE notifications SET readAt = CURRENT_TIMESTAMP WHERE readAt IS NULL");
     }
     res.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/attendance/status", async (req, res, next) => {
+  try {
+    const rules = await getUkRotaRules();
+    const staffId = req.user.role === "admin" ? Number(req.query.staffId || req.user.staffId || 0) : Number(req.user.staffId || 0);
+    if (!staffId) {
+      return res.json({ rules, enabled: Boolean(rules.clockInEnabled), openEntry: null, recentEntries: [] });
+    }
+
+    const openEntry = await getAttendanceOpenEntry(staffId);
+    const recentEntries = await listAttendanceEntries({ staffId, limit: 5 });
+    res.json({
+      rules,
+      enabled: Boolean(rules.clockInEnabled),
+      locationRequired: Boolean(rules.clockInEnabled && rules.locationCheckEnabled),
+      openEntry: normaliseAttendance(openEntry),
+      recentEntries: recentEntries.map(normaliseAttendance)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/attendance", requireAdmin, async (_req, res, next) => {
+  try {
+    const rows = await listAttendanceEntries({ limit: 80 });
+    res.json(rows.map(normaliseAttendance));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/attendance/clock-in", async (req, res, next) => {
+  try {
+    const rules = await getUkRotaRules();
+    if (!rules.clockInEnabled) return res.status(403).json({ error: "Clock In / Out is not enabled." });
+    if (!req.user.staffId) return res.status(400).json({ error: "This login is not linked to a staff profile." });
+
+    const location = readAttendanceLocation(req.body, Boolean(rules.locationCheckEnabled), "clock in");
+    const openEntry = await getAttendanceOpenEntry(req.user.staffId);
+    if (openEntry) return res.status(400).json({ error: "You are already clocked in." });
+
+    const shiftId = req.body.shiftId ? Number(req.body.shiftId) : null;
+    if (shiftId) {
+      const shift = await get("SELECT id, staffId FROM shifts WHERE id = ?", [shiftId]);
+      if (!shift || Number(shift.staffId) !== Number(req.user.staffId)) {
+        return res.status(400).json({ error: "Choose one of your own shifts to clock in." });
+      }
+    }
+
+    const now = new Date().toISOString();
+    const result = await run(
+      `INSERT INTO attendance
+        (staffId, shiftId, clockInAt, clockInLatitude, clockInLongitude, clockInLocationAccuracy, clockInLocationChecked)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.user.staffId,
+        shiftId,
+        now,
+        location.latitude,
+        location.longitude,
+        location.accuracy,
+        location.checked ? 1 : 0
+      ]
+    );
+    await addAudit(req.user.id, "clock_in", `${req.user.staffName || req.user.username} clocked in`);
+    const row = await getAttendanceEntry(result.id);
+    res.status(201).json(normaliseAttendance(row));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/attendance/clock-out", async (req, res, next) => {
+  try {
+    const rules = await getUkRotaRules();
+    if (!rules.clockInEnabled) return res.status(403).json({ error: "Clock In / Out is not enabled." });
+    if (!req.user.staffId) return res.status(400).json({ error: "This login is not linked to a staff profile." });
+
+    const openEntry = await getAttendanceOpenEntry(req.user.staffId);
+    if (!openEntry) return res.status(400).json({ error: "You are not clocked in." });
+    const location = readAttendanceLocation(req.body, Boolean(rules.locationCheckEnabled), "clock out");
+    const now = new Date().toISOString();
+
+    await run(
+      `UPDATE attendance
+       SET clockOutAt = ?,
+           clockOutLatitude = ?,
+           clockOutLongitude = ?,
+           clockOutLocationAccuracy = ?,
+           clockOutLocationChecked = ?,
+           updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        now,
+        location.latitude,
+        location.longitude,
+        location.accuracy,
+        location.checked ? 1 : 0,
+        openEntry.id
+      ]
+    );
+    await addAudit(req.user.id, "clock_out", `${req.user.staffName || req.user.username} clocked out`);
+    const row = await getAttendanceEntry(openEntry.id);
+    res.json(normaliseAttendance(row));
   } catch (error) {
     next(error);
   }
@@ -1203,9 +1316,10 @@ app.use((error, _req, res, _next) => {
     return res.status(400).json({ error: "Invalid JSON body." });
   }
 
-  console.error(error);
-  res.status(500).json({
-    error: "Internal server error",
+  const statusCode = Number(error.statusCode || error.status || 500);
+  if (statusCode >= 500) console.error(error);
+  res.status(statusCode).json({
+    error: statusCode >= 500 ? "Internal server error" : error.message,
     ...(process.env.NODE_ENV === "development" ? { message: error.message } : {})
   });
 });
@@ -1545,6 +1659,76 @@ function normaliseTask(row) {
     ...row,
     assignedStaffId: row.assignedStaffId || null,
     createdBy: row.createdBy || null
+  };
+}
+
+function normaliseAttendance(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    staffId: Number(row.staffId),
+    shiftId: row.shiftId ? Number(row.shiftId) : null,
+    clockInLocationChecked: Boolean(row.clockInLocationChecked),
+    clockOutLocationChecked: Boolean(row.clockOutLocationChecked)
+  };
+}
+
+function getAttendanceEntry(id) {
+  return get(
+    `SELECT attendance.*, staff.name AS staffName, shifts.shiftDate, shifts.startTime, shifts.endTime
+     FROM attendance
+     JOIN staff ON staff.id = attendance.staffId
+     LEFT JOIN shifts ON shifts.id = attendance.shiftId
+     WHERE attendance.id = ?`,
+    [id]
+  );
+}
+
+function getAttendanceOpenEntry(staffId) {
+  return get(
+    `SELECT attendance.*, staff.name AS staffName, shifts.shiftDate, shifts.startTime, shifts.endTime
+     FROM attendance
+     JOIN staff ON staff.id = attendance.staffId
+     LEFT JOIN shifts ON shifts.id = attendance.shiftId
+     WHERE attendance.staffId = ? AND attendance.clockOutAt IS NULL
+     ORDER BY attendance.clockInAt DESC
+     LIMIT 1`,
+    [staffId]
+  );
+}
+
+function listAttendanceEntries({ staffId = null, limit = 80 } = {}) {
+  const staffFilter = staffId ? "WHERE attendance.staffId = ?" : "";
+  const params = staffId ? [staffId, limit] : [limit];
+  return all(
+    `SELECT attendance.*, staff.name AS staffName, shifts.shiftDate, shifts.startTime, shifts.endTime
+     FROM attendance
+     JOIN staff ON staff.id = attendance.staffId
+     LEFT JOIN shifts ON shifts.id = attendance.shiftId
+     ${staffFilter}
+     ORDER BY attendance.clockInAt DESC
+     LIMIT ?`,
+    params
+  );
+}
+
+function readAttendanceLocation(body, required, actionLabel) {
+  const latitude = body.latitude === undefined || body.latitude === null || body.latitude === "" ? null : Number(body.latitude);
+  const longitude = body.longitude === undefined || body.longitude === null || body.longitude === "" ? null : Number(body.longitude);
+  const accuracy = body.accuracy === undefined || body.accuracy === null || body.accuracy === "" ? null : Number(body.accuracy);
+  const hasLocation = Number.isFinite(latitude) && Number.isFinite(longitude);
+
+  if (required && !hasLocation) {
+    const error = new Error(`Location permission is required to ${actionLabel}.`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  return {
+    latitude: hasLocation ? latitude : null,
+    longitude: hasLocation ? longitude : null,
+    accuracy: hasLocation && Number.isFinite(accuracy) ? accuracy : null,
+    checked: hasLocation
   };
 }
 

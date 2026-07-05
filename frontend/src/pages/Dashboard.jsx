@@ -27,12 +27,14 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [reminders, setReminders] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
   const [tasks, setTasks] = React.useState([]);
+  const [attendance, setAttendance] = React.useState([]);
   const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [dashboardWeekStart, setDashboardWeekStart] = React.useState(toDateInputValue(getMonday()));
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [settingsRefreshKey, setSettingsRefreshKey] = React.useState(0);
+  const isAdmin = currentUser?.role === "admin";
 
   React.useEffect(() => {
     const refreshDashboardSettings = () => setSettingsRefreshKey((value) => value + 1);
@@ -49,23 +51,24 @@ export function Dashboard({ goTo, currentUser, branding }) {
       api.reminders(),
       api.timeOff(),
       api.tasks(),
-      api.ukRotaRules()
+      api.ukRotaRules(),
+      isAdmin ? api.attendanceList() : Promise.resolve([])
     ])
-      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
         if (timeOffResult.status === "fulfilled") setTimeOff(timeOffResult.value);
         if (taskResult.status === "fulfilled") setTasks(taskResult.value);
         if (ukRulesResult.status === "fulfilled") setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...ukRulesResult.value });
-        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult].find((result) => result.status === "rejected");
+        if (attendanceResult.status === "fulfilled") setAttendance(attendanceResult.value);
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult].find((result) => result.status === "rejected");
         if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [dashboardWeekStart, settingsRefreshKey]);
+  }, [dashboardWeekStart, isAdmin, settingsRefreshKey]);
 
-  const isAdmin = currentUser?.role === "admin";
   const today = toDateInputValue(new Date());
   const weekStart = new Date(`${dashboardWeekStart}T00:00:00`);
   const weekDays = Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index)));
@@ -81,6 +84,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   };
   const attentionItems = getAttentionItems({ shifts, ukRules, weekDays });
   const workingNow = getWorkingNow(shifts, today);
+  const clockedInNow = ukRules.clockInEnabled ? attendance.filter((entry) => entry.clockInAt && !entry.clockOutAt) : [];
   const nextShift = getNextShiftToday(shifts, today);
   const tasksDueToday = tasks.filter((task) => task.status !== "done" && task.dueDate === today);
 
@@ -97,6 +101,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
       <Status loading={loading} error="">
         <TodayActionPlan
           attentionItems={attentionItems}
+          clockedInNow={clockedInNow}
           nextShift={nextShift}
           tasksDueToday={tasksDueToday}
           workingNow={workingNow}
@@ -194,10 +199,16 @@ function DashboardWelcome({ currentUser }) {
   );
 }
 
-function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow }) {
+function TodayActionPlan({ attentionItems, clockedInNow, nextShift, tasksDueToday, workingNow }) {
   const hasAlerts = attentionItems.length > 0;
-  const workingLabel = workingNow.length ? `${workingNow.length} staff` : "No one scheduled now";
+  const usingClockedIn = clockedInNow.length > 0;
+  const workingLabel = usingClockedIn ? `${clockedInNow.length} clocked in` : workingNow.length ? `${workingNow.length} staff` : "No one scheduled now";
   const nextShiftLabel = nextShift ? `${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today";
+  const firstWorkingDetail = usingClockedIn
+    ? `${clockedInNow[0].staffName} clocked in ${formatDateTime(clockedInNow[0].clockInAt)}`
+    : workingNow[0]
+      ? `${workingNow[0].staffName} ${formatShiftRange(workingNow[0].startTime, workingNow[0].endTime)}`
+      : "No one is currently clocked/scheduled in.";
 
   return (
     <section className="space-y-3">
@@ -210,7 +221,7 @@ function TodayActionPlan({ attentionItems, nextShift, tasksDueToday, workingNow 
           icon={Users}
           title="Working now"
           value={workingLabel}
-          detail={workingNow[0] ? `${workingNow[0].staffName} ${formatShiftRange(workingNow[0].startTime, workingNow[0].endTime)}` : "No one is currently clocked/scheduled in."}
+          detail={firstWorkingDetail}
         />
         <ActionMiniCard
           icon={Clock}
@@ -597,6 +608,14 @@ function formatTimeLabel(value) {
   const date = new Date();
   date.setHours(Number(hours), Number(minutes), 0, 0);
   return new Intl.DateTimeFormat("en-GB", { hour: "numeric", minute: "2-digit" }).format(date).toLowerCase();
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(value));
 }
 
 function formatHourTotal(value) {

@@ -93,7 +93,7 @@ function preparePostgresSql(sql) {
     .replace(/\?/g, () => `$${++index}`)
     .replace(/\bCURRENT_TIMESTAMP\b/g, "(CURRENT_TIMESTAMP::text)");
 
-  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks)\b/i.test(query)
+  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|attendance)\b/i.test(query)
     && !/\bRETURNING\b/i.test(query)
     && !/\bON\s+CONFLICT\b/i.test(query)) {
     query = `${query.trim()} RETURNING id`;
@@ -143,7 +143,17 @@ const pgKeyMap = new Map(Object.entries({
   openingstart: "openingStart",
   openingend: "openingEnd",
   businesstimezone: "businessTimezone",
-  logondataurl: "logoDataUrl"
+  logondataurl: "logoDataUrl",
+  clockinat: "clockInAt",
+  clockoutat: "clockOutAt",
+  clockinlatitude: "clockInLatitude",
+  clockinlongitude: "clockInLongitude",
+  clockoutlatitude: "clockOutLatitude",
+  clockoutlongitude: "clockOutLongitude",
+  clockinlocationaccuracy: "clockInLocationAccuracy",
+  clockoutlocationaccuracy: "clockOutLocationAccuracy",
+  clockinlocationchecked: "clockInLocationChecked",
+  clockoutlocationchecked: "clockOutLocationChecked"
 }));
 
 function cameliseRow(row) {
@@ -312,6 +322,28 @@ export async function initDb() {
       FOREIGN KEY (createdBy) REFERENCES users(id)
       )
     `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      staffId INTEGER NOT NULL,
+      shiftId INTEGER,
+      clockInAt TEXT NOT NULL,
+      clockOutAt TEXT,
+      clockInLatitude REAL,
+      clockInLongitude REAL,
+      clockOutLatitude REAL,
+      clockOutLongitude REAL,
+      clockInLocationAccuracy REAL,
+      clockOutLocationAccuracy REAL,
+      clockInLocationChecked INTEGER NOT NULL DEFAULT 0,
+      clockOutLocationChecked INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (staffId) REFERENCES staff(id),
+      FOREIGN KEY (shiftId) REFERENCES shifts(id)
+      )
+    `);
   }
 
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
@@ -337,6 +369,17 @@ export async function initDb() {
   await ensureTableColumn("sessions", "expiresAt", "TEXT");
   await ensureTableColumn("sessions", "createdAt", "TEXT");
   await ensureTableColumn("tasks", "dueDate", "TEXT");
+  await ensureTableColumn("attendance", "shiftId", "INTEGER");
+  await ensureTableColumn("attendance", "clockOutAt", "TEXT");
+  await ensureTableColumn("attendance", "clockInLatitude", "REAL");
+  await ensureTableColumn("attendance", "clockInLongitude", "REAL");
+  await ensureTableColumn("attendance", "clockOutLatitude", "REAL");
+  await ensureTableColumn("attendance", "clockOutLongitude", "REAL");
+  await ensureTableColumn("attendance", "clockInLocationAccuracy", "REAL");
+  await ensureTableColumn("attendance", "clockOutLocationAccuracy", "REAL");
+  await ensureTableColumn("attendance", "clockInLocationChecked", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn("attendance", "clockOutLocationChecked", "INTEGER NOT NULL DEFAULT 0");
+  await ensureTableColumn("attendance", "updatedAt", "TEXT");
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
   await ensureDefaultSetting("businessTimezone", DEFAULT_TIME_ZONE);
@@ -495,6 +538,26 @@ async function createPostgresSchema() {
       status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('backlog', 'todo', 'process', 'done')),
       assignedStaffId INTEGER REFERENCES staff(id),
       createdBy INTEGER REFERENCES users(id),
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS attendance (
+      id SERIAL PRIMARY KEY,
+      staffId INTEGER NOT NULL REFERENCES staff(id),
+      shiftId INTEGER REFERENCES shifts(id),
+      clockInAt TEXT NOT NULL,
+      clockOutAt TEXT,
+      clockInLatitude DOUBLE PRECISION,
+      clockInLongitude DOUBLE PRECISION,
+      clockOutLatitude DOUBLE PRECISION,
+      clockOutLongitude DOUBLE PRECISION,
+      clockInLocationAccuracy DOUBLE PRECISION,
+      clockOutLocationAccuracy DOUBLE PRECISION,
+      clockInLocationChecked INTEGER NOT NULL DEFAULT 0,
+      clockOutLocationChecked INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
