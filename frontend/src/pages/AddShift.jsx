@@ -50,6 +50,7 @@ export function AddShift({ onSaved }) {
 
   const selectedStaff = staff.find((person) => String(person.id) === String(form.staffId));
   const dynamicRanges = buildRanges(openingHours);
+  const selectedQuickRange = dynamicRanges.find((range) => form.startTime === range.startTime && form.endTime === range.endTime);
   const conflict = findConflict(form, availability, timeOff);
 
   const submit = async (event) => {
@@ -126,7 +127,15 @@ export function AddShift({ onSaved }) {
             <input type="date" required className={inputClass} value={form.shiftDate} onChange={(e) => setForm({ ...form, shiftDate: e.target.value })} />
           </Field>
           <div className="rounded-md border border-fuel-line bg-fuel-mist p-3">
-            <p className="mb-3 text-sm font-black text-fuel-ink">Hour range</p>
+            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-sm font-black text-fuel-ink">Hour range</p>
+                <p className="text-xs font-semibold text-slate-500">Use a quick range or enter a different start/end time.</p>
+              </div>
+              <Pill tone={selectedQuickRange ? "green" : "amber"}>
+                {selectedQuickRange ? selectedQuickRange.label : "Custom time"}
+              </Pill>
+            </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {dynamicRanges.map((range) => {
                 const isSelected = form.startTime === range.startTime && form.endTime === range.endTime;
@@ -145,6 +154,26 @@ export function AddShift({ onSaved }) {
                   </button>
                 );
               })}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <Field label="Custom start">
+                <input
+                  type="time"
+                  required
+                  className={inputClass}
+                  value={form.startTime}
+                  onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                />
+              </Field>
+              <Field label="Custom end">
+                <input
+                  type="time"
+                  required
+                  className={inputClass}
+                  value={form.endTime}
+                  onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                />
+              </Field>
             </div>
           </div>
           <Field label="Notes">
