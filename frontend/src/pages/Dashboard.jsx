@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Info, Layers, ListChecks, PlusCircle, Printer, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Info, Layers, ListChecks, PlusCircle, Printer, Sparkles, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -158,6 +158,8 @@ export function Dashboard({ goTo, currentUser, branding }) {
           </div>
           <DashboardRotaSummary
             activeStaff={staff.filter((person) => person.active)}
+            attendance={attendance}
+            clockInEnabled={ukRules.clockInEnabled}
             reminders={reminders}
             shifts={shifts}
             tasks={weekTasks}
@@ -348,7 +350,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
   );
 }
 
-function DashboardRotaSummary({ activeStaff, reminders, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek }) {
+function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminders, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek }) {
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
   const staffOnRota = new Set(visibleShifts.map((shift) => String(shift.staffId))).size;
   const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
@@ -376,6 +378,12 @@ function DashboardRotaSummary({ activeStaff, reminders, shifts, tasks, timeOff, 
               <SummaryPill label="Notes / time off" value={`${noteCount} / ${approvedTimeOffCount}`} />
             )}
           </div>
+          <WorkedHoursGraph
+            attendance={attendance}
+            clockInEnabled={clockInEnabled}
+            shifts={visibleShifts}
+            weekDays={weekDays}
+          />
         </div>
 
         <div className="rounded-xl border border-fuel-line bg-white p-4">
@@ -475,6 +483,83 @@ function SummaryPill({ label, value }) {
     <div className="rounded-md border border-fuel-line bg-fuel-mist px-3 py-2">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-xl font-black text-fuel-ink">{value}</p>
+    </div>
+  );
+}
+
+function WorkedHoursGraph({ attendance, clockInEnabled, shifts, weekDays }) {
+  if (!clockInEnabled) {
+    return (
+      <div className="mt-4 rounded-lg border border-dashed border-fuel-line bg-slate-50 px-3 py-3">
+        <div className="flex items-start gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-slate-500">
+            <BarChart3 size={18} />
+          </span>
+          <div>
+            <h5 className="text-sm font-black text-fuel-ink">Worked hours graph</h5>
+            <p className="mt-1 text-xs font-semibold text-slate-500">
+              Enable Clock In / Out in Settings to compare actual worked hours with the rota.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const graph = buildWorkedHoursGraph({ attendance, shifts, weekDays });
+  const hasAttendance = graph.rows.some((row) => row.workedHours > 0);
+  const maxHours = Math.max(1, ...graph.rows.flatMap((row) => [row.plannedHours, row.workedHours]));
+
+  return (
+    <div className="mt-4 rounded-lg border border-fuel-line bg-white px-3 py-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
+            <BarChart3 size={18} />
+          </span>
+          <div>
+            <h5 className="text-sm font-black text-fuel-ink">Worked hours</h5>
+            <p className="text-xs font-semibold text-slate-500">Clocked hours vs planned rota hours</p>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs font-black">
+          <span className="rounded-md bg-fuel-mist px-2 py-1 text-fuel-green">
+            Worked {formatHourTotal(graph.totalWorked)}h
+          </span>
+          <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-600">
+            Planned {formatHourTotal(graph.totalPlanned)}h
+          </span>
+          <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-600">
+            {graph.clockedInNow} clocked in
+          </span>
+        </div>
+      </div>
+
+      {hasAttendance ? (
+        <div className="mt-3 space-y-2">
+          {graph.rows.map((row) => {
+            const plannedWidth = `${Math.max(4, (row.plannedHours / maxHours) * 100)}%`;
+            const workedWidth = `${Math.max(row.workedHours > 0 ? 4 : 0, (row.workedHours / maxHours) * 100)}%`;
+
+            return (
+              <div key={row.date} className="grid grid-cols-[3.25rem_1fr_auto] items-center gap-2 text-xs">
+                <span className="font-black text-fuel-ink">{row.label}</span>
+                <div className="relative h-7 overflow-hidden rounded-md bg-slate-100">
+                  <div className="absolute inset-y-0 left-0 rounded-md bg-fuel-mist" style={{ width: plannedWidth }} />
+                  <div className="absolute inset-y-0 left-0 rounded-md bg-fuel-green" style={{ width: workedWidth }} />
+                </div>
+                <span className="min-w-[5.25rem] text-right font-black text-slate-600">
+                  {formatHourTotal(row.workedHours)} / {formatHourTotal(row.plannedHours)}h
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded-md bg-slate-50 px-3 py-3 text-sm font-semibold text-slate-500">
+          No clock-in records for this week yet.
+        </p>
+      )}
     </div>
   );
 }
@@ -601,6 +686,64 @@ function shiftEndDateTime(dateString, startTime, endTime) {
   const end = shiftDateTime(dateString, endTime);
   if (end <= start) end.setDate(end.getDate() + 1);
   return end;
+}
+
+function buildWorkedHoursGraph({ attendance, shifts, weekDays }) {
+  const plannedByDay = new Map(weekDays.map((day) => [day, 0]));
+  const workedByDay = new Map(weekDays.map((day) => [day, 0]));
+  const now = new Date();
+
+  shifts.forEach((shift) => {
+    if (!plannedByDay.has(shift.shiftDate)) return;
+    plannedByDay.set(shift.shiftDate, plannedByDay.get(shift.shiftDate) + Number(shift.paidHours || shift.totalHours || 0));
+  });
+
+  attendance.forEach((entry) => {
+    const entryDate = attendanceDate(entry);
+    if (!workedByDay.has(entryDate)) return;
+
+    const clockIn = safeDate(entry.clockInAt);
+    const clockOut = entry.clockOutAt ? safeDate(entry.clockOutAt) : now;
+    const workedHours = diffHours(clockIn, clockOut);
+    if (workedHours <= 0) return;
+
+    workedByDay.set(entryDate, workedByDay.get(entryDate) + workedHours);
+  });
+
+  const rows = weekDays.map((day) => ({
+    date: day,
+    label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${day}T00:00:00`)),
+    plannedHours: roundHours(plannedByDay.get(day) || 0),
+    workedHours: roundHours(workedByDay.get(day) || 0)
+  }));
+
+  return {
+    clockedInNow: attendance.filter((entry) => entry.clockInAt && !entry.clockOutAt).length,
+    rows,
+    totalPlanned: roundHours(rows.reduce((sum, row) => sum + row.plannedHours, 0)),
+    totalWorked: roundHours(rows.reduce((sum, row) => sum + row.workedHours, 0))
+  };
+}
+
+function attendanceDate(entry) {
+  if (entry.shiftDate) return entry.shiftDate;
+  const clockIn = safeDate(entry.clockInAt);
+  return clockIn ? toDateInputValue(clockIn) : "";
+}
+
+function safeDate(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function diffHours(start, end) {
+  if (!start || !end || end <= start) return 0;
+  return (end.getTime() - start.getTime()) / 3600000;
+}
+
+function roundHours(value) {
+  return Math.round(Number(value || 0) * 100) / 100;
 }
 
 function formatTimeLabel(value) {
