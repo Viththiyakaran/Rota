@@ -26,6 +26,14 @@ export const DEFAULT_UK_ROTA_RULES = {
   wageCostEnabled: false,
   showWageCostOnDashboard: false
 };
+export const DEFAULT_SHIFT_RANGE_PRESETS = [
+  { label: "Morning", startTime: "05:30", endTime: "14:00" },
+  { label: "Day", startTime: "05:30", endTime: "19:00" },
+  { label: "Full day", startTime: "05:30", endTime: "22:00" },
+  { label: "Afternoon", startTime: "13:00", endTime: "22:00" },
+  { label: "Late", startTime: "14:00", endTime: "22:00" },
+  { label: "Evening", startTime: "18:00", endTime: "22:00" }
+];
 export const db = isPostgres
   ? new pg.Pool({
       connectionString: databaseUrl,
@@ -383,6 +391,7 @@ export async function initDb() {
   await ensureDefaultSetting("openingStart", "05:30");
   await ensureDefaultSetting("openingEnd", "22:00");
   await ensureDefaultSetting("businessTimezone", DEFAULT_TIME_ZONE);
+  await ensureDefaultSetting("shiftRangePresets", JSON.stringify(DEFAULT_SHIFT_RANGE_PRESETS));
   await ensureDefaultSetting("ukRotaRules", JSON.stringify(DEFAULT_UK_ROTA_RULES));
   await replaceLegacySeedEmails();
 
@@ -898,12 +907,13 @@ export async function getBranding() {
 }
 
 export async function getOpeningHours() {
-  const rows = await all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["openingStart", "openingEnd", "businessTimezone"]);
+  const rows = await all("SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)", ["openingStart", "openingEnd", "businessTimezone", "shiftRangePresets"]);
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
     openingStart: values.openingStart || "05:30",
     openingEnd: values.openingEnd || "22:00",
-    businessTimezone: validTimeZone(values.businessTimezone) ? values.businessTimezone : DEFAULT_TIME_ZONE
+    businessTimezone: validTimeZone(values.businessTimezone) ? values.businessTimezone : DEFAULT_TIME_ZONE,
+    shiftRangePresets: normaliseShiftRangePresets(values.shiftRangePresets)
   };
 }
 
@@ -911,7 +921,7 @@ export function getBusinessTimezone() {
   return businessTimezoneCache;
 }
 
-export async function updateOpeningHours({ openingStart, openingEnd, businessTimezone }) {
+export async function updateOpeningHours({ openingStart, openingEnd, businessTimezone, shiftRangePresets }) {
   await run(
     `INSERT INTO settings (key, value)
      VALUES (?, ?)
@@ -934,7 +944,45 @@ export async function updateOpeningHours({ openingStart, openingEnd, businessTim
     businessTimezoneCache = validTimeZone(businessTimezone) ? businessTimezone : DEFAULT_TIME_ZONE;
     await refreshFutureReminderTimes();
   }
+  if (shiftRangePresets !== undefined) {
+    await run(
+      `INSERT INTO settings (key, value)
+       VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ["shiftRangePresets", JSON.stringify(normaliseShiftRangePresets(shiftRangePresets))]
+    );
+  }
   return getOpeningHours();
+}
+
+function normaliseShiftRangePresets(value) {
+  const parsed = typeof value === "string" ? parseJsonSetting(value) : value;
+  const source = Array.isArray(parsed) ? parsed : DEFAULT_SHIFT_RANGE_PRESETS;
+  const seen = new Set();
+  const ranges = source
+    .map((range) => ({
+      label: String(range?.label || "").trim(),
+      startTime: String(range?.startTime || "").trim(),
+      endTime: String(range?.endTime || "").trim()
+    }))
+    .filter((range) => isTimeValue(range.startTime) && isTimeValue(range.endTime))
+    .map((range) => ({
+      ...range,
+      label: range.label || `${range.startTime}-${range.endTime}`
+    }))
+    .filter((range) => {
+      const key = `${range.startTime}-${range.endTime}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 12);
+
+  return ranges.length ? ranges : DEFAULT_SHIFT_RANGE_PRESETS;
+}
+
+function isTimeValue(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
 }
 
 export async function getUkRotaRules() {

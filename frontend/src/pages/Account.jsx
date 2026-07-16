@@ -19,7 +19,6 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
   const [showPasswords, setShowPasswords] = React.useState(false);
 
   React.useEffect(() => {
-    if (!currentUser.staffId) return;
     if (!canUsePushNotifications()) return;
     api.pushStatus()
       .then(setPushStatus)
@@ -129,7 +128,7 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
           </button>
         </form>
       </Card>
-      {!forced && currentUser.staffId && (
+      {!forced && (
         <>
           <Card>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -146,7 +145,7 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
               </div>
               <button
                 className={`${primaryButton} disabled:bg-slate-300`}
-                disabled={savingPush || !canUsePushNotifications()}
+                disabled={savingPush || !canUsePushNotifications() || !currentUser.staffId || pushStatus.available === false}
                 onClick={enablePush}
               >
                 <Bell size={18} />
@@ -160,9 +159,12 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
             )}
             {pushMessage && <p className="mt-3 rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{pushMessage}</p>}
             {pushError && <p className="mt-3 rounded-md bg-red-50 p-3 font-bold text-red-700">{pushError}</p>}
+            {pushStatus.reason && (
+              <p className="mt-3 rounded-md bg-amber-50 p-3 text-sm font-bold text-amber-800">{pushStatus.reason}</p>
+            )}
           </Card>
 
-          <Card>
+          {currentUser.staffId && <Card>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <h3 className="text-xl font-black">Calendar Sync</h3>
@@ -207,7 +209,7 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
             <p className="mt-3 text-sm font-bold text-slate-500">
               Keep this link private. It lets a calendar app read your upcoming shifts.
             </p>
-          </Card>
+          </Card>}
         </>
       )}
     </div>

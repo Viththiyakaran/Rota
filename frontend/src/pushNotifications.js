@@ -27,14 +27,31 @@ export async function enablePushNotifications() {
 
   const registration = await navigator.serviceWorker.ready;
   const existing = await registration.pushManager.getSubscription();
-  const subscription = existing || await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey)
-  });
+  const applicationServerKey = urlBase64ToUint8Array(publicKey);
+  const subscription = existing && subscriptionUsesKey(existing, publicKey)
+    ? existing
+    : await resubscribe(registration, existing, applicationServerKey);
 
   await api.subscribePush(subscription.toJSON());
-  await api.testPush();
+  const testResult = await api.testPush();
+  if (testResult?.sent === 0 && testResult?.subscriptions === 0) {
+    throw new Error("No device subscription was saved. Please try enabling notifications again.");
+  }
+  if (testResult?.sent === 0 && testResult?.failed > 0) {
+    throw new Error("The test notification could not be delivered. Browser notification permission or device push service may be blocking it.");
+  }
   return true;
+}
+
+async function resubscribe(registration, existing, applicationServerKey) {
+  if (existing) {
+    await existing.unsubscribe().catch(() => {});
+  }
+
+  return registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey
+  });
 }
 
 function urlBase64ToUint8Array(base64String) {
@@ -48,4 +65,19 @@ function urlBase64ToUint8Array(base64String) {
   }
 
   return outputArray;
+}
+
+function subscriptionUsesKey(subscription, publicKey) {
+  const existingKey = subscription.options?.applicationServerKey;
+  if (!existingKey) return true;
+  return arrayBufferToBase64Url(existingKey) === publicKey;
+}
+
+function arrayBufferToBase64Url(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return window.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
+import { buildClockPayload, findClockPromptShift, formatClockTime, shouldPromptClockOut } from "./attendanceClock.js";
 import { AddShift } from "./pages/AddShift.jsx";
 import { AddStaff } from "./pages/AddStaff.jsx";
 import { Account } from "./pages/Account.jsx";
@@ -40,6 +41,8 @@ function App() {
   const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "" });
   const [checkingSession, setCheckingSession] = React.useState(true);
   const [popupNotification, setPopupNotification] = React.useState(null);
+  const [clockPrompt, setClockPrompt] = React.useState(null);
+  const [dismissedClockPrompt, setDismissedClockPrompt] = React.useState(null);
   const isAdmin = currentUser?.role === "admin";
   const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && !item.hidden);
   const desktopNav = navItems.filter((item) =>
@@ -115,6 +118,58 @@ function App() {
     return () => window.clearInterval(timer);
   }, [currentUser]);
 
+  React.useEffect(() => {
+    if (!currentUser?.staffId || currentUser.mustChangePassword) {
+      setClockPrompt(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const checkClockPrompt = () => {
+      Promise.allSettled([api.myShifts(), api.attendanceStatus()])
+        .then(([shiftResult, attendanceResult]) => {
+          if (cancelled || shiftResult.status !== "fulfilled" || attendanceResult.status !== "fulfilled") return;
+          const shifts = shiftResult.value || [];
+          const attendance = attendanceResult.value || {};
+          if (!attendance.enabled) {
+            setClockPrompt(null);
+            return;
+          }
+
+          const openEntry = attendance.openEntry;
+          if (openEntry && shouldPromptClockOut(openEntry)) {
+            const promptKey = `out:${openEntry.id}:${openEntry.clockInAt}`;
+            if (dismissedClockPrompt !== promptKey) {
+              setClockPrompt({ mode: "out", promptKey, attendance, shifts, shift: openEntry, saving: false, message: "", error: "" });
+            }
+            return;
+          }
+
+          if (!openEntry) {
+            const shift = findClockPromptShift(shifts);
+            if (shift) {
+              const promptKey = `in:${shift.id}:${shift.shiftDate}:${shift.startTime}`;
+              if (dismissedClockPrompt !== promptKey) {
+                setClockPrompt({ mode: "in", promptKey, attendance, shifts, shift, saving: false, message: "", error: "" });
+              }
+              return;
+            }
+          }
+
+          setClockPrompt(null);
+        })
+        .catch(() => {});
+    };
+
+    checkClockPrompt();
+    const timer = window.setInterval(checkClockPrompt, 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [currentUser, dismissedClockPrompt]);
+
   const dismissPopupNotification = () => {
     if (!currentUser || !popupNotification) return;
     const dismissedKey = `fuelopsDismissedNotifications:${currentUser.id}`;
@@ -122,6 +177,30 @@ function App() {
     dismissed.add(String(popupNotification.id));
     localStorage.setItem(dismissedKey, JSON.stringify([...dismissed].slice(-80)));
     setPopupNotification(null);
+  };
+
+  const dismissClockPrompt = () => {
+    if (clockPrompt?.promptKey) setDismissedClockPrompt(clockPrompt.promptKey);
+    setClockPrompt(null);
+  };
+
+  const handleClockPromptAction = async () => {
+    if (!clockPrompt) return;
+    setClockPrompt((current) => current ? { ...current, saving: true, error: "", message: "" } : current);
+    try {
+      const payload = await buildClockPayload(clockPrompt.attendance?.locationRequired, clockPrompt.shifts || []);
+      const saved = clockPrompt.mode === "in" ? await api.clockIn(payload) : await api.clockOut(payload);
+      const message = clockPrompt.mode === "in"
+        ? `Clocked in at ${formatClockTime(saved.clockInAt)}.`
+        : `Clocked out at ${formatClockTime(saved.clockOutAt)}.`;
+      setClockPrompt((current) => current ? { ...current, saving: false, message } : current);
+      window.setTimeout(() => {
+        setClockPrompt(null);
+        setDismissedClockPrompt(null);
+      }, 1800);
+    } catch (error) {
+      setClockPrompt((current) => current ? { ...current, saving: false, error: error.message } : current);
+    }
   };
 
   const logout = async () => {
@@ -346,6 +425,15 @@ function App() {
         </div>
       )}
 
+      {clockPrompt && (
+        <ClockPrompt
+          prompt={clockPrompt}
+          onAction={handleClockPromptAction}
+          onClose={dismissClockPrompt}
+          onOpenShifts={() => setPage("my-shifts")}
+        />
+      )}
+
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/90 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 py-2 sm:gap-2">
           {visibleNav.map((item) => {
@@ -367,6 +455,62 @@ function App() {
           })}
         </div>
       </nav>
+    </div>
+  );
+}
+
+function ClockPrompt({ prompt, onAction, onClose, onOpenShifts }) {
+  const isClockOut = prompt.mode === "out";
+  const shift = prompt.shift || {};
+  const title = isClockOut ? "Time to clock out" : "Time to clock in";
+  const body = isClockOut
+    ? `Your ${shift.startTime || ""}-${shift.endTime || ""} shift has finished.`
+    : `Your shift starts at ${shift.startTime || ""}.`;
+
+  return (
+    <div className="fixed bottom-24 left-3 z-40 w-[calc(100vw-1.5rem)] max-w-sm rounded-xl border border-fuel-line bg-white p-4 text-fuel-ink shadow-lift sm:bottom-6 sm:left-6">
+      <div className="flex gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-lime">
+          <Clock size={22} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-fuel-green">Clock In / Out</p>
+          <p className="mt-1 text-lg font-black">{title}</p>
+          <p className="mt-1 text-sm font-bold text-slate-700">{body}</p>
+          {shift.notes && <p className="mt-2 rounded-md bg-fuel-mist px-2 py-1 text-xs font-bold text-slate-700">{shift.notes}</p>}
+          {prompt.attendance?.locationRequired && (
+            <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs font-bold text-amber-800">
+              Location permission is required when you tap {isClockOut ? "Clock Out" : "Clock In"}.
+            </p>
+          )}
+          {prompt.message && <p className="mt-2 rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-fuel-green">{prompt.message}</p>}
+          {prompt.error && <p className="mt-2 rounded-md bg-red-50 px-2 py-1 text-xs font-bold text-red-700">{prompt.error}</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-md bg-fuel-green px-3 py-2 text-sm font-black text-white disabled:bg-slate-300"
+              disabled={prompt.saving}
+              onClick={onAction}
+            >
+              {prompt.saving ? "Saving..." : isClockOut ? "Clock Out" : "Clock In"}
+            </button>
+            <button
+              type="button"
+              className="rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green"
+              onClick={onOpenShifts}
+            >
+              My Shifts
+            </button>
+          </div>
+        </div>
+        <button
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-fuel-mist text-fuel-green hover:bg-fuel-line"
+          onClick={onClose}
+          title="Close clock reminder"
+        >
+          <X size={18} />
+        </button>
+      </div>
     </div>
   );
 }

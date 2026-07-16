@@ -390,11 +390,11 @@ app.get("/api/settings/opening-hours", async (_req, res, next) => {
 
 app.put("/api/settings/opening-hours", requireAdmin, async (req, res, next) => {
   try {
-    const { openingStart, openingEnd, businessTimezone } = req.body;
+    const { openingStart, openingEnd, businessTimezone, shiftRangePresets } = req.body;
     if (!isTime(openingStart) || !isTime(openingEnd)) return res.status(400).json({ error: "Opening hours must be valid times." });
     if (businessTimezone !== undefined && !validTimeZone(businessTimezone)) return res.status(400).json({ error: "Timezone must be valid." });
-    const saved = await updateOpeningHours({ openingStart, openingEnd, businessTimezone });
-    await addAudit(req.user.id, "update_opening_hours", `${openingStart}-${openingEnd} ${saved.businessTimezone}`);
+    const saved = await updateOpeningHours({ openingStart, openingEnd, businessTimezone, shiftRangePresets });
+    await addAudit(req.user.id, "update_opening_hours", `${openingStart}-${openingEnd} ${saved.businessTimezone} with ${saved.shiftRangePresets.length} shift ranges`);
     res.json(saved);
   } catch (error) {
     next(error);
@@ -761,9 +761,24 @@ app.get("/api/push/public-key", async (_req, res, next) => {
 
 app.get("/api/push/status", async (req, res, next) => {
   try {
-    if (!req.user.staffId) return res.json({ enabled: false, subscriptions: 0, available: pushConfigured });
+    if (!pushConfigured) {
+      return res.json({
+        enabled: false,
+        subscriptions: 0,
+        available: false,
+        reason: "Push notifications are not configured on the server."
+      });
+    }
+    if (!req.user.staffId) {
+      return res.json({
+        enabled: false,
+        subscriptions: 0,
+        available: true,
+        reason: "This login is not linked to a staff member. Push reminders are sent to staff logins."
+      });
+    }
     const count = await get("SELECT COUNT(*) AS count FROM pushSubscriptions WHERE staffId = ?", [req.user.staffId]);
-    res.json({ enabled: Number(count.count || 0) > 0, subscriptions: Number(count.count || 0), available: pushConfigured });
+    res.json({ enabled: Number(count.count || 0) > 0, subscriptions: Number(count.count || 0), available: true });
   } catch (error) {
     next(error);
   }
@@ -800,12 +815,12 @@ app.post("/api/push/subscribe", async (req, res, next) => {
 app.post("/api/push/test", async (req, res, next) => {
   try {
     if (!req.user.staffId) return res.status(400).json({ error: "Only staff-linked users can test push notifications." });
-    await sendPushToStaff(req.user.staffId, {
+    const result = await sendPushToStaff(req.user.staffId, {
       title: "Notifications enabled",
       message: "You will receive rota reminders on this device.",
       type: "push_test"
     });
-    res.json({ ok: true });
+    res.json({ ok: result.sent > 0, ...result });
   } catch (error) {
     next(error);
   }
@@ -1509,8 +1524,10 @@ async function getPushPublicKey() {
 }
 
 async function sendPushToStaff(staffId, { title, message, type = "rota_update", shiftId = null, timeOffRequestId = null } = {}) {
-  if (!pushConfigured || !staffId) return;
+  const result = { subscriptions: 0, sent: 0, failed: 0, removed: 0 };
+  if (!pushConfigured || !staffId) return result;
   const subscriptions = await all("SELECT * FROM pushSubscriptions WHERE staffId = ?", [staffId]);
+  result.subscriptions = subscriptions.length;
   const payload = JSON.stringify({
     title: title || "Rota notification",
     body: message || "You have a rota update.",
@@ -1532,14 +1549,18 @@ async function sendPushToStaff(staffId, { title, message, type = "rota_update", 
 
     try {
       await webpush.sendNotification(subscription, payload);
+      result.sent += 1;
     } catch (error) {
       if (error.statusCode === 404 || error.statusCode === 410) {
         await run("DELETE FROM pushSubscriptions WHERE id = ?", [row.id]);
+        result.removed += 1;
         return;
       }
+      result.failed += 1;
       console.error("Push send failed", error.statusCode || "", error.message);
     }
   }));
+  return result;
 }
 
 function startReminderPushScheduler() {

@@ -1,11 +1,12 @@
 import React from "react";
 import { CalendarDays, Clock, Download, ExternalLink, LocateFixed, MapPin } from "lucide-react";
 import { api } from "../api.js";
+import { buildClockPayload, formatClockTime } from "../attendanceClock.js";
 import { googleCalendarUrl, phoneCalendarDataUrl, phoneCalendarFilename } from "../calendarLinks.js";
 import { Card } from "../components/Card.jsx";
 import { PageHeader, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
-import { formatDayLabel, formatShiftRange, toDateInputValue } from "../dateUtils.js";
+import { formatDayLabel, formatShiftRange } from "../dateUtils.js";
 
 export function MyShifts({ branding = {} }) {
   const [shifts, setShifts] = React.useState([]);
@@ -163,62 +164,4 @@ function AttendancePanel({ attendance, error, loading, message, onClockIn, onClo
       {error && <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm font-bold text-red-700">{error}</p>}
     </Card>
   );
-}
-
-async function buildClockPayload(locationRequired, shifts) {
-  const shift = pickClockShift(shifts);
-  const location = locationRequired ? await getBrowserLocation() : {};
-  return {
-    shiftId: shift?.id || null,
-    ...location
-  };
-}
-
-function pickClockShift(shifts) {
-  const today = toDateInputValue(new Date());
-  const currentMinutes = new Date().getHours() * 60 + new Date().getMinutes();
-  const todayShifts = shifts
-    .filter((shift) => shift.shiftDate === today)
-    .sort((left, right) => timeToMinutes(left.startTime) - timeToMinutes(right.startTime));
-  return todayShifts.find((shift) => isTimeInShift(currentMinutes, shift.startTime, shift.endTime)) || todayShifts[0] || null;
-}
-
-function getBrowserLocation() {
-  if (!navigator.geolocation) {
-    return Promise.reject(new Error("This browser does not support location permission."));
-  }
-
-  return new Promise((resolve, reject) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => resolve({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        accuracy: position.coords.accuracy
-      }),
-      () => reject(new Error("Please allow location permission to clock in or out.")),
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
-  });
-}
-
-function formatClockTime(value) {
-  if (!value) return "";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit"
-  }).format(new Date(value));
-}
-
-function timeToMinutes(value) {
-  const [hours = 0, minutes = 0] = String(value || "00:00").split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function isTimeInShift(currentMinutes, startTime, endTime) {
-  const start = timeToMinutes(startTime);
-  const end = timeToMinutes(endTime);
-  if (end <= start) return currentMinutes >= start || currentMinutes < end;
-  return currentMinutes >= start && currentMinutes < end;
 }

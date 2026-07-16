@@ -5,18 +5,18 @@ import { Field, inputClass } from "../components/Field.jsx";
 import { PageHeader, Pill, primaryButton } from "../components/PageHeader.jsx";
 import { toDateInputValue } from "../dateUtils.js";
 
-const quickRanges = [
-  { label: "5.30am-2pm", startTime: "05:30", endTime: "14:00" },
-  { label: "5.30am-7pm", startTime: "05:30", endTime: "19:00" },
-  { label: "5.30am-10pm", startTime: "05:30", endTime: "22:00" },
-  { label: "1pm-10pm", startTime: "13:00", endTime: "22:00" },
-  { label: "2pm-10pm", startTime: "14:00", endTime: "22:00" },
-  { label: "6pm-10pm", startTime: "18:00", endTime: "22:00" }
+const DEFAULT_SHIFT_RANGE_PRESETS = [
+  { label: "Morning", startTime: "05:30", endTime: "14:00" },
+  { label: "Day", startTime: "05:30", endTime: "19:00" },
+  { label: "Full day", startTime: "05:30", endTime: "22:00" },
+  { label: "Afternoon", startTime: "13:00", endTime: "22:00" },
+  { label: "Late", startTime: "14:00", endTime: "22:00" },
+  { label: "Evening", startTime: "18:00", endTime: "22:00" }
 ];
 
 export function AddShift({ onSaved }) {
   const [staff, setStaff] = React.useState([]);
-  const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00" });
+  const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", shiftRangePresets: DEFAULT_SHIFT_RANGE_PRESETS });
   const [availability, setAvailability] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
   const [error, setError] = React.useState("");
@@ -130,7 +130,7 @@ export function AddShift({ onSaved }) {
             <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="text-sm font-black text-fuel-ink">Hour range</p>
-                <p className="text-xs font-semibold text-slate-500">Use a quick range or enter a different start/end time.</p>
+                <p className="text-xs font-semibold text-slate-500">Use an admin preset or enter a custom start/end time.</p>
               </div>
               <Pill tone={selectedQuickRange ? "green" : "amber"}>
                 {selectedQuickRange ? selectedQuickRange.label : "Custom time"}
@@ -141,7 +141,7 @@ export function AddShift({ onSaved }) {
                 const isSelected = form.startTime === range.startTime && form.endTime === range.endTime;
                 return (
                   <button
-                    key={range.label}
+                    key={`${range.startTime}-${range.endTime}`}
                     type="button"
                     className={`rounded-md px-3 py-3 text-sm font-black ring-2 ring-transparent ${
                       isSelected
@@ -150,7 +150,8 @@ export function AddShift({ onSaved }) {
                     }`}
                     onClick={() => setForm({ ...form, startTime: range.startTime, endTime: range.endTime })}
                   >
-                    {range.label}
+                    <span className="block">{range.label}</span>
+                    <span className={`mt-1 block text-xs ${isSelected ? "text-white/85" : "text-slate-500"}`}>{range.displayTime}</span>
                   </button>
                 );
               })}
@@ -187,11 +188,30 @@ export function AddShift({ onSaved }) {
 }
 
 function buildRanges(hours) {
+  const presets = Array.isArray(hours.shiftRangePresets) && hours.shiftRangePresets.length
+    ? hours.shiftRangePresets
+    : DEFAULT_SHIFT_RANGE_PRESETS;
   const ranges = [
-    { label: `${hours.openingStart}-${hours.openingEnd}`, startTime: hours.openingStart, endTime: hours.openingEnd },
-    ...quickRanges
+    { label: "Opening hours", startTime: hours.openingStart, endTime: hours.openingEnd },
+    ...presets
   ];
-  return ranges.filter((range, index, list) => index === list.findIndex((item) => item.startTime === range.startTime && item.endTime === range.endTime));
+  return ranges
+    .filter((range) => range.startTime && range.endTime)
+    .map((range) => ({
+      ...range,
+      label: range.label || `${formatTimeLabel(range.startTime)}-${formatTimeLabel(range.endTime)}`,
+      displayTime: `${formatTimeLabel(range.startTime)}-${formatTimeLabel(range.endTime)}`
+    }))
+    .filter((range, index, list) => index === list.findIndex((item) => item.startTime === range.startTime && item.endTime === range.endTime));
+}
+
+function formatTimeLabel(value) {
+  const [hourValue, minute = "00"] = String(value || "").split(":");
+  const hour = Number(hourValue);
+  if (!Number.isFinite(hour)) return value;
+  const suffix = hour >= 12 ? "pm" : "am";
+  const displayHour = hour % 12 || 12;
+  return minute === "00" ? `${displayHour}${suffix}` : `${displayHour}.${minute}${suffix}`;
 }
 
 function findConflict(form, availability, timeOff) {

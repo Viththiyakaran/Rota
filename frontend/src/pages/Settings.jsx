@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Clock, Database, History, ImagePlus, KeyRound, MapPin, RotateCcw, Save, ShieldCheck } from "lucide-react";
+import { AlertTriangle, Clock, Database, History, ImagePlus, KeyRound, MapPin, Plus, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -30,6 +30,14 @@ const DEFAULT_UK_ROTA_RULES = {
   wageCostEnabled: false,
   showWageCostOnDashboard: false
 };
+const DEFAULT_SHIFT_RANGE_PRESETS = [
+  { label: "Morning", startTime: "05:30", endTime: "14:00" },
+  { label: "Day", startTime: "05:30", endTime: "19:00" },
+  { label: "Full day", startTime: "05:30", endTime: "22:00" },
+  { label: "Afternoon", startTime: "13:00", endTime: "22:00" },
+  { label: "Late", startTime: "14:00", endTime: "22:00" },
+  { label: "Evening", startTime: "18:00", endTime: "22:00" }
+];
 const UK_ROTA_RULES_CACHE_KEY = "localops.ukRotaRules";
 
 function normaliseUkRules(rules = {}) {
@@ -58,7 +66,13 @@ export function Settings({ branding, onBrandingSaved }) {
   const [staff, setStaff] = React.useState([]);
   const [users, setUsers] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
-  const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", businessTimezone: "Europe/London" });
+  const [openingHours, setOpeningHours] = React.useState({
+    openingStart: "05:30",
+    openingEnd: "22:00",
+    businessTimezone: "Europe/London",
+    shiftRangePresets: DEFAULT_SHIFT_RANGE_PRESETS
+  });
+  const [newRange, setNewRange] = React.useState({ label: "", startTime: "09:00", endTime: "17:00" });
   const [ukRules, setUkRules] = React.useState(readCachedUkRules);
   const [savedUkRules, setSavedUkRules] = React.useState(readCachedUkRules);
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "" });
@@ -161,6 +175,36 @@ export function Settings({ branding, onBrandingSaved }) {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const addShiftRangePreset = () => {
+    setError("");
+    const nextRange = {
+      label: String(newRange.label || "").trim() || `${formatTimeLabel(newRange.startTime)}-${formatTimeLabel(newRange.endTime)}`,
+      startTime: newRange.startTime,
+      endTime: newRange.endTime
+    };
+    if (!isValidTime(nextRange.startTime) || !isValidTime(nextRange.endTime)) {
+      setError("Shift range start and end must be valid times.");
+      return;
+    }
+
+    setOpeningHours((current) => {
+      const existing = Array.isArray(current.shiftRangePresets) ? current.shiftRangePresets : [];
+      const withoutDuplicate = existing.filter((range) => range.startTime !== nextRange.startTime || range.endTime !== nextRange.endTime);
+      return {
+        ...current,
+        shiftRangePresets: [...withoutDuplicate, nextRange]
+      };
+    });
+    setNewRange({ label: "", startTime: "09:00", endTime: "17:00" });
+  };
+
+  const removeShiftRangePreset = (target) => {
+    setOpeningHours((current) => ({
+      ...current,
+      shiftRangePresets: (current.shiftRangePresets || []).filter((range) => range.startTime !== target.startTime || range.endTime !== target.endTime)
+    }));
   };
 
   const saveUkRules = async (event) => {
@@ -405,28 +449,92 @@ export function Settings({ branding, onBrandingSaved }) {
           title="Business Opening Hours"
           description="These hours and timezone control shift ranges, reminders, and calendar sync."
         />
-        <form className="grid gap-4 px-5 pb-5 lg:grid-cols-[1fr_1fr_1.5fr_auto]" onSubmit={saveOpeningHours}>
-          <Field label="Open">
-            <input type="time" className={inputClass} value={openingHours.openingStart} onChange={(e) => setOpeningHours({ ...openingHours, openingStart: e.target.value })} />
-          </Field>
-          <Field label="Close">
-            <input type="time" className={inputClass} value={openingHours.openingEnd} onChange={(e) => setOpeningHours({ ...openingHours, openingEnd: e.target.value })} />
-          </Field>
-          <Field label="Timezone">
-            <select
-              className={inputClass}
-              value={openingHours.businessTimezone || "Europe/London"}
-              onChange={(e) => setOpeningHours({ ...openingHours, businessTimezone: e.target.value })}
-            >
-              {TIMEZONE_OPTIONS.map((timezone) => (
-                <option key={timezone.value} value={timezone.value}>{timezone.label}</option>
+        <form className="space-y-5 px-5 pb-5" onSubmit={saveOpeningHours}>
+          <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1.5fr_auto]">
+            <Field label="Open">
+              <input type="time" className={inputClass} value={openingHours.openingStart} onChange={(e) => setOpeningHours({ ...openingHours, openingStart: e.target.value })} />
+            </Field>
+            <Field label="Close">
+              <input type="time" className={inputClass} value={openingHours.openingEnd} onChange={(e) => setOpeningHours({ ...openingHours, openingEnd: e.target.value })} />
+            </Field>
+            <Field label="Timezone">
+              <select
+                className={inputClass}
+                value={openingHours.businessTimezone || "Europe/London"}
+                onChange={(e) => setOpeningHours({ ...openingHours, businessTimezone: e.target.value })}
+              >
+                {TIMEZONE_OPTIONS.map((timezone) => (
+                  <option key={timezone.value} value={timezone.value}>{timezone.label}</option>
+                ))}
+              </select>
+            </Field>
+            <button className={`${primaryButton} self-end`}>
+              <Save size={18} />
+              Save
+            </button>
+          </div>
+
+          <div className="rounded-lg border border-fuel-line bg-fuel-mist/60 p-4">
+            <div className="mb-4">
+              <h4 className="font-black text-fuel-ink">Shift range presets</h4>
+              <p className="mt-1 text-sm font-semibold text-slate-600">
+                These buttons appear in Add Shift. Use them for common rota times, and use custom start/end for unusual shifts.
+              </p>
+            </div>
+
+            <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_auto]">
+              <Field label="Preset name">
+                <input
+                  className={inputClass}
+                  value={newRange.label}
+                  onChange={(event) => setNewRange({ ...newRange, label: event.target.value })}
+                  placeholder="e.g. School run cover"
+                />
+              </Field>
+              <Field label="Start">
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={newRange.startTime}
+                  onChange={(event) => setNewRange({ ...newRange, startTime: event.target.value })}
+                />
+              </Field>
+              <Field label="End">
+                <input
+                  type="time"
+                  className={inputClass}
+                  value={newRange.endTime}
+                  onChange={(event) => setNewRange({ ...newRange, endTime: event.target.value })}
+                />
+              </Field>
+              <button type="button" className={`${softButton} self-end`} onClick={addShiftRangePreset}>
+                <Plus size={18} />
+                Add preset
+              </button>
+            </div>
+
+            <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              {(openingHours.shiftRangePresets || []).map((range) => (
+                <div key={`${range.startTime}-${range.endTime}`} className="flex items-center justify-between gap-3 rounded-lg border border-fuel-line bg-white p-3">
+                  <div>
+                    <p className="font-black text-fuel-ink">{range.label || `${formatTimeLabel(range.startTime)}-${formatTimeLabel(range.endTime)}`}</p>
+                    <p className="text-sm font-bold text-fuel-green">{formatTimeLabel(range.startTime)} - {formatTimeLabel(range.endTime)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-700 hover:bg-red-100"
+                    onClick={() => removeShiftRangePreset(range)}
+                    aria-label={`Remove ${range.label || "shift range"}`}
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
               ))}
-            </select>
-          </Field>
-          <button className={`${primaryButton} self-end`}>
-            <Save size={18} />
-            Save
-          </button>
+              {(!openingHours.shiftRangePresets || openingHours.shiftRangePresets.length === 0) && (
+                <p className="rounded-lg bg-white p-3 text-sm font-bold text-slate-500">No presets yet. Add one above, then press Save.</p>
+              )}
+            </div>
+          </div>
         </form>
       </Card>
 
@@ -685,4 +793,17 @@ function NumberInput({ disabled = false, label, onChange, prefix, step = "1", va
       </div>
     </Field>
   );
+}
+
+function isValidTime(value) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value || ""));
+}
+
+function formatTimeLabel(value) {
+  const [hourValue, minute = "00"] = String(value || "").split(":");
+  const hour = Number(hourValue);
+  if (!Number.isFinite(hour)) return value;
+  const suffix = hour >= 12 ? "pm" : "am";
+  const displayHour = hour % 12 || 12;
+  return minute === "00" ? `${displayHour}${suffix}` : `${displayHour}.${minute}${suffix}`;
 }
