@@ -138,7 +138,7 @@ export function Reminders({ branding = {}, currentUser = null }) {
                     </div>
                     <p className="mt-1 font-semibold text-fuel-green">{displayNotificationMessage(notification, currentUser)}</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {notification.staffName} - {formatNotificationDate(notification.createdAt)}
+                      {notificationMeta(notification)}
                     </p>
                   </div>
                 </div>
@@ -208,7 +208,7 @@ export function Reminders({ branding = {}, currentUser = null }) {
 }
 
 function displayNotificationTitle(notification, currentUser) {
-  if (currentUser?.role === "admin" && isStaffShiftReminder(notification.type)) {
+  if (currentUser?.role === "admin" && isShiftNotification(notification.type)) {
     if (notification.type === "shift_start") {
       return `${notification.staffName || "Staff"} shift starting now`;
     }
@@ -218,8 +218,8 @@ function displayNotificationTitle(notification, currentUser) {
 }
 
 function displayNotificationMessage(notification, currentUser) {
-  if (currentUser?.role === "admin" && isStaffShiftReminder(notification.type)) {
-    return staffMessage(notification.message, notification.staffName);
+  if (currentUser?.role === "admin" && isShiftNotification(notification.type)) {
+    return adminStaffMessage(notification.message, notification.staffName);
   }
   return notification.message;
 }
@@ -239,6 +239,31 @@ function isStaffShiftReminder(type) {
   return type === "shift_reminder" || type === "shift_start";
 }
 
+function isShiftNotification(type) {
+  return [
+    "shift_created",
+    "shift_deleted",
+    "shift_note",
+    "shift_reassigned",
+    "shift_reminder",
+    "shift_start",
+    "shift_updated"
+  ].includes(type);
+}
+
+function adminStaffMessage(message, staffName = "Staff") {
+  return String(message || "")
+    .replace(/^You have a shift/i, `${staffName} has a shift`)
+    .replace(/^Your shift starts/i, `${staffName}'s shift starts`)
+    .replace(/^Your shift on/i, `${staffName}'s shift on`);
+}
+
+function notificationMeta(notification) {
+  return [notification.staffName, formatNotificationDate(notification.createdAt)]
+    .filter(Boolean)
+    .join(" - ");
+}
+
 function formatNotificationDate(value) {
   if (!value) return "";
   const date = parseNotificationDate(value);
@@ -253,8 +278,11 @@ function formatNotificationDate(value) {
 }
 
 function parseNotificationDate(value) {
+  if (value instanceof Date) return value;
   const text = String(value || "").trim();
   if (!text) return new Date("");
   if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(text)) return new Date(text);
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) return parsed;
   return new Date(`${text.replace(" ", "T")}Z`);
 }
