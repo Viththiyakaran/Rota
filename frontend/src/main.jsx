@@ -27,7 +27,7 @@ const navItems = [
   { id: "rota-ai", label: "Rota AI", icon: Bot, roles: ["admin"], hidden: true },
   { id: "rota-pattern", label: "Pattern", icon: Layers, roles: ["admin"], hidden: true },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
-  { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"], hidden: true },
+  { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
   { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"], hidden: true },
   { id: "account", label: "Account", icon: UserRound, roles: ["admin", "staff"] },

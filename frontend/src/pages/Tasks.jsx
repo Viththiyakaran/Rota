@@ -9,8 +9,8 @@ import { toDateInputValue } from "../dateUtils.js";
 
 const COLUMNS = [
   { id: "backlog", label: "Backlog", tone: "bg-slate-100 text-slate-700" },
-  { id: "todo", label: "Todo", tone: "bg-fuel-mist text-fuel-green" },
-  { id: "process", label: "Process", tone: "bg-amber-50 text-amber-800" },
+  { id: "todo", label: "To do", tone: "bg-fuel-mist text-fuel-green" },
+  { id: "process", label: "Doing", tone: "bg-amber-50 text-amber-800" },
   { id: "done", label: "Done", tone: "bg-emerald-50 text-emerald-700" }
 ];
 

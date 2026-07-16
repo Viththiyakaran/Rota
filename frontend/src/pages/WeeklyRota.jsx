@@ -734,8 +734,8 @@ function sameStaff(left, right) {
 function formatTaskStatus(status) {
   return {
     backlog: "Backlog",
-    todo: "Todo",
-    process: "Process",
+    todo: "To do",
+    process: "Doing",
     done: "Done"
   }[status] || "Task";
 }
