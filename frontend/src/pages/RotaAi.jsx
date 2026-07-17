@@ -54,7 +54,10 @@ export function RotaAi({ goTo }) {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => setImagePreview(String(reader.result || ""));
+    reader.onload = () => {
+      setImagePreview(String(reader.result || ""));
+      setMessage("Image uploaded for reference. Free mode cannot read text from images yet, so paste or type the rota text and generate from text.");
+    };
     reader.readAsDataURL(file);
   };
 
@@ -116,7 +119,12 @@ export function RotaAi({ goTo }) {
                 <input type="file" accept="image/*" className="hidden" onChange={handleImage} />
               </label>
               {imagePreview ? (
-                <img src={imagePreview} alt="Uploaded rota reference" className="mt-4 max-h-80 w-full rounded-md border border-fuel-line object-contain" />
+                <div className="mt-4 space-y-3">
+                  <img src={imagePreview} alt="Uploaded rota reference" className="max-h-80 w-full rounded-md border border-fuel-line object-contain" />
+                  <div className="rounded-md bg-amber-50 p-3 text-sm font-bold text-amber-800">
+                    Image recognition is not enabled in free mode. Use the image as a guide, then paste the text or table rows into the box.
+                  </div>
+                </div>
               ) : (
                 <div className="mt-4 rounded-md bg-white p-4 text-sm font-bold text-slate-500">
                   Free mode does not send your rota image to any paid AI service. For now, upload the image, then type or paste the visible rota text into the box.
@@ -124,7 +132,8 @@ export function RotaAi({ goTo }) {
               )}
             </div>
             <div className="rounded-md bg-fuel-mist p-4 text-sm font-bold text-slate-700">
-              Best format: one shift per line, for example `Monday Afridi 6pm-10pm Shopping`. Dot times like `5.30am-7pm` are supported.
+              Best format: one shift per line, for example `Monday Afridi 6pm-10pm Shopping`.
+              Table-style text with a `Days VITHTHI Afridi Veera` header is also supported.
             </div>
           </div>
         </div>
@@ -205,35 +214,138 @@ function parseRotaText(text, staff) {
     return { rows, errors: ["Staff list is not loaded yet. Open Staff once, or refresh and try again."] };
   }
 
+  const staffHeaders = findStaffHeaders(lines, activeStaff);
+
   for (const line of lines) {
-    const day = findDay(line);
-    const staffMember = findStaff(line, activeStaff);
-    const timeRange = findFlexibleTimeRange(line);
-    if (!day || !staffMember || !timeRange) continue;
-
-    const notes = line
-      .replace(new RegExp(day.label, "i"), "")
-      .replace(new RegExp(escapeRegExp(staffMember.name), "i"), "")
-      .replace(timeRange.raw, "")
-      .replace(/\b(off|total hours?)\b/gi, "")
-      .trim();
-
-    rows.push({
-      id: crypto.randomUUID(),
-      staffId: String(staffMember.id),
-      dayOffset: day.offset,
-      startTime: timeRange.startTime,
-      endTime: timeRange.endTime,
-      breakMinutes: 0,
-      reminderMinutes: 30,
-      notes
-    });
+    rows.push(...parseNamedShiftLine(line, activeStaff));
+    rows.push(...parseTableShiftLine(line, staffHeaders));
   }
 
-  if (!rows.length && lines.length) {
-    errors.push("Could not detect shifts. Check staff names match Staff List and use lines like: Monday Afridi 6pm-10pm Shopping.");
+  const uniqueRows = uniqueRotaRows(rows);
+
+  if (!uniqueRows.length && lines.length) {
+    errors.push("Could not detect shifts. Use lines like `Monday Afridi 6pm-10pm Shopping`, or paste a table with header `Days VITHTHI Afridi Veera`.");
   }
-  return { rows, errors };
+  return { rows: uniqueRows, errors };
+}
+
+function parseNamedShiftLine(line, staff) {
+  const day = findDay(line);
+  const staffMember = findStaff(line, staff);
+  const timeRange = findFlexibleTimeRange(line);
+  if (!day || !staffMember || !timeRange) return [];
+
+  const notes = line
+    .replace(new RegExp(day.label, "i"), "")
+    .replace(new RegExp(escapeRegExp(staffMember.name), "i"), "")
+    .replace(timeRange.raw, "")
+    .replace(/\b(off|total hours?)\b/gi, "")
+    .trim();
+
+  return [buildDetectedRow({ day, staffMember, timeRange, notes })];
+}
+
+function parseTableShiftLine(line, staffHeaders) {
+  const day = findDay(line);
+  if (!day || !staffHeaders.length || isHeaderOrTotalLine(line)) return [];
+
+  const afterDay = line.replace(new RegExp(`^\\s*${day.label}\\s*`, "i"), "").trim();
+  const cells = splitTableCells(afterDay);
+  const rows = [];
+
+  cells.slice(0, staffHeaders.length).forEach((cell, index) => {
+    if (isOffCell(cell)) return;
+    const timeRange = findFlexibleTimeRange(cell);
+    if (!timeRange) return;
+
+    rows.push(buildDetectedRow({
+      day,
+      staffMember: staffHeaders[index],
+      timeRange,
+      notes: cells.slice(staffHeaders.length).join(" ")
+    }));
+  });
+
+  return rows;
+}
+
+function buildDetectedRow({ day, staffMember, timeRange, notes }) {
+  return {
+    id: crypto.randomUUID(),
+    staffId: String(staffMember.id),
+    dayOffset: day.offset,
+    startTime: timeRange.startTime,
+    endTime: timeRange.endTime,
+    breakMinutes: 0,
+    reminderMinutes: 30,
+    notes: cleanNotes(notes)
+  };
+}
+
+function uniqueRotaRows(rows) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = [row.staffId, row.dayOffset, row.startTime, row.endTime, row.notes].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function findStaffHeaders(lines, staff) {
+  const headerLine = lines.find((line) =>
+    /\bdays?\b/i.test(line) &&
+    staff.filter((person) => normaliseName(line).includes(normaliseName(person.name))).length >= 2
+  );
+
+  if (!headerLine) return staff;
+
+  return staff
+    .map((person) => ({ person, index: normaliseName(headerLine).indexOf(normaliseName(person.name)) }))
+    .filter((entry) => entry.index >= 0)
+    .sort((left, right) => left.index - right.index)
+    .map((entry) => entry.person);
+}
+
+function splitTableCells(text) {
+  if (text.includes("\t")) return text.split("\t").map((cell) => cell.trim());
+  if (text.includes("|")) return text.split("|").map((cell) => cell.trim());
+  const cells = [];
+  let remaining = text.trim();
+
+  while (remaining) {
+    const offMatch = remaining.match(/^off\b/i);
+    if (offMatch) {
+      cells.push(offMatch[0]);
+      remaining = remaining.slice(offMatch[0].length).trim();
+      continue;
+    }
+
+    const timeRange = findFlexibleTimeRange(remaining);
+    if (!timeRange || !remaining.toLowerCase().startsWith(timeRange.raw.toLowerCase())) {
+      cells.push(remaining);
+      break;
+    }
+    cells.push(timeRange.raw);
+    remaining = remaining.slice(timeRange.raw.length).trim();
+  }
+
+  return cells.filter(Boolean);
+}
+
+function isHeaderOrTotalLine(line) {
+  return /\b(days?|total hours?)\b/i.test(line);
+}
+
+function isOffCell(value) {
+  return /^off$/i.test(String(value || "").trim());
+}
+
+function cleanNotes(value) {
+  return String(value || "")
+    .replace(/\b(off|total hours?)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function findDay(line) {
