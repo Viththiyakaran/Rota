@@ -49,18 +49,30 @@ const loginAttempts = new Map();
 const loginWindowMs = 15 * 60 * 1000;
 const maxLoginAttempts = 5;
 let pushConfigured = false;
+const configuredFrontendUrls = [
+  process.env.FRONTEND_URL,
+  process.env.FRONTEND_URLS,
+  process.env.NETLIFY_FRONTEND_URL
+]
+  .filter(Boolean)
+  .flatMap((value) => String(value).split(","))
+  .map((value) => value.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000",
   "http://127.0.0.1:5173",
   "http://127.0.0.1:3000",
-  process.env.FRONTEND_URL
+  "https://marvelous-tarsier-71e4a4.netlify.app",
+  ...configuredFrontendUrls
 ].filter(Boolean);
 
 app.set("trust proxy", 1);
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
+    const normalizedOrigin = origin ? String(origin).replace(/\/$/, "") : "";
+    if (!normalizedOrigin || allowedOrigins.includes(normalizedOrigin)) return callback(null, true);
     return callback(null, false);
   },
   credentials: true

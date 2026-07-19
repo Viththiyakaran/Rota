@@ -220,6 +220,7 @@ Backend:
 PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url
+FRONTEND_URLS=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
 DB_PATH=/data/fuelops.sqlite
 DATABASE_URL=postgresql://...
 ADMIN_RESET_TOKEN=temporary-secret-for-admin-recovery
@@ -239,6 +240,7 @@ Notes:
 - Railway provides `PORT` automatically.
 - Use `DATABASE_URL` for Supabase/Postgres production storage.
 - Use `DB_PATH` only for SQLite local development or if you deploy with a persistent volume instead of Supabase.
+- Set `FRONTEND_URL` or `FRONTEND_URLS` to every deployed frontend origin that should be allowed to log in. For Netlify, include the exact `https://...netlify.app` URL.
 - `ADMIN_RESET_TOKEN` should only be added temporarily when recovering admin access.
 - `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` are optional. If they are not set, the app generates and saves free Web Push keys in the configured database.
 - For long-term production, fixed VAPID keys are better because existing phone/browser subscriptions remain valid after database restore or migration.
@@ -344,6 +346,12 @@ Set this on the backend host:
 
 ```text
 FRONTEND_URL=https://your-frontend-url
+```
+
+If you have both a Netlify URL and a custom domain, use:
+
+```text
+FRONTEND_URLS=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
 ```
 
 The backend URL must use HTTPS in production because login uses secure cookies.
