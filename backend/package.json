@@ -8,6 +8,7 @@
     "node": ">=22.5.0"
   },
   "scripts": {
+    "build": "node -e \"console.log('Backend has no build step')\"",
     "start": "node --no-warnings src/server.js",
     "dev": "node --no-warnings --watch src/server.js"
   },
