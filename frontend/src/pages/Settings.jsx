@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Clock, Database, History, ImagePlus, KeyRound, MapPin, Plus, RotateCcw, Save, ShieldCheck, Trash2 } from "lucide-react";
+import { AlertTriangle, Building2, Clock, History, ImagePlus, KeyRound, MapPin, Plus, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Trash2 } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -39,6 +39,12 @@ const DEFAULT_SHIFT_RANGE_PRESETS = [
   { label: "Evening", startTime: "18:00", endTime: "22:00" }
 ];
 const UK_ROTA_RULES_CACHE_KEY = "localops.ukRotaRules";
+const SETTINGS_SECTIONS = [
+  { id: "business", label: "Business", description: "Business name and logo", icon: Building2 },
+  { id: "rota", label: "Rota rules", description: "Hours, presets and planning rules", icon: SlidersHorizontal },
+  { id: "access", label: "Login access", description: "Admin and staff accounts", icon: KeyRound },
+  { id: "activity", label: "Activity", description: "Recent admin changes", icon: History }
+];
 
 function normaliseUkRules(rules = {}) {
   return { ...DEFAULT_UK_ROTA_RULES, ...rules };
@@ -62,8 +68,8 @@ function cacheUkRules(rules) {
 }
 
 export function Settings({ branding, onBrandingSaved }) {
+  const [activeSection, setActiveSection] = React.useState("business");
   const [form, setForm] = React.useState(branding);
-  const [staff, setStaff] = React.useState([]);
   const [users, setUsers] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({
@@ -82,7 +88,6 @@ export function Settings({ branding, onBrandingSaved }) {
   const [confirmUkRulesSave, setConfirmUkRulesSave] = React.useState(false);
   const [savingUkRules, setSavingUkRules] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
-  const [seeding, setSeeding] = React.useState(false);
 
   React.useEffect(() => {
     setForm(branding);
@@ -106,10 +111,8 @@ export function Settings({ branding, onBrandingSaved }) {
   };
 
   const loadAdminData = React.useCallback(() => {
-    Promise.all([api.staff(), api.users(), api.openingHours(), api.ukRotaRules(), api.audit()])
-      .then(([staffRows, userRows, hours, rules, auditRows]) => {
-        const activeStaff = staffRows.filter((person) => person.active);
-        setStaff(activeStaff);
+    Promise.all([api.users(), api.openingHours(), api.ukRotaRules(), api.audit()])
+      .then(([userRows, hours, rules, auditRows]) => {
         setUsers(userRows);
         setOpeningHours(hours);
         const loadedRules = normaliseUkRules(rules);
@@ -288,21 +291,6 @@ export function Settings({ branding, onBrandingSaved }) {
     loadAdminData();
   };
 
-  const seedDemoData = async () => {
-    setSeeding(true);
-    setError("");
-    setMessage("");
-    try {
-      const result = await api.seedDemoData({ count: 20 });
-      showSavedPopup(`Demo data added: ${result.created} shifts created${result.skipped ? `, ${result.skipped} duplicates skipped` : ""}.`);
-      loadAdminData();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSeeding(false);
-    }
-  };
-
   return (
     <div className="space-y-5 pb-8">
       {confirmUkRulesSave && (
@@ -367,8 +355,8 @@ export function Settings({ branding, onBrandingSaved }) {
 
       <PageHeader
         eyebrow="Admin Control"
-        title="Business Settings"
-        description="Manage the business name, logo, rota hours, login access, and audit history from one place."
+        title="Settings"
+        description="Choose a section and update only what you need."
         meta={(
           <Pill>
             <ShieldCheck size={18} />
@@ -377,6 +365,43 @@ export function Settings({ branding, onBrandingSaved }) {
         )}
       />
 
+      <Card className="p-2">
+        <nav className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Settings sections">
+          {SETTINGS_SECTIONS.map((section) => {
+            const Icon = section.icon;
+            const active = activeSection === section.id;
+            return (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => {
+                  setActiveSection(section.id);
+                  setError("");
+                  setMessage("");
+                }}
+                className={`flex items-start gap-3 rounded-lg px-3 py-3 text-left transition ${
+                  active ? "bg-fuel-green text-white shadow-sm" : "text-fuel-ink hover:bg-fuel-mist"
+                }`}
+                aria-current={active ? "page" : undefined}
+              >
+                <Icon className="mt-0.5 h-5 w-5 shrink-0" />
+                <span>
+                  <span className="block font-black">{section.label}</span>
+                  <span className={`mt-0.5 hidden text-xs font-semibold sm:block ${active ? "text-white/80" : "text-slate-500"}`}>
+                    {section.description}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+      </Card>
+
+      {error && <p className="rounded-lg bg-red-50 p-3 font-bold text-red-700">{error}</p>}
+      {message && <p className="rounded-lg bg-fuel-mist p-3 font-bold text-fuel-green">{message}</p>}
+
+      {activeSection === "business" ? (
+      <div className="space-y-5">
       <Card className="p-0">
         <form className="space-y-4" onSubmit={save}>
           <SectionHeader
@@ -386,9 +411,6 @@ export function Settings({ branding, onBrandingSaved }) {
           />
 
           <div className="space-y-4 px-5 pb-5">
-          {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700">{error}</p>}
-          {message && <p className="rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{message}</p>}
-
           <Field label="Business name">
             <input
               required
@@ -443,6 +465,11 @@ export function Settings({ branding, onBrandingSaved }) {
         </form>
       </Card>
 
+      </div>
+      ) : null}
+
+      {activeSection === "rota" ? (
+      <div className="space-y-5">
       <Card className="p-0">
         <SectionHeader
           icon={<Clock size={20} />}
@@ -656,6 +683,10 @@ export function Settings({ branding, onBrandingSaved }) {
         </form>
       </Card>
 
+      </div>
+      ) : null}
+
+      {activeSection === "access" ? (
       <Card className="p-0">
         <SectionHeader
           icon={<KeyRound size={20} />}
@@ -691,24 +722,9 @@ export function Settings({ branding, onBrandingSaved }) {
           ))}
         </div>
       </Card>
+      ) : null}
 
-      <Card className="p-0">
-        <SectionHeader
-          icon={<Database size={20} />}
-          title="Demo Data"
-          description="Create test shifts in the current database so you can check rota, reminders, and Supabase rows."
-        />
-        <div className="space-y-3 px-5 pb-5">
-          <p className="text-sm font-bold text-slate-600">
-            This adds 20 demo shifts across active staff. It skips exact duplicates and records the action in the audit log.
-          </p>
-          <button type="button" className={primaryButton} onClick={seedDemoData} disabled={seeding || staff.length === 0}>
-            <Database size={18} />
-            {seeding ? "Adding demo shifts..." : "Seed 20 demo shifts"}
-          </button>
-        </div>
-      </Card>
-
+      {activeSection === "activity" ? (
       <Card className="p-0">
         <SectionHeader
           icon={<History size={20} />}
@@ -726,6 +742,7 @@ export function Settings({ branding, onBrandingSaved }) {
           {audit.length === 0 && <p className="text-sm font-bold text-slate-500">No audit entries yet.</p>}
         </div>
       </Card>
+      ) : null}
     </div>
   );
 }

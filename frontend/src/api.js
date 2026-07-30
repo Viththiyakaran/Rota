@@ -81,6 +81,5 @@ export const api = {
   pushStatus: () => request("/api/push/status"),
   subscribePush: (payload) => request("/api/push/subscribe", { method: "POST", body: JSON.stringify(payload) }),
   testPush: () => request("/api/push/test", { method: "POST" }),
-  calendarFeed: () => request("/api/calendar/my-feed"),
-  seedDemoData: (payload = { count: 20 }) => request("/api/demo/seed", { method: "POST", body: JSON.stringify(payload) })
+  calendarFeed: () => request("/api/calendar/my-feed")
 };
