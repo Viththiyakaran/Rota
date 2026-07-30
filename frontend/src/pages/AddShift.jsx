@@ -14,15 +14,15 @@ const DEFAULT_SHIFT_RANGE_PRESETS = [
   { label: "Evening", startTime: "18:00", endTime: "22:00" }
 ];
 
-export function AddShift({ onSaved }) {
+export function AddShift({ initialValues = null, onSaved }) {
   const [staff, setStaff] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", shiftRangePresets: DEFAULT_SHIFT_RANGE_PRESETS });
   const [availability, setAvailability] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
   const [error, setError] = React.useState("");
   const [form, setForm] = React.useState({
-    staffId: "",
-    shiftDate: toDateInputValue(new Date()),
+    staffId: initialValues?.staffId || "",
+    shiftDate: initialValues?.shiftDate || toDateInputValue(new Date()),
     startTime: "05:30",
     endTime: "14:00",
     breakMinutes: 0,
@@ -41,7 +41,8 @@ export function AddShift({ onSaved }) {
       setTimeOff(timeOffRows);
       setForm((current) => ({
         ...current,
-        staffId: active[0]?.id || "",
+        staffId: initialValues?.staffId || active[0]?.id || "",
+        shiftDate: initialValues?.shiftDate || current.shiftDate,
         startTime: hours.openingStart,
         endTime: hours.openingEnd
       }));

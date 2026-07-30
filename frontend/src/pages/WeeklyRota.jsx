@@ -1,12 +1,25 @@
 ﻿import React from "react";
-import { CalendarDays, Check, ChevronLeft, ChevronRight, Layers, MessageCircle, Pencil, Printer, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  MessageCircle,
+  MoreHorizontal,
+  Pencil,
+  PlusCircle,
+  Printer,
+  Trash2,
+  X
+} from "lucide-react";
 import { api } from "../api.js";
-import { PageHeader, Pill, darkButton, primaryButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
 import { addDays, formatDateLabel, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappGroupShareUrl } from "../whatsapp.js";
 
-export function WeeklyRota({ currentUser, goTo }) {
+export function WeeklyRota({ currentUser, goTo, onAddShift }) {
   const [startDate, setStartDate] = React.useState(toDateInputValue(getMonday()));
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
@@ -18,6 +31,8 @@ export function WeeklyRota({ currentUser, goTo }) {
   const [noteError, setNoteError] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const toolsRef = React.useRef(null);
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -35,6 +50,25 @@ export function WeeklyRota({ currentUser, goTo }) {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  React.useEffect(() => {
+    if (!moreOpen) return undefined;
+
+    const closeTools = (event) => {
+      if (event.key === "Escape") {
+        setMoreOpen(false);
+      } else if (event.type === "mousedown" && !toolsRef.current?.contains(event.target)) {
+        setMoreOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeTools);
+    document.addEventListener("keydown", closeTools);
+    return () => {
+      document.removeEventListener("mousedown", closeTools);
+      document.removeEventListener("keydown", closeTools);
+    };
+  }, [moreOpen]);
 
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(new Date(`${startDate}T00:00:00`), index);
@@ -79,6 +113,8 @@ export function WeeklyRota({ currentUser, goTo }) {
     setStartDate(toDateInputValue(next));
   };
 
+  const goToCurrentWeek = () => setStartDate(toDateInputValue(getMonday()));
+
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
   const weekTasks = tasks.filter((task) =>
@@ -107,76 +143,125 @@ export function WeeklyRota({ currentUser, goTo }) {
         weekRange={weekRange}
       />
 
-      <div className="screen-only">
-        <PageHeader
-          eyebrow="Monday to Sunday"
-          title="Weekly Rota"
-          description={weekRange}
-          meta={<Pill>{visibleShifts.length} shifts</Pill>}
-        />
-      </div>
+      <section className="screen-only rounded-xl border border-fuel-line bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-fuel-green">Weekly rota</p>
+            <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-2xl font-black text-fuel-ink sm:text-3xl">{weekRange}</h1>
+              <span className="text-sm font-bold text-slate-500">{visibleShifts.length} shifts</span>
+            </div>
+          </div>
 
-      <div className="screen-only rounded-lg border border-fuel-line bg-white p-4 shadow-md">
-        <div className="grid gap-3 lg:grid-cols-[auto_1fr_auto] lg:items-center">
-          <div className="flex items-center gap-2 font-black text-fuel-ink">
-            <CalendarDays size={20} className="text-fuel-green" />
-            Week start
-          </div>
-          <input
-            type="date"
-            className="w-full rounded-md border border-fuel-line bg-fuel-mist px-3 py-3 font-bold outline-none focus:border-fuel-green"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-          />
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-md bg-fuel-mist text-fuel-green hover:bg-fuel-line"
-              onClick={() => moveWeek(-1)}
-              title="Previous week"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button
-              type="button"
-              className={primaryButton}
-              onClick={() => moveWeek(1)}
-            >
-              Next
-              <ChevronRight size={18} className="ml-1 inline" />
-            </button>
-          </div>
-          <div className="flex flex-col gap-2 lg:col-span-3 lg:flex-row">
-            <a
-              className="flex flex-1 items-center justify-center gap-2 rounded-md bg-[#25D366] px-4 py-3 text-sm font-black normal-case text-white shadow-sm"
-              href={groupShareUrl}
-              target="_blank"
-              rel="noreferrer"
-            >
-              <MessageCircle size={18} />
-              WhatsApp group
-            </a>
-            <button
-              type="button"
-              className={`flex-1 ${darkButton}`}
-              onClick={() => window.print()}
-            >
-              <Printer size={18} />
-              Print / PDF
-            </button>
-            {isAdmin && (
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative">
+              <span className="sr-only">Jump to week</span>
+              <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fuel-green" />
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="h-11 w-[160px] rounded-lg border border-fuel-line bg-white pl-9 pr-2 text-sm font-black text-fuel-ink outline-none focus:border-fuel-green focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+
+            <div className="inline-flex overflow-hidden rounded-lg border border-fuel-line bg-white">
               <button
                 type="button"
-                className="flex min-h-11 flex-1 items-center justify-center gap-2 rounded-md bg-fuel-lime px-4 py-2.5 text-sm font-black normal-case text-fuel-ink shadow-sm"
-                onClick={() => goTo("rota-pattern")}
+                onClick={() => moveWeek(-1)}
+                className="inline-flex h-11 w-11 items-center justify-center text-slate-700 hover:bg-fuel-mist"
+                aria-label="Previous week"
               >
-                <Layers size={18} />
-                Rota pattern
+                <ChevronLeft className="h-5 w-5" />
               </button>
-            )}
+              <button
+                type="button"
+                onClick={goToCurrentWeek}
+                className="h-11 border-x border-fuel-line px-4 text-sm font-black text-fuel-ink hover:bg-fuel-mist"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                onClick={() => moveWeek(1)}
+                className="inline-flex h-11 w-11 items-center justify-center text-slate-700 hover:bg-fuel-mist"
+                aria-label="Next week"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            </div>
+
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => onAddShift?.()}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 font-black text-white hover:bg-blue-700"
+              >
+                <PlusCircle className="h-5 w-5" />
+                Add shift
+              </button>
+            ) : null}
+
+            <div ref={toolsRef} className="relative">
+              <button
+                type="button"
+                onClick={() => setMoreOpen((open) => !open)}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 font-black text-fuel-ink hover:bg-fuel-line"
+                aria-haspopup="menu"
+                aria-expanded={moreOpen}
+              >
+                More
+                <ChevronDown className={`h-4 w-4 transition ${moreOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {moreOpen ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 z-40 mt-2 w-56 overflow-hidden rounded-xl border border-fuel-line bg-white p-2 shadow-xl"
+                >
+                  <a
+                    href={groupShareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    role="menuitem"
+                    onClick={() => setMoreOpen(false)}
+                    className="flex items-center gap-3 rounded-lg px-3 py-2.5 font-bold text-slate-800 hover:bg-slate-50"
+                  >
+                    <MessageCircle className="h-5 w-5 text-green-600" />
+                    Share to WhatsApp
+                  </a>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      window.print();
+                    }}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left font-bold text-slate-800 hover:bg-slate-50"
+                  >
+                    <Printer className="h-5 w-5 text-fuel-green" />
+                    Print / PDF
+                  </button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        goTo("rota-pattern");
+                      }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left font-bold text-slate-800 hover:bg-slate-50"
+                    >
+                      <Layers className="h-5 w-5 text-fuel-green" />
+                      Rota pattern
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
-      </div>
+      </section>
 
       <Status loading={loading} error={error}>
         <PlannerGrid
@@ -185,6 +270,7 @@ export function WeeklyRota({ currentUser, goTo }) {
           isAdmin={isAdmin}
           noteDraft={noteDraft}
           noteError={noteError}
+          onAddShift={onAddShift}
           onCancelNote={cancelNoteEdit}
           onDeleteShift={removeShift}
           onEditNote={startNoteEdit}
@@ -288,6 +374,7 @@ function PlannerGrid({
   isAdmin,
   noteDraft,
   noteError,
+  onAddShift,
   onCancelNote,
   onDeleteShift,
   onEditNote,
@@ -306,15 +393,13 @@ function PlannerGrid({
       <div className="flex flex-col gap-3 border-b border-fuel-line bg-white px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-xl font-black text-fuel-ink">Staff planner</h2>
-          <p className="text-sm font-bold text-slate-600">
-            {activeStaff.length} staff - {visibleShifts.length} shifts - {formatHourTotal(totalHours)} paid hours
+          <p className="text-sm font-bold text-slate-500">
+            {isAdmin ? "Select an empty cell to add a shift." : "Your team schedule for the week."}
           </p>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs font-black text-slate-600 sm:flex">
-          <span className="rounded-md bg-fuel-mist px-3 py-2">{activeStaff.length} staff</span>
-          <span className="rounded-md bg-fuel-mist px-3 py-2">{visibleShifts.length} shifts</span>
-          <span className="rounded-md bg-fuel-mist px-3 py-2">{formatHourTotal(totalHours)} hrs</span>
-        </div>
+        <p className="text-sm font-black text-slate-600">
+          {activeStaff.length} staff · {visibleShifts.length} shifts · {formatHourTotal(totalHours)} paid hours
+        </p>
       </div>
 
       <MobileWeekCards
@@ -334,10 +419,10 @@ function PlannerGrid({
         weekDays={weekDays}
       />
 
-      <div className="hidden overflow-x-auto lg:block">
+      <div className="hidden max-h-[calc(100vh-13rem)] overflow-auto lg:block">
         <div className="min-w-[1080px]">
-          <div className="grid grid-cols-[220px_repeat(7,minmax(126px,1fr))] border-b border-fuel-line bg-fuel-mist/80">
-            <div className="sticky left-0 z-10 border-r border-fuel-line bg-fuel-mist/95 px-4 py-3">
+          <div className="sticky top-0 z-20 grid grid-cols-[220px_repeat(7,minmax(126px,1fr))] border-b border-fuel-line bg-fuel-mist/95 shadow-sm">
+            <div className="sticky left-0 z-30 border-r border-fuel-line bg-fuel-mist px-4 py-3">
               <p className="text-xs font-black uppercase tracking-wide text-slate-500">Week summary</p>
               <p className="mt-1 text-sm font-black text-fuel-ink">{formatHourTotal(totalHours)} hrs</p>
             </div>
@@ -345,11 +430,15 @@ function PlannerGrid({
               const dayShifts = visibleShifts.filter((shift) => shift.shiftDate === day);
               const dayHours = dayShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
               return (
-                <div key={day} className="border-r border-fuel-line px-3 py-3 last:border-r-0">
+                <div
+                  key={day}
+                  className={`border-r border-fuel-line px-3 py-3 last:border-r-0 ${
+                    day === toDateInputValue(new Date()) ? "bg-blue-50" : ""
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <p className="text-base font-black text-fuel-ink">{formatDayLabel(day)}</p>
-                      <p className="text-xs font-bold text-slate-500">{formatDateLabel(day)}</p>
                     </div>
                     <span className="rounded-md bg-white px-2 py-1 text-xs font-black text-fuel-green">
                       {dayShifts.length}
@@ -370,6 +459,7 @@ function PlannerGrid({
                 key={person.id}
                 noteDraft={noteDraft}
                 noteError={noteError}
+                onAddShift={onAddShift}
                 onCancelNote={onCancelNote}
                 onDeleteShift={onDeleteShift}
                 onEditNote={onEditNote}
@@ -520,6 +610,7 @@ function StaffPlannerRow({
   isAdmin,
   noteDraft,
   noteError,
+  onAddShift,
   onCancelNote,
   onDeleteShift,
   onEditNote,
@@ -556,19 +647,35 @@ function StaffPlannerRow({
         const dayTimeOff = approvedTimeOffForDay(timeOff, day).filter((item) => sameStaff(item.staffId, person.id));
 
         return (
-          <div key={`${person.id}-${day}`} className="min-h-28 border-r border-fuel-line bg-slate-50/40 p-2 last:border-r-0">
-            {dayTimeOff.length > 0 && (
+          <div
+            key={`${person.id}-${day}`}
+            className={`min-h-28 border-r border-fuel-line p-2 last:border-r-0 ${
+              day === toDateInputValue(new Date()) ? "bg-blue-50/50" : "bg-slate-50/40"
+            }`}
+          >
+            {dayTimeOff.length > 0 ? (
               <div
-                className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-black uppercase text-amber-700"
+                className="flex min-h-20 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-2 py-2 text-xs font-black uppercase text-amber-700"
                 title={`${person.name} has approved time off on ${formatDateLabel(day)}`}
               >
                 Time off
               </div>
-            )}
-            {cellShifts.length === 0 ? (
-              <div className="flex h-full min-h-20 items-center justify-center rounded-md border border-dashed border-fuel-line bg-white text-xs font-bold text-slate-300">
-                Off
-              </div>
+            ) : cellShifts.length === 0 ? (
+              isAdmin ? (
+                <button
+                  type="button"
+                  onClick={() => onAddShift?.({ staffId: person.id, shiftDate: day })}
+                  className="group flex h-full min-h-20 w-full items-center justify-center gap-2 rounded-md border border-dashed border-fuel-line bg-white text-xs font-black text-slate-400 transition hover:border-fuel-green hover:bg-blue-50 hover:text-fuel-green"
+                  aria-label={`Add shift for ${person.name} on ${formatDateLabel(day)}`}
+                >
+                  <PlusCircle className="h-4 w-4 opacity-70 group-hover:opacity-100" />
+                  Add shift
+                </button>
+              ) : (
+                <div className="flex h-full min-h-20 items-center justify-center text-slate-300" aria-label="No shift">
+                  —
+                </div>
+              )
             ) : (
               <div className="space-y-2">
                 {cellShifts.map((shift) => (
@@ -621,13 +728,38 @@ function PlannerShiftCard({
           <p className="mt-0.5 text-xs font-bold text-slate-500">{shift.totalHours} hrs</p>
         </div>
         {isAdmin && (
-          <button
-            className="shrink-0 rounded-md bg-fuel-mist p-1.5 text-slate-500 hover:text-red-700"
-            onClick={() => onDeleteShift(shift.id)}
-            title="Delete shift"
-          >
-            <Trash2 size={14} />
-          </button>
+          <details className="relative shrink-0">
+            <summary
+              className="flex cursor-pointer list-none items-center justify-center rounded-md bg-fuel-mist p-1.5 text-slate-500 hover:text-fuel-green [&::-webkit-details-marker]:hidden"
+              aria-label="Shift actions"
+            >
+              <MoreHorizontal size={15} />
+            </summary>
+            <div className="absolute right-0 top-8 z-30 w-36 rounded-lg border border-fuel-line bg-white p-1 shadow-xl">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-black text-slate-700 hover:bg-fuel-mist"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  onEditNote(shift);
+                }}
+              >
+                <Pencil size={13} />
+                Edit note
+              </button>
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-black text-red-700 hover:bg-red-50"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  if (window.confirm("Delete this shift?")) onDeleteShift(shift.id);
+                }}
+              >
+                <Trash2 size={13} />
+                Delete shift
+              </button>
+            </div>
+          </details>
         )}
       </div>
 
@@ -669,21 +801,11 @@ function PlannerShiftCard({
             {noteError && <p className="rounded-md bg-red-50 px-2 py-1 text-[11px] font-black text-red-700">{noteError}</p>}
           </div>
         ) : (
-          <div className="flex items-start justify-between gap-2">
+          <div>
             {shift.notes ? (
               <p className={`min-w-0 truncate rounded-md px-2 py-1 text-xs font-bold ${noteToneClass(shift.notes)}`} title={shift.notes}>{shift.notes}</p>
             ) : (
               <p className="text-xs font-bold text-slate-400">No note</p>
-            )}
-            {isAdmin && (
-              <button
-                type="button"
-                className="shrink-0 rounded-md bg-fuel-mist p-1.5 text-fuel-green"
-                title="Edit note"
-                onClick={() => onEditNote(shift)}
-              >
-                <Pencil size={14} />
-              </button>
             )}
           </div>
         )}

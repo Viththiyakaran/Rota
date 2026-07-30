@@ -39,6 +39,7 @@ const navItems = [
 
 function App() {
   const [page, setPage] = React.useState("dashboard");
+  const [addShiftDefaults, setAddShiftDefaults] = React.useState(null);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "" });
   const [checkingSession, setCheckingSession] = React.useState(true);
@@ -56,6 +57,10 @@ function App() {
   );
   const appTitle = buildRotaTitle(branding.businessName);
   const pageProps = { goTo: setPage, currentUser, branding: { ...branding, appTitle } };
+  const openAddShift = (defaults = null) => {
+    setAddShiftDefaults(defaults);
+    setPage("add-shift");
+  };
 
   React.useEffect(() => {
     Promise.allSettled([api.branding(), api.me()])
@@ -80,6 +85,10 @@ function App() {
     const allowed = navItems.find((item) => item.id === page)?.roles.includes(currentUser.role);
     if (!allowed) setPage("dashboard");
   }, [currentUser, page]);
+
+  React.useEffect(() => {
+    if (page !== "add-shift") setAddShiftDefaults(null);
+  }, [page]);
 
   React.useEffect(() => {
     const handlePasswordChangeRequired = () => {
@@ -378,10 +387,18 @@ function App() {
         {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
-        {page === "rota" && <WeeklyRota currentUser={currentUser} goTo={setPage} />}
+        {page === "rota" && <WeeklyRota currentUser={currentUser} goTo={setPage} onAddShift={openAddShift} />}
         {page === "rota-ai" && isAdmin && <RotaAi goTo={setPage} />}
         {page === "rota-pattern" && isAdmin && <RotaPattern goTo={setPage} />}
-        {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
+        {page === "add-shift" && isAdmin && (
+          <AddShift
+            initialValues={addShiftDefaults}
+            onSaved={() => {
+              setAddShiftDefaults(null);
+              setPage("rota");
+            }}
+          />
+        )}
         {page === "tasks" && <Tasks currentUser={currentUser} />}
         {page === "reports" && isAdmin && <Reports goTo={setPage} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
