@@ -164,6 +164,8 @@ app.get("/api", (_req, res) => {
       "POST /api/tasks",
       "PUT /api/tasks/:id",
       "DELETE /api/tasks/:id",
+      "GET /api/sales?startDate=yyyy-mm-dd&endDate=yyyy-mm-dd",
+      "PUT /api/sales",
       "GET /api/audit"
     ]
   });
@@ -518,6 +520,79 @@ app.put("/api/time-off/:id", requireAdmin, async (req, res, next) => {
 app.get("/api/audit", requireAdmin, async (_req, res, next) => {
   try {
     res.json(await listAudit());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/sales", requireAdmin, async (req, res, next) => {
+  try {
+    const { startDate, endDate } = req.query;
+    if (!isDate(startDate) || !isDate(endDate) || endDate < startDate) {
+      return res.status(400).json({ error: "A valid sales date range is required." });
+    }
+    const rows = await all(
+      `SELECT id, saleDate, amount, createdAt, updatedAt
+       FROM salesEntries
+       WHERE saleDate >= ? AND saleDate <= ?
+       ORDER BY saleDate ASC`,
+      [startDate, endDate]
+    );
+    res.json(rows.map((row) => ({ ...row, amount: Number(row.amount || 0) })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/sales", requireAdmin, async (req, res, next) => {
+  try {
+    const entries = Array.isArray(req.body.entries) ? req.body.entries : [];
+    if (entries.length === 0 || entries.length > 31) {
+      return res.status(400).json({ error: "Add between 1 and 31 daily sales entries." });
+    }
+
+    const seenDates = new Set();
+    for (const entry of entries) {
+      const saleDate = String(entry.saleDate || "");
+      if (!isDate(saleDate) || seenDates.has(saleDate)) {
+        return res.status(400).json({ error: "Each sales date must be valid and unique." });
+      }
+      seenDates.add(saleDate);
+      if (entry.amount !== null && entry.amount !== "") {
+        const amount = Number(entry.amount);
+        if (!Number.isFinite(amount) || amount < 0 || amount > 100000000) {
+          return res.status(400).json({ error: "Sales amounts must be between £0 and £100,000,000." });
+        }
+      }
+    }
+
+    for (const entry of entries) {
+      const saleDate = String(entry.saleDate);
+      if (entry.amount === null || entry.amount === "") {
+        await run("DELETE FROM salesEntries WHERE saleDate = ?", [saleDate]);
+      } else {
+        await run(
+          `INSERT INTO salesEntries (saleDate, amount, createdBy)
+           VALUES (?, ?, ?)
+           ON CONFLICT(saleDate) DO UPDATE SET
+             amount = excluded.amount,
+             createdBy = excluded.createdBy,
+             updatedAt = CURRENT_TIMESTAMP`,
+          [saleDate, Number(entry.amount), req.user.id]
+        );
+      }
+    }
+
+    const dates = Array.from(seenDates).sort();
+    await addAudit(req.user.id, "update_sales", `Updated daily sales for ${dates[0]} to ${dates[dates.length - 1]}`);
+    const saved = await all(
+      `SELECT id, saleDate, amount, createdAt, updatedAt
+       FROM salesEntries
+       WHERE saleDate >= ? AND saleDate <= ?
+       ORDER BY saleDate ASC`,
+      [dates[0], dates[dates.length - 1]]
+    );
+    res.json(saved.map((row) => ({ ...row, amount: Number(row.amount || 0) })));
   } catch (error) {
     next(error);
   }

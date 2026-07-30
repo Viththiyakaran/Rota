@@ -1,5 +1,5 @@
 import React from "react";
-import { Archive, CalendarDays, ClipboardCheck, Clock, FileText, RotateCcw, Trash2, Users } from "lucide-react";
+import { Archive, ArrowDownRight, ArrowUpRight, CalendarDays, ClipboardCheck, Clock, FileText, Minus, PoundSterling, RotateCcw, Save, Trash2, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -109,6 +109,8 @@ export function Reports({ goTo }) {
         <p className="mt-3 text-sm font-bold text-slate-500">{formatDateLabel(range.start)} to {formatDateLabel(range.end)}</p>
       </Card>
 
+      <WeeklySalesTracker />
+
       <Status loading={loading} error={error}>
         <div className="grid gap-4 lg:grid-cols-2">
           <ReportCard icon={CalendarDays} title="Weekly Rota Report" action="Open rota" onAction={() => goTo("rota")}>
@@ -187,6 +189,203 @@ export function Reports({ goTo }) {
       </Status>
     </div>
   );
+}
+
+function WeeklySalesTracker() {
+  const currentStart = React.useMemo(() => getMonday(new Date()), []);
+  const previousStart = React.useMemo(() => addDays(currentStart, -7), [currentStart]);
+  const currentDates = React.useMemo(
+    () => Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(currentStart, index))),
+    [currentStart]
+  );
+  const previousDates = React.useMemo(
+    () => Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(previousStart, index))),
+    [previousStart]
+  );
+  const [values, setValues] = React.useState({});
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [saved, setSaved] = React.useState(false);
+
+  React.useEffect(() => {
+    setLoading(true);
+    api.sales(previousDates[0], currentDates[6])
+      .then((rows) => {
+        setValues(Object.fromEntries(rows.map((row) => [row.saleDate, String(row.amount)])));
+        setError("");
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [currentDates, previousDates]);
+
+  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
+  const currentComparisonDates = currentDates.slice(0, todayIndex + 1);
+  const previousComparisonDates = previousDates.slice(0, todayIndex + 1);
+  const currentTotal = sumSales(currentComparisonDates, values);
+  const previousTotal = sumSales(previousComparisonDates, values);
+  const difference = currentTotal - previousTotal;
+  const percentage = previousTotal > 0 ? (difference / previousTotal) * 100 : null;
+  const currentEntered = currentDates.filter((date) => values[date] !== undefined && values[date] !== "").length;
+  const previousEntered = previousDates.filter((date) => values[date] !== undefined && values[date] !== "").length;
+
+  const updateValue = (date, value) => {
+    setValues((current) => ({ ...current, [date]: value }));
+    setSaved(false);
+  };
+
+  const saveSales = async () => {
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    try {
+      const dates = [...previousDates, ...currentDates];
+      await api.updateSales(dates.map((saleDate) => ({
+        saleDate,
+        amount: values[saleDate] === undefined || values[saleDate] === "" ? null : Number(values[saleDate])
+      })));
+      setSaved(true);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="overflow-hidden p-0">
+      <div className="border-b border-fuel-line p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
+              <PoundSterling size={22} />
+            </span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-fuel-green">Performance tracker</p>
+              <h2 className="mt-1 text-2xl font-black text-fuel-ink">Weekly sales</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-600">Enter the end-of-day sales total and compare this week with last week.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={saveSales}
+            disabled={loading || saving}
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-fuel-green px-5 py-2.5 text-sm font-black text-white shadow-sm disabled:opacity-60"
+          >
+            <Save size={18} />
+            {saving ? "Saving..." : saved ? "Sales saved" : "Save sales"}
+          </button>
+        </div>
+        {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
+      </div>
+
+      <div className="grid gap-3 border-b border-fuel-line bg-slate-50 p-4 sm:grid-cols-3">
+        <SalesSummary label="This week to date" value={formatCurrency(currentTotal)} helper={`${currentEntered}/7 daily figures entered`} />
+        <SalesSummary label="Same days last week" value={formatCurrency(previousTotal)} helper={`${previousEntered}/7 daily figures entered`} />
+        <SalesSummary
+          label="Weekly change"
+          value={formatSignedCurrency(difference)}
+          helper={percentage === null ? "Add last week to calculate %" : `${percentage >= 0 ? "+" : ""}${percentage.toFixed(1)}%`}
+          trend={difference}
+        />
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[720px]">
+          <div className="grid grid-cols-[1.1fr_1fr_1fr_0.8fr] gap-3 border-b border-fuel-line bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+            <span>Day</span>
+            <span>This week</span>
+            <span>Last week</span>
+            <span className="text-right">Change</span>
+          </div>
+          {currentDates.map((currentDate, index) => {
+            const previousDate = previousDates[index];
+            const currentAmount = numberFromInput(values[currentDate]);
+            const previousAmount = numberFromInput(values[previousDate]);
+            const dailyDifference = currentAmount - previousAmount;
+            return (
+              <div key={currentDate} className="grid grid-cols-[1.1fr_1fr_1fr_0.8fr] items-center gap-3 border-b border-fuel-line px-5 py-3 last:border-b-0">
+                <div>
+                  <p className="font-black text-fuel-ink">{new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(new Date(`${currentDate}T00:00:00`))}</p>
+                  <p className="text-xs font-semibold text-slate-500">{formatDayLabel(currentDate)}</p>
+                </div>
+                <SalesInput
+                  date={currentDate}
+                  value={values[currentDate] ?? ""}
+                  onChange={(value) => updateValue(currentDate, value)}
+                  loading={loading}
+                />
+                <SalesInput
+                  date={previousDate}
+                  value={values[previousDate] ?? ""}
+                  onChange={(value) => updateValue(previousDate, value)}
+                  loading={loading}
+                />
+                <p className={`text-right text-sm font-black ${dailyDifference > 0 ? "text-emerald-700" : dailyDifference < 0 ? "text-red-700" : "text-slate-500"}`}>
+                  {formatSignedCurrency(dailyDifference)}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SalesInput({ date, loading, onChange, value }) {
+  return (
+    <label className="relative block">
+      <span className="sr-only">Sales for {formatDayLabel(date)}</span>
+      <PoundSterling className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <input
+        type="number"
+        inputMode="decimal"
+        min="0"
+        max="100000000"
+        step="0.01"
+        disabled={loading}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={loading ? "Loading..." : "0.00"}
+        className="min-h-11 w-full rounded-lg border border-fuel-line bg-white py-2 pl-9 pr-3 font-bold text-fuel-ink outline-none focus:border-fuel-green focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+      />
+    </label>
+  );
+}
+
+function SalesSummary({ helper, label, trend = 0, value }) {
+  const TrendIcon = trend > 0 ? ArrowUpRight : trend < 0 ? ArrowDownRight : Minus;
+  const trendClass = trend > 0 ? "text-emerald-700" : trend < 0 ? "text-red-700" : "text-slate-500";
+  return (
+    <div className="rounded-lg border border-fuel-line bg-white p-4">
+      <p className="text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      <div className="mt-2 flex items-center gap-2">
+        <p className="text-2xl font-black text-fuel-ink">{value}</p>
+        {label === "Weekly change" && <TrendIcon className={`h-5 w-5 ${trendClass}`} />}
+      </div>
+      <p className={`mt-1 text-xs font-bold ${label === "Weekly change" ? trendClass : "text-slate-500"}`}>{helper}</p>
+    </div>
+  );
+}
+
+function sumSales(dates, values) {
+  return dates.reduce((total, date) => total + numberFromInput(values[date]), 0);
+}
+
+function numberFromInput(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number >= 0 ? number : 0;
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Number(value || 0));
+}
+
+function formatSignedCurrency(value) {
+  const number = Number(value || 0);
+  if (number === 0) return "£0.00";
+  return `${number > 0 ? "+" : "-"}${formatCurrency(Math.abs(number))}`;
 }
 
 function ReportCard({ action, children, icon: Icon, onAction, title }) {

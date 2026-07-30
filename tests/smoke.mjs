@@ -45,6 +45,7 @@ async function runSmoke() {
 
   const routeList = await request("/api");
   assert(routeList.endpoints?.includes("GET /api/staff"), "api route list works");
+  assert(routeList.endpoints?.includes("PUT /api/sales"), "sales route is listed");
 
   const publicBranding = await request("/api/settings/branding");
   assert(publicBranding.businessName, "public branding works");
@@ -127,6 +128,21 @@ async function runSmoke() {
   });
   const hours = await request("/api/settings/opening-hours", { cookie: admin.cookie });
   assert(hours.openingStart === "06:00", "opening hours save");
+
+  const savedSales = await request("/api/sales", {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: {
+      entries: [
+        { saleDate: "2026-07-20", amount: 8200.5 },
+        { saleDate: "2026-07-27", amount: 9100.75 }
+      ]
+    }
+  });
+  assert(savedSales.length === 2, "daily sales save");
+  const sales = await request("/api/sales?startDate=2026-07-20&endDate=2026-07-27", { cookie: admin.cookie });
+  assert(sales[0].amount === 8200.5 && sales[1].amount === 9100.75, "daily sales reload");
+  await expectStatus("/api/sales?startDate=2026-07-20&endDate=2026-07-27", 403, { cookie: staff.cookie });
 
   const createdStaff = await request("/api/staff", {
     cookie: admin.cookie,
