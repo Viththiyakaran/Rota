@@ -61,6 +61,8 @@ export const api = {
   deleteTask: (id) => request(`/api/tasks/${id}`, { method: "DELETE" }),
   sales: (startDate, endDate) => request(`/api/sales?startDate=${startDate}&endDate=${endDate}`),
   updateSales: (entries) => request("/api/sales", { method: "PUT", body: JSON.stringify({ entries }) }),
+  salesCommunication: (weekStart) => request(`/api/sales/communication?weekStart=${weekStart}`),
+  updateSalesCommunication: (payload) => request("/api/sales/communication", { method: "PUT", body: JSON.stringify(payload) }),
   audit: () => request("/api/audit"),
   staff: () => request("/api/staff"),
   createStaff: (payload) => request("/api/staff", { method: "POST", body: JSON.stringify(payload) }),

@@ -166,6 +166,8 @@ app.get("/api", (_req, res) => {
       "DELETE /api/tasks/:id",
       "GET /api/sales?startDate=yyyy-mm-dd&endDate=yyyy-mm-dd",
       "PUT /api/sales",
+      "GET /api/sales/communication?weekStart=yyyy-mm-dd",
+      "PUT /api/sales/communication",
       "GET /api/audit"
     ]
   });
@@ -593,6 +595,52 @@ app.put("/api/sales", requireAdmin, async (req, res, next) => {
       [dates[0], dates[dates.length - 1]]
     );
     res.json(saved.map((row) => ({ ...row, amount: Number(row.amount || 0) })));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/sales/communication", requireAdmin, async (req, res, next) => {
+  try {
+    const weekStart = String(req.query.weekStart || "");
+    if (!isDate(weekStart)) return res.status(400).json({ error: "A valid week start date is required." });
+    const row = await get(
+      "SELECT weekStart, communication, updatedAt FROM salesWeeklyNotes WHERE weekStart = ?",
+      [weekStart]
+    );
+    res.json(row || { weekStart, communication: "", updatedAt: null });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/sales/communication", requireAdmin, async (req, res, next) => {
+  try {
+    const weekStart = String(req.body.weekStart || "");
+    const communication = String(req.body.communication || "").trim();
+    if (!isDate(weekStart)) return res.status(400).json({ error: "A valid week start date is required." });
+    if (communication.length > 2000) return res.status(400).json({ error: "Communication must be 2,000 characters or fewer." });
+
+    if (communication) {
+      await run(
+        `INSERT INTO salesWeeklyNotes (weekStart, communication, createdBy)
+         VALUES (?, ?, ?)
+         ON CONFLICT(weekStart) DO UPDATE SET
+           communication = excluded.communication,
+           createdBy = excluded.createdBy,
+           updatedAt = CURRENT_TIMESTAMP`,
+        [weekStart, communication, req.user.id]
+      );
+    } else {
+      await run("DELETE FROM salesWeeklyNotes WHERE weekStart = ?", [weekStart]);
+    }
+
+    await addAudit(req.user.id, "update_sales_communication", `Updated performance tracker communication for week ${weekStart}`);
+    const row = await get(
+      "SELECT weekStart, communication, updatedAt FROM salesWeeklyNotes WHERE weekStart = ?",
+      [weekStart]
+    );
+    res.json(row || { weekStart, communication: "", updatedAt: null });
   } catch (error) {
     next(error);
   }

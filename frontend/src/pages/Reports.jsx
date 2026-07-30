@@ -203,6 +203,7 @@ function WeeklySalesTracker() {
     [previousStart]
   );
   const [values, setValues] = React.useState({});
+  const [communication, setCommunication] = React.useState("");
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
@@ -210,24 +211,31 @@ function WeeklySalesTracker() {
 
   React.useEffect(() => {
     setLoading(true);
-    api.sales(previousDates[0], currentDates[6])
-      .then((rows) => {
+    Promise.all([
+      api.sales(previousDates[0], currentDates[6]),
+      api.salesCommunication(currentDates[0])
+    ])
+      .then(([rows, weeklyNote]) => {
         setValues(Object.fromEntries(rows.map((row) => [row.saleDate, String(row.amount)])));
+        setCommunication(weeklyNote.communication || "");
         setError("");
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [currentDates, previousDates]);
 
-  const todayIndex = new Date().getDay() === 0 ? 6 : new Date().getDay() - 1;
-  const currentComparisonDates = currentDates.slice(0, todayIndex + 1);
-  const previousComparisonDates = previousDates.slice(0, todayIndex + 1);
+  const comparableIndexes = currentDates
+    .map((currentDate, index) => (
+      hasSalesValue(values[currentDate]) && hasSalesValue(values[previousDates[index]]) ? index : -1
+    ))
+    .filter((index) => index >= 0);
+  const currentComparisonDates = comparableIndexes.map((index) => currentDates[index]);
+  const previousComparisonDates = comparableIndexes.map((index) => previousDates[index]);
   const currentTotal = sumSales(currentComparisonDates, values);
   const previousTotal = sumSales(previousComparisonDates, values);
   const difference = currentTotal - previousTotal;
   const percentage = previousTotal > 0 ? (difference / previousTotal) * 100 : null;
-  const currentEntered = currentDates.filter((date) => values[date] !== undefined && values[date] !== "").length;
-  const previousEntered = previousDates.filter((date) => values[date] !== undefined && values[date] !== "").length;
+  const currentEntered = currentDates.filter((date) => hasSalesValue(values[date])).length;
 
   const updateValue = (date, value) => {
     setValues((current) => ({ ...current, [date]: value }));
@@ -240,10 +248,13 @@ function WeeklySalesTracker() {
     setSaved(false);
     try {
       const dates = [...previousDates, ...currentDates];
-      await api.updateSales(dates.map((saleDate) => ({
-        saleDate,
-        amount: values[saleDate] === undefined || values[saleDate] === "" ? null : Number(values[saleDate])
-      })));
+      await Promise.all([
+        api.updateSales(dates.map((saleDate) => ({
+          saleDate,
+          amount: values[saleDate] === undefined || values[saleDate] === "" ? null : Number(values[saleDate])
+        }))),
+        api.updateSalesCommunication({ weekStart: currentDates[0], communication })
+      ]);
       setSaved(true);
     } catch (err) {
       setError(err.message);
@@ -280,31 +291,41 @@ function WeeklySalesTracker() {
       </div>
 
       <div className="grid gap-3 border-b border-fuel-line bg-slate-50 p-4 sm:grid-cols-3">
-        <SalesSummary label="This week to date" value={formatCurrency(currentTotal)} helper={`${currentEntered}/7 daily figures entered`} />
-        <SalesSummary label="Same days last week" value={formatCurrency(previousTotal)} helper={`${previousEntered}/7 daily figures entered`} />
+        <SalesSummary label="Sales (£)" value={formatCurrency(currentTotal)} helper={`${currentEntered}/7 current-week figures entered`} />
+        <SalesSummary label="Last week" value={formatCurrency(previousTotal)} helper={`${comparableIndexes.length} matching days compared`} />
         <SalesSummary
           label="Weekly change"
           value={formatSignedCurrency(difference)}
-          helper={percentage === null ? "Add last week to calculate %" : `${percentage >= 0 ? "+" : ""}${percentage.toFixed(1)}%`}
+          helper={percentage === null ? "Enter matching days to calculate %" : `${percentage >= 0 ? "+" : ""}${percentage.toFixed(1)}%`}
           trend={difference}
         />
       </div>
 
       <div className="overflow-x-auto">
-        <div className="min-w-[720px]">
-          <div className="grid grid-cols-[1.1fr_1fr_1fr_0.8fr] gap-3 border-b border-fuel-line bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
+        <div className="min-w-[900px]">
+          <div className="grid grid-cols-[1.1fr_1fr_1fr_0.8fr_0.9fr] gap-3 border-b border-fuel-line bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-slate-500">
             <span>Day</span>
-            <span>This week</span>
+            <span>Sales (£)</span>
             <span>Last week</span>
-            <span className="text-right">Change</span>
+            <span className="text-right">+/- LW</span>
+            <span className="text-right">Cumulative</span>
           </div>
           {currentDates.map((currentDate, index) => {
             const previousDate = previousDates[index];
             const currentAmount = numberFromInput(values[currentDate]);
             const previousAmount = numberFromInput(values[previousDate]);
-            const dailyDifference = currentAmount - previousAmount;
+            const hasComparison = hasSalesValue(values[currentDate]) && hasSalesValue(values[previousDate]);
+            const dailyDifference = hasComparison ? currentAmount - previousAmount : null;
+            const cumulativeDifference = currentDates
+              .slice(0, index + 1)
+              .reduce((total, date, cumulativeIndex) => {
+                const matchingPreviousDate = previousDates[cumulativeIndex];
+                if (!hasSalesValue(values[date]) || !hasSalesValue(values[matchingPreviousDate])) return total;
+                return total + numberFromInput(values[date]) - numberFromInput(values[matchingPreviousDate]);
+              }, 0);
+            const hasCumulative = hasComparison;
             return (
-              <div key={currentDate} className="grid grid-cols-[1.1fr_1fr_1fr_0.8fr] items-center gap-3 border-b border-fuel-line px-5 py-3 last:border-b-0">
+              <div key={currentDate} className="grid grid-cols-[1.1fr_1fr_1fr_0.8fr_0.9fr] items-center gap-3 border-b border-fuel-line px-5 py-3 last:border-b-0">
                 <div>
                   <p className="font-black text-fuel-ink">{new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(new Date(`${currentDate}T00:00:00`))}</p>
                   <p className="text-xs font-semibold text-slate-500">{formatDayLabel(currentDate)}</p>
@@ -324,10 +345,32 @@ function WeeklySalesTracker() {
                 <p className={`text-right text-sm font-black ${dailyDifference > 0 ? "text-emerald-700" : dailyDifference < 0 ? "text-red-700" : "text-slate-500"}`}>
                   {formatSignedCurrency(dailyDifference)}
                 </p>
+                <p className={`text-right text-sm font-black ${cumulativeDifference > 0 ? "text-emerald-700" : cumulativeDifference < 0 ? "text-red-700" : "text-slate-500"}`}>
+                  {hasCumulative ? formatSignedCurrency(cumulativeDifference) : "—"}
+                </p>
               </div>
             );
           })}
         </div>
+      </div>
+
+      <div className="border-t border-fuel-line bg-slate-50 p-5">
+        <label className="block">
+          <span className="text-sm font-black uppercase tracking-wide text-fuel-ink">Communication</span>
+          <span className="mt-1 block text-xs font-semibold text-slate-500">Add the weekly message, sales focus, or action for the team.</span>
+          <textarea
+            rows="3"
+            maxLength="2000"
+            value={communication}
+            disabled={loading}
+            onChange={(event) => {
+              setCommunication(event.target.value);
+              setSaved(false);
+            }}
+            placeholder="Example: Strong Tuesday. Focus on meal deals and impulse sales this weekend."
+            className="mt-3 w-full resize-y rounded-lg border border-fuel-line bg-white p-3 text-sm font-semibold text-fuel-ink outline-none focus:border-fuel-green focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+          />
+        </label>
       </div>
     </Card>
   );
@@ -378,11 +421,16 @@ function numberFromInput(value) {
   return Number.isFinite(number) && number >= 0 ? number : 0;
 }
 
+function hasSalesValue(value) {
+  return value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Number(value || 0));
 }
 
 function formatSignedCurrency(value) {
+  if (value === null || value === undefined) return "—";
   const number = Number(value || 0);
   if (number === 0) return "£0.00";
   return `${number > 0 ? "+" : "-"}${formatCurrency(Math.abs(number))}`;

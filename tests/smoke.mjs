@@ -142,7 +142,16 @@ async function runSmoke() {
   assert(savedSales.length === 2, "daily sales save");
   const sales = await request("/api/sales?startDate=2026-07-20&endDate=2026-07-27", { cookie: admin.cookie });
   assert(sales[0].amount === 8200.5 && sales[1].amount === 9100.75, "daily sales reload");
+  const salesCommunication = await request("/api/sales/communication", {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { weekStart: "2026-07-27", communication: "Focus on weekend add-on sales." }
+  });
+  assert(salesCommunication.communication === "Focus on weekend add-on sales.", "sales communication saves");
+  const reloadedSalesCommunication = await request("/api/sales/communication?weekStart=2026-07-27", { cookie: admin.cookie });
+  assert(reloadedSalesCommunication.communication === "Focus on weekend add-on sales.", "sales communication reloads");
   await expectStatus("/api/sales?startDate=2026-07-20&endDate=2026-07-27", 403, { cookie: staff.cookie });
+  await expectStatus("/api/sales/communication?weekStart=2026-07-27", 403, { cookie: staff.cookie });
 
   const createdStaff = await request("/api/staff", {
     cookie: admin.cookie,

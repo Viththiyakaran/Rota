@@ -162,7 +162,8 @@ const pgKeyMap = new Map(Object.entries({
   clockoutlocationaccuracy: "clockOutLocationAccuracy",
   clockinlocationchecked: "clockInLocationChecked",
   clockoutlocationchecked: "clockOutLocationChecked",
-  saledate: "saleDate"
+  saledate: "saleDate",
+  weekstart: "weekStart"
 }));
 
 function cameliseRow(row) {
@@ -360,6 +361,18 @@ export async function initDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       saleDate TEXT NOT NULL UNIQUE,
       amount REAL NOT NULL DEFAULT 0,
+      createdBy INTEGER,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (createdBy) REFERENCES users(id)
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS salesWeeklyNotes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      weekStart TEXT NOT NULL UNIQUE,
+      communication TEXT NOT NULL DEFAULT '',
       createdBy INTEGER,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -594,6 +607,17 @@ async function createPostgresSchema() {
       id SERIAL PRIMARY KEY,
       saleDate TEXT NOT NULL UNIQUE,
       amount DOUBLE PRECISION NOT NULL DEFAULT 0,
+      createdBy INTEGER REFERENCES users(id),
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS salesWeeklyNotes (
+      id SERIAL PRIMARY KEY,
+      weekStart TEXT NOT NULL UNIQUE,
+      communication TEXT NOT NULL DEFAULT '',
       createdBy INTEGER REFERENCES users(id),
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
