@@ -206,6 +206,7 @@ function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) 
 }
 
 function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
+  const menuRef = React.useRef(null);
   const moreActions = [
     { label: "Generate Rota", page: "rota-pattern", icon: Sparkles },
     { label: "Print Rota", page: "rota", icon: Printer },
@@ -214,8 +215,26 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
     { label: "Tasks", page: "tasks", icon: ListChecks }
   ];
 
+  React.useEffect(() => {
+    if (!moreOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!menuRef.current?.contains(event.target)) onToggleMore();
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") onToggleMore();
+    };
+
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [moreOpen, onToggleMore]);
+
   return (
-    <div className="relative">
+    <div ref={menuRef} className="relative">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
         <button
           type="button"
@@ -247,7 +266,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
         )}
       </div>
       {isAdmin && moreOpen && (
-        <div className="absolute right-0 z-30 mt-2 grid w-full gap-1 rounded-lg border border-fuel-line bg-white p-2 shadow-lift sm:w-72">
+        <div className="absolute bottom-full right-0 z-30 mb-2 grid max-h-[calc(100vh-8rem)] w-full gap-1 overflow-y-auto rounded-lg border border-fuel-line bg-white p-2 shadow-lift sm:w-72">
           {moreActions.map((action) => {
             const Icon = action.icon;
             return (
@@ -297,7 +316,7 @@ function CompactDashboardSummary({
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 lg:grid-cols-[1.3fr_0.9fr]">
+      <div className="grid items-start gap-3 lg:grid-cols-[1.3fr_0.9fr]">
         <Card className="p-4 sm:p-4">
           <div className="flex items-center justify-between gap-3">
             <div>

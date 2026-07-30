@@ -336,16 +336,6 @@ function App() {
             </div>
           </div>
           <div className="flex items-center justify-end gap-2">
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => setPage("rota-ai")}
-                className="hidden min-h-10 items-center justify-center gap-2 rounded-lg bg-fuel-green px-3 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-fuel-deep sm:inline-flex"
-              >
-                <Bot size={18} />
-                Rota AI
-              </button>
-            )}
             <button
               type="button"
               onClick={() => setPage("reminders")}
