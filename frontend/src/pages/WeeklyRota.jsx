@@ -19,7 +19,7 @@ import { Status } from "../components/Status.jsx";
 import { addDays, formatDateLabel, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappGroupShareUrl } from "../whatsapp.js";
 
-export function WeeklyRota({ currentUser, goTo, onAddShift }) {
+export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
   const [startDate, setStartDate] = React.useState(toDateInputValue(getMonday()));
   const [staff, setStaff] = React.useState([]);
   const [shifts, setShifts] = React.useState([]);
@@ -273,6 +273,7 @@ export function WeeklyRota({ currentUser, goTo, onAddShift }) {
           onAddShift={onAddShift}
           onCancelNote={cancelNoteEdit}
           onDeleteShift={removeShift}
+          onEditShift={onEditShift}
           onEditNote={startNoteEdit}
           onNoteDraftChange={setNoteDraft}
           onSaveNote={saveNote}
@@ -377,6 +378,7 @@ function PlannerGrid({
   onAddShift,
   onCancelNote,
   onDeleteShift,
+  onEditShift,
   onEditNote,
   onNoteDraftChange,
   onSaveNote,
@@ -409,6 +411,7 @@ function PlannerGrid({
         noteError={noteError}
         onCancelNote={onCancelNote}
         onDeleteShift={onDeleteShift}
+        onEditShift={onEditShift}
         onEditNote={onEditNote}
         onNoteDraftChange={onNoteDraftChange}
         onSaveNote={onSaveNote}
@@ -462,6 +465,7 @@ function PlannerGrid({
                 onAddShift={onAddShift}
                 onCancelNote={onCancelNote}
                 onDeleteShift={onDeleteShift}
+                onEditShift={onEditShift}
                 onEditNote={onEditNote}
                 onNoteDraftChange={onNoteDraftChange}
                 onSaveNote={onSaveNote}
@@ -486,6 +490,7 @@ function MobileWeekCards({
   noteError,
   onCancelNote,
   onDeleteShift,
+  onEditShift,
   onEditNote,
   onNoteDraftChange,
   onSaveNote,
@@ -540,6 +545,7 @@ function MobileWeekCards({
                     noteError={noteError}
                     onCancelNote={onCancelNote}
                     onDeleteShift={onDeleteShift}
+                    onEditShift={onEditShift}
                     onEditNote={onEditNote}
                     onNoteDraftChange={onNoteDraftChange}
                     onSaveNote={onSaveNote}
@@ -613,6 +619,7 @@ function StaffPlannerRow({
   onAddShift,
   onCancelNote,
   onDeleteShift,
+  onEditShift,
   onEditNote,
   onNoteDraftChange,
   onSaveNote,
@@ -687,6 +694,7 @@ function StaffPlannerRow({
                     noteError={noteError}
                     onCancelNote={onCancelNote}
                     onDeleteShift={onDeleteShift}
+                    onEditShift={onEditShift}
                     onEditNote={onEditNote}
                     onNoteDraftChange={onNoteDraftChange}
                     onSaveNote={onSaveNote}
@@ -710,6 +718,7 @@ function PlannerShiftCard({
   noteError,
   onCancelNote,
   onDeleteShift,
+  onEditShift,
   onEditNote,
   onNoteDraftChange,
   onSaveNote,
@@ -735,7 +744,18 @@ function PlannerShiftCard({
             >
               <MoreHorizontal size={15} />
             </summary>
-            <div className="absolute right-0 top-8 z-30 w-36 rounded-lg border border-fuel-line bg-white p-1 shadow-xl">
+            <div className="absolute right-0 top-8 z-30 w-40 rounded-lg border border-fuel-line bg-white p-1 shadow-xl">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-black text-slate-700 hover:bg-fuel-mist"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  onEditShift?.(shift);
+                }}
+              >
+                <CalendarDays size={13} />
+                Edit shift
+              </button>
               <button
                 type="button"
                 className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-black text-slate-700 hover:bg-fuel-mist"

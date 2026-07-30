@@ -235,6 +235,29 @@ async function runSmoke() {
   });
   assert(shift.totalHours === 8, "shift hours calculated");
 
+  const followingWeekShift = await request("/api/shifts", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: {
+      staffId: staffRows[0].id,
+      shiftDate: "2026-07-08",
+      startTime: "06:00",
+      endTime: "14:00",
+      breakMinutes: 0,
+      reminderMinutes: 60,
+      notes: "Following week"
+    }
+  });
+  const editedShift = await request(`/api/shifts/${shift.id}`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { startTime: "13:30", endTime: "22:00", breakMinutes: 0 }
+  });
+  assert(editedShift.startTime === "13:30" && editedShift.totalHours === 8.5, "single shift time edit works");
+  const followingWeek = await request("/api/shifts/week?startDate=2026-07-06", { cookie: admin.cookie });
+  const untouchedShift = followingWeek.find((item) => item.id === followingWeekShift.id);
+  assert(untouchedShift?.startTime === "06:00" && untouchedShift?.endTime === "14:00", "single shift edit does not change another week");
+
   const week = await request("/api/shifts/week?startDate=2026-06-29", { cookie: admin.cookie });
   assert(week.some((item) => item.id === shift.id), "week includes created shift");
 

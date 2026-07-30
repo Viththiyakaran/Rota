@@ -14,22 +14,24 @@ const DEFAULT_SHIFT_RANGE_PRESETS = [
   { label: "Evening", startTime: "18:00", endTime: "22:00" }
 ];
 
-export function AddShift({ initialValues = null, onSaved }) {
+export function AddShift({ initialValues = null, onCancel, onSaved, shiftId = null }) {
+  const isEditing = Boolean(shiftId);
   const [staff, setStaff] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({ openingStart: "05:30", openingEnd: "22:00", shiftRangePresets: DEFAULT_SHIFT_RANGE_PRESETS });
   const [availability, setAvailability] = React.useState([]);
   const [timeOff, setTimeOff] = React.useState([]);
   const [error, setError] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState({
     staffId: initialValues?.staffId || "",
     shiftDate: initialValues?.shiftDate || toDateInputValue(new Date()),
-    startTime: "05:30",
-    endTime: "14:00",
-    breakMinutes: 0,
-    reminderMinutes: 30,
-    notes: "",
-    isExtra: false,
-    coverForStaffId: ""
+    startTime: initialValues?.startTime || "05:30",
+    endTime: initialValues?.endTime || "14:00",
+    breakMinutes: Number(initialValues?.breakMinutes ?? 0),
+    reminderMinutes: Number(initialValues?.reminderMinutes ?? 30),
+    notes: initialValues?.notes || "",
+    isExtra: Boolean(initialValues?.isExtra),
+    coverForStaffId: initialValues?.coverForStaffId || ""
   });
 
   React.useEffect(() => {
@@ -43,10 +45,15 @@ export function AddShift({ initialValues = null, onSaved }) {
         ...current,
         staffId: initialValues?.staffId || active[0]?.id || "",
         shiftDate: initialValues?.shiftDate || current.shiftDate,
-        startTime: hours.openingStart,
-        endTime: hours.openingEnd
+        startTime: initialValues?.startTime || hours.openingStart,
+        endTime: initialValues?.endTime || hours.openingEnd,
+        breakMinutes: Number(initialValues?.breakMinutes ?? current.breakMinutes ?? 0),
+        reminderMinutes: Number(initialValues?.reminderMinutes ?? current.reminderMinutes ?? 30),
+        notes: initialValues?.notes || current.notes,
+        isExtra: Boolean(initialValues?.isExtra),
+        coverForStaffId: initialValues?.coverForStaffId || current.coverForStaffId
       }));
-    });
+    }).catch((err) => setError(err.message));
   }, []);
 
   const selectedStaff = staff.find((person) => String(person.id) === String(form.staffId));
@@ -56,15 +63,24 @@ export function AddShift({ initialValues = null, onSaved }) {
 
   const submit = async (event) => {
     event.preventDefault();
+    setSaving(true);
+    setError("");
     try {
-      await api.createShift({
+      const payload = {
         ...form,
         staffId: Number(form.staffId),
         coverForStaffId: form.isExtra && form.coverForStaffId ? Number(form.coverForStaffId) : null
-      });
+      };
+      if (isEditing) {
+        await api.updateShift(shiftId, payload);
+      } else {
+        await api.createShift(payload);
+      }
       onSaved();
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -72,12 +88,22 @@ export function AddShift({ initialValues = null, onSaved }) {
     <div className="space-y-4">
       <PageHeader
         eyebrow="Rota"
-        title="One-off Shift"
-        description="Use this for temporary cover or changes. For normal repeating rota, use Rota Pattern."
+        title={isEditing ? "Edit Shift" : "One-off Shift"}
+        description={isEditing
+          ? "Update this individual shift without changing other weeks or the rota pattern."
+          : "Use this for temporary cover or changes. For normal repeating rota, use Rota Pattern."}
       />
       <Card>
         <form onSubmit={submit} className="space-y-4">
           {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700">{error}</p>}
+          {isEditing ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <p className="font-black text-fuel-green">This shift only</p>
+              <p className="mt-1 text-sm font-bold text-slate-600">
+                Saving here will not change another day, another week, or your rota pattern.
+              </p>
+            </div>
+          ) : null}
           <Field label="Staff">
             <select required className={inputClass} value={form.staffId} onChange={(e) => setForm({ ...form, staffId: e.target.value })}>
               {staff.map((person) => (
@@ -178,10 +204,45 @@ export function AddShift({ initialValues = null, onSaved }) {
               </Field>
             </div>
           </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Unpaid break (minutes)">
+              <input
+                type="number"
+                min="0"
+                step="5"
+                className={inputClass}
+                value={form.breakMinutes}
+                onChange={(event) => setForm({ ...form, breakMinutes: Number(event.target.value) })}
+              />
+            </Field>
+            <Field label="Reminder before shift (minutes)">
+              <input
+                type="number"
+                min="5"
+                step="5"
+                className={inputClass}
+                value={form.reminderMinutes}
+                onChange={(event) => setForm({ ...form, reminderMinutes: Number(event.target.value) })}
+              />
+            </Field>
+          </div>
           <Field label="Notes">
             <textarea className={`${inputClass} min-h-24`} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           </Field>
-          <button className={`${primaryButton} w-full`}>Save One-off Shift</button>
+          <div className={`grid gap-2 ${onCancel ? "sm:grid-cols-[1fr_2fr]" : ""}`}>
+            {onCancel ? (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="min-h-11 rounded-md bg-fuel-mist px-4 py-2.5 text-sm font-black text-fuel-green"
+              >
+                Cancel
+              </button>
+            ) : null}
+            <button className={`${primaryButton} w-full`} disabled={saving}>
+              {saving ? "Saving..." : isEditing ? "Save this shift only" : "Save One-off Shift"}
+            </button>
+          </div>
         </form>
       </Card>
     </div>

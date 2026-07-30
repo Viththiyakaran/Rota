@@ -29,6 +29,7 @@ const navItems = [
   { id: "rota-ai", label: "Rota AI", icon: Bot, roles: ["admin"], hidden: true },
   { id: "rota-pattern", label: "Pattern", icon: Layers, roles: ["admin"], hidden: true },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
+  { id: "edit-shift", label: "Edit Shift", icon: CalendarDays, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
   { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
@@ -40,6 +41,7 @@ const navItems = [
 function App() {
   const [page, setPage] = React.useState("dashboard");
   const [addShiftDefaults, setAddShiftDefaults] = React.useState(null);
+  const [editingShift, setEditingShift] = React.useState(null);
   const [currentUser, setCurrentUser] = React.useState(null);
   const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "" });
   const [checkingSession, setCheckingSession] = React.useState(true);
@@ -60,6 +62,10 @@ function App() {
   const openAddShift = (defaults = null) => {
     setAddShiftDefaults(defaults);
     setPage("add-shift");
+  };
+  const openEditShift = (shift) => {
+    setEditingShift(shift);
+    setPage("edit-shift");
   };
 
   React.useEffect(() => {
@@ -88,6 +94,7 @@ function App() {
 
   React.useEffect(() => {
     if (page !== "add-shift") setAddShiftDefaults(null);
+    if (page !== "edit-shift") setEditingShift(null);
   }, [page]);
 
   React.useEffect(() => {
@@ -387,7 +394,14 @@ function App() {
         {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
         {page === "staff" && isAdmin && <StaffList goTo={setPage} />}
         {page === "add-staff" && isAdmin && <AddStaff onSaved={() => setPage("staff")} />}
-        {page === "rota" && <WeeklyRota currentUser={currentUser} goTo={setPage} onAddShift={openAddShift} />}
+        {page === "rota" && (
+          <WeeklyRota
+            currentUser={currentUser}
+            goTo={setPage}
+            onAddShift={openAddShift}
+            onEditShift={openEditShift}
+          />
+        )}
         {page === "rota-ai" && isAdmin && <RotaAi goTo={setPage} />}
         {page === "rota-pattern" && isAdmin && <RotaPattern goTo={setPage} />}
         {page === "add-shift" && isAdmin && (
@@ -397,6 +411,14 @@ function App() {
               setAddShiftDefaults(null);
               setPage("rota");
             }}
+          />
+        )}
+        {page === "edit-shift" && isAdmin && editingShift && (
+          <AddShift
+            initialValues={editingShift}
+            onCancel={() => setPage("rota")}
+            onSaved={() => setPage("rota")}
+            shiftId={editingShift.id}
           />
         )}
         {page === "tasks" && <Tasks currentUser={currentUser} />}
