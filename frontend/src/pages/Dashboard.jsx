@@ -167,6 +167,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
             ukRules={ukRules}
             weekDays={weekDays}
             onOpenWeek={() => goTo("rota")}
+            onOpenNotifications={() => goTo("reminders")}
           />
         </Card>
       </Status>
@@ -215,8 +216,8 @@ function TodayActionPlan({ attentionItems, clockedInNow, nextShift, tasksDueToda
   return (
     <section className="space-y-3">
       <div>
-        <h2 className="text-xl font-black text-fuel-ink">Today's Action Plan</h2>
-        <p className="text-sm font-medium text-slate-600">Four quick checks before the day gets busy.</p>
+        <h2 className="text-xl font-black text-fuel-ink">Today</h2>
+        <p className="text-sm font-medium text-slate-600">The checks that matter before the day gets busy.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ActionMiniCard
@@ -270,15 +271,15 @@ function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) 
 
 function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
   const moreActions = [
+    { label: "Reports", page: "reports", icon: BarChart3 },
     { label: "Rota Pattern", page: "rota-pattern", icon: Layers },
     { label: "One-off Shift", page: "add-shift", icon: PlusCircle },
-    { label: "Weekly Rota", page: "rota", icon: CalendarDays },
     { label: "Tasks", page: "tasks", icon: ListChecks }
   ];
 
   return (
     <div className="relative">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1fr_1fr_auto_auto_auto]">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.15fr_1fr_auto_auto_auto]">
         <button
           type="button"
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-emerald-800"
@@ -290,13 +291,21 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
         <button
           type="button"
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-fuel-line bg-white px-4 py-3 text-base font-bold text-fuel-ink shadow-sm transition hover:bg-fuel-mist hover:text-fuel-green"
-          onClick={() => goTo(isAdmin ? "rota-pattern" : "time-off")}
+          onClick={() => goTo("rota")}
         >
-          <Sparkles size={19} />
-          {isAdmin ? "Generate Rota" : "Request Time Off"}
+          <CalendarDays size={19} />
+          Open Rota
         </button>
         {isAdmin && (
           <>
+            <button
+              type="button"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-fuel-line bg-white px-4 py-3 text-base font-bold text-fuel-ink shadow-sm transition hover:bg-fuel-mist hover:text-fuel-green"
+              onClick={() => goTo("rota-pattern")}
+            >
+              <Sparkles size={18} />
+              Generate Rota
+            </button>
             <button
               type="button"
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-emerald-100"
@@ -323,7 +332,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
             aria-expanded={moreOpen}
             title="More actions"
           >
-            <span className="xl:hidden">More Actions</span>
+            <span className="xl:hidden">More</span>
             <ChevronDown size={18} />
           </button>
         )}
@@ -350,7 +359,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
   );
 }
 
-function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminders, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek }) {
+function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminders, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek, onOpenNotifications }) {
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
   const staffOnRota = new Set(visibleShifts.map((shift) => String(shift.staffId))).size;
   const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
@@ -389,7 +398,7 @@ function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminde
         <div className="rounded-xl border border-fuel-line bg-white p-4">
           <div className="flex items-center justify-between gap-3">
             <h4 className="text-base font-extrabold text-fuel-ink">Recent Notifications</h4>
-            <button type="button" className="text-sm font-bold text-fuel-green" onClick={onOpenWeek}>View rota</button>
+            <button type="button" className="text-sm font-bold text-fuel-green" onClick={onOpenNotifications}>View all</button>
           </div>
           <div className="mt-3 space-y-2">
             {reminders.slice(0, 3).map((reminder) => (
@@ -417,28 +426,30 @@ function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminde
           const dayTimeOff = approvedTimeOffForDay(timeOff, day);
           const dayStaff = new Set(dayShifts.map((shift) => String(shift.staffId))).size;
           const dayNotes = new Set(dayShifts.map((shift) => shift.notes).filter(Boolean)).size;
+          const dayHours = dayShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
           const previewShifts = dayShifts.slice(0, 3);
           const hiddenShiftCount = Math.max(dayShifts.length - previewShifts.length, 0);
+          const isToday = day === toDateInputValue(new Date());
 
           return (
-            <div key={day} className="rounded-lg border border-fuel-line/80 bg-fuel-mist/40 p-3 shadow-sm">
+            <div key={day} className={`rounded-xl border bg-fuel-mist/35 p-3 shadow-sm ${isToday ? "border-fuel-green ring-2 ring-emerald-100" : "border-fuel-line/80"}`}>
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
-                  <p className="font-black">{formatWeekday(day)}</p>
+                  <p className="font-black">{formatWeekday(day)} {isToday && <span className="ml-1 rounded-full bg-fuel-green px-2 py-0.5 text-[10px] uppercase text-white">Today</span>}</p>
                   <p className="text-xs font-bold text-slate-500">{formatDayLabel(day)}</p>
                 </div>
                 <span className="rounded-md bg-white px-2 py-1 text-xs font-bold text-fuel-green">
-                  {dayShifts.length} shifts
+                  {formatCount(dayShifts.length, "shift")} · {formatHourTotal(dayHours)}h
                 </span>
               </div>
 
-              <div className="min-h-[92px] space-y-2">
+              <div className="space-y-2">
                 {previewShifts.length > 0 ? previewShifts.map((shift) => (
-                  <div key={shift.id} className="rounded-md bg-white px-2 py-2 shadow-sm">
+                  <div key={shift.id} className="rounded-lg bg-white px-2.5 py-2.5 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                       <p className="truncate text-sm font-black">{shift.staffName}</p>
                       {shift.isExtra && (
-                        <span className="rounded bg-fuel-lime px-1.5 py-0.5 text-[10px] font-black uppercase text-fuel-ink">
+                        <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-black uppercase text-fuel-green">
                           Extra
                         </span>
                       )}
@@ -446,6 +457,12 @@ function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminde
                     <p className="mt-1 text-xs font-black text-fuel-green">
                       {formatShiftRange(shift.startTime, shift.endTime)}
                     </p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">{formatHourTotal(shift.paidHours)}h paid</p>
+                    {shift.notes && (
+                      <p className="mt-2 inline-flex max-w-full rounded-md bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700">
+                        <span className="truncate">{shift.notes}</span>
+                      </p>
+                    )}
                   </div>
                 )) : (
                   <div className="flex h-24 items-center justify-center rounded-md border border-dashed border-fuel-line text-sm font-bold text-slate-400">
@@ -464,11 +481,8 @@ function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminde
                 )}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-1.5 text-xs font-bold text-slate-600">
-                <span className="rounded-md bg-white px-2 py-1">{dayStaff} staff</span>
-                <span className="rounded-md bg-white px-2 py-1">{dayNotes} notes</span>
-                <span className="rounded-md bg-white px-2 py-1">{dayTasks.length} tasks</span>
-                <span className="rounded-md bg-white px-2 py-1">{dayTimeOff.length} off</span>
+              <div className="mt-3 rounded-md bg-white px-2 py-1.5 text-xs font-bold text-slate-600">
+                {formatCount(dayStaff, "staff", "staff")} · {formatCount(dayNotes, "note")} · {formatCount(dayTasks.length, "task")} · {dayTimeOff.length} off
               </div>
             </div>
           );
@@ -485,6 +499,10 @@ function SummaryPill({ label, value }) {
       <p className="mt-1 text-xl font-black text-fuel-ink">{value}</p>
     </div>
   );
+}
+
+function formatCount(count, singular, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
 function WorkedHoursGraph({ attendance, clockInEnabled, shifts, weekDays }) {

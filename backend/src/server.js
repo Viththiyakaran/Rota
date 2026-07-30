@@ -52,6 +52,7 @@ let pushConfigured = false;
 const configuredFrontendUrls = [
   process.env.FRONTEND_URL,
   process.env.FRONTEND_URLS,
+  process.env.CORS_ORIGIN,
   process.env.NETLIFY_FRONTEND_URL
 ]
   .filter(Boolean)

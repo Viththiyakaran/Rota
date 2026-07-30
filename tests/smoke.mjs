@@ -11,7 +11,7 @@ const base = `http://127.0.0.1:${port}`;
 
 const server = spawn(process.execPath, ["--no-warnings", "src/server.js"], {
   cwd: path.join(root, "backend"),
-  env: { ...process.env, PORT: port, DB_PATH: dbPath, ADMIN_RESET_TOKEN: "smoke-reset-token" },
+  env: { ...process.env, PORT: port, DB_PATH: dbPath, DATABASE_URL: "", ADMIN_RESET_TOKEN: "smoke-reset-token" },
   stdio: ["ignore", "pipe", "pipe"]
 });
 

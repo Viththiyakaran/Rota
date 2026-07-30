@@ -45,6 +45,8 @@ Backend:
 NODE_ENV=production
 PORT=5000
 FRONTEND_URL=https://your-frontend-url
+FRONTEND_URLS=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
+CORS_ORIGIN=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
 DB_PATH=/data/fuelops.sqlite
 DATABASE_URL=postgresql://...
 ADMIN_RESET_TOKEN=temporary-only-if-needed
@@ -62,11 +64,37 @@ VITE_API_BASE=https://your-backend-url
 Notes:
 
 - Railway provides `PORT`.
+- Render provides `PORT`.
 - Prefer `DATABASE_URL` for Supabase/Postgres production storage.
 - Use `DB_PATH` only when running SQLite with persistent storage.
+- For split frontend/backend hosting, put every frontend origin in `FRONTEND_URLS` or `CORS_ORIGIN`.
 - `ADMIN_RESET_TOKEN` should be removed after admin password recovery.
 - `JWT_SECRET` is not required because the app uses server sessions.
 - Never paste or commit real database passwords into source control.
+- Never expose Supabase service-role keys in Netlify or other frontend hosting.
+
+## Netlify Frontend And Render Backend
+
+Netlify frontend variable:
+
+```text
+VITE_API_BASE=https://your-render-backend.onrender.com
+```
+
+Render backend variables:
+
+```text
+NODE_ENV=production
+DATABASE_URL=postgresql://postgres.your-project-ref:YOUR_SUPABASE_PASSWORD@aws-...pooler.supabase.com:5432/postgres
+FRONTEND_URL=https://your-netlify-site.netlify.app
+FRONTEND_URLS=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
+CORS_ORIGIN=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
+ADMIN_RESET_TOKEN=temporary-only-if-needed
+```
+
+After changing Render variables, use **Save, rebuild, and deploy**. After changing Netlify variables, redeploy the frontend.
+
+If login fails with CORS, copy the exact frontend URL from the browser address bar into `FRONTEND_URLS` or `CORS_ORIGIN`.
 
 ## Railway Single-Service Deployment
 

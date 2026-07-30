@@ -221,6 +221,7 @@ PORT=5000
 NODE_ENV=production
 FRONTEND_URL=https://your-frontend-url
 FRONTEND_URLS=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
+CORS_ORIGIN=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
 DB_PATH=/data/fuelops.sqlite
 DATABASE_URL=postgresql://...
 ADMIN_RESET_TOKEN=temporary-secret-for-admin-recovery
@@ -232,20 +233,47 @@ VAPID_SUBJECT=mailto:admin@example.com
 Frontend:
 
 ```text
-VITE_API_BASE=https://your-backend-url.up.railway.app
+VITE_API_BASE=https://your-backend-url
 ```
 
 Notes:
 
 - Railway provides `PORT` automatically.
+- Render provides `PORT` automatically.
 - Use `DATABASE_URL` for Supabase/Postgres production storage.
 - Use `DB_PATH` only for SQLite local development or if you deploy with a persistent volume instead of Supabase.
-- Set `FRONTEND_URL` or `FRONTEND_URLS` to every deployed frontend origin that should be allowed to log in. For Netlify, include the exact `https://...netlify.app` URL.
+- Set `FRONTEND_URL`, `FRONTEND_URLS`, or `CORS_ORIGIN` to every deployed frontend origin that should be allowed to log in. For Netlify, include the exact `https://...netlify.app` URL and any custom domain.
 - `ADMIN_RESET_TOKEN` should only be added temporarily when recovering admin access.
 - `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` are optional. If they are not set, the app generates and saves free Web Push keys in the configured database.
 - For long-term production, fixed VAPID keys are better because existing phone/browser subscriptions remain valid after database restore or migration.
 - This app uses server-side sessions, not JWT, so `JWT_SECRET` is not required.
 - Never commit `DATABASE_URL`. Keep it only in Railway/Supabase environment variables.
+- Never put Supabase service-role keys in the frontend. The React app only needs `VITE_API_BASE`.
+
+## Netlify Frontend + Render Backend
+
+Use this split setup when the React frontend is on Netlify and the Node API is on Render.
+
+Netlify environment variable:
+
+```text
+VITE_API_BASE=https://your-render-backend.onrender.com
+```
+
+Render backend environment variables:
+
+```text
+NODE_ENV=production
+DATABASE_URL=postgresql://postgres.your-project-ref:YOUR_SUPABASE_PASSWORD@aws-...pooler.supabase.com:5432/postgres
+FRONTEND_URL=https://your-netlify-site.netlify.app
+FRONTEND_URLS=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
+CORS_ORIGIN=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
+ADMIN_RESET_TOKEN=temporary-only-if-needed
+```
+
+After changing Render variables, click **Save, rebuild, and deploy**. After changing Netlify variables, trigger a new frontend deploy.
+
+If login shows a browser CORS error, check that the exact frontend URL shown in the browser address bar is included in `FRONTEND_URLS` or `CORS_ORIGIN`.
 
 ## Railway Deployment
 
@@ -352,6 +380,7 @@ If you have both a Netlify URL and a custom domain, use:
 
 ```text
 FRONTEND_URLS=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
+CORS_ORIGIN=https://your-netlify-site.netlify.app,https://your-custom-domain.co.uk
 ```
 
 The backend URL must use HTTPS in production because login uses secure cookies.

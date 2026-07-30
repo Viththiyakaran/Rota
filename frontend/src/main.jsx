@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
+import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { buildClockPayload, findClockPromptShift, formatClockTime, shouldPromptClockOut } from "./attendanceClock.js";
@@ -18,6 +18,7 @@ import { StaffList } from "./pages/StaffList.jsx";
 import { Tasks } from "./pages/Tasks.jsx";
 import { TimeOff } from "./pages/TimeOff.jsx";
 import { WeeklyRota } from "./pages/WeeklyRota.jsx";
+import { Reports } from "./pages/Reports.jsx";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home, roles: ["admin", "staff"] },
@@ -29,6 +30,7 @@ const navItems = [
   { id: "rota-pattern", label: "Pattern", icon: Layers, roles: ["admin"], hidden: true },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
+  { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
   { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"], hidden: true },
   { id: "account", label: "Account", icon: UserRound, roles: ["admin", "staff"] },
@@ -44,10 +46,13 @@ function App() {
   const [clockPrompt, setClockPrompt] = React.useState(null);
   const [dismissedClockPrompt, setDismissedClockPrompt] = React.useState(null);
   const isAdmin = currentUser?.role === "admin";
-  const visibleNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && !item.hidden);
+  const mobileNavIds = isAdmin
+    ? ["dashboard", "staff", "rota", "time-off", "account"]
+    : ["dashboard", "my-shifts", "rota", "time-off", "account"];
+  const mobileNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && mobileNavIds.includes(item.id));
   const desktopNav = navItems.filter((item) =>
     item.roles.includes(currentUser?.role) &&
-    ["dashboard", "my-shifts", "staff", "rota", "time-off", "tasks", "reminders", "settings"].includes(item.id)
+    ["dashboard", "my-shifts", "staff", "rota", "tasks", "time-off", "reminders", "reports", "settings"].includes(item.id)
   );
   const appTitle = buildRotaTitle(branding.businessName);
   const pageProps = { goTo: setPage, currentUser, branding: { ...branding, appTitle } };
@@ -88,8 +93,8 @@ function App() {
   }, []);
 
   React.useEffect(() => {
-    document.title = appTitle;
-  }, [appTitle]);
+    document.title = "LocalPlanner | Rota & Staff Planning";
+  }, []);
 
   React.useEffect(() => {
     if (!currentUser) {
@@ -267,8 +272,8 @@ function App() {
             )}
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-base font-black">{appTitle}</span>
-            <span className="text-xs font-semibold text-emerald-100">LocalOps Planner</span>
+            <span className="block truncate text-base font-black">{branding.businessName || "Your Business"}</span>
+            <span className="text-xs font-semibold text-emerald-100">Simple rota planning</span>
           </span>
         </button>
 
@@ -327,7 +332,7 @@ function App() {
             </button>
             <div className="hidden lg:block">
               <p className="text-sm font-black text-fuel-ink">{branding.businessName || "Your Business"}</p>
-              <p className="text-xs font-semibold text-slate-500">Rota, tasks and staff planning</p>
+              <p className="text-xs font-semibold text-slate-500">Rota & staff planning</p>
             </div>
           </div>
           <div className="flex items-center justify-end gap-2">
@@ -388,6 +393,7 @@ function App() {
         {page === "rota-pattern" && isAdmin && <RotaPattern goTo={setPage} />}
         {page === "add-shift" && isAdmin && <AddShift onSaved={() => setPage("rota")} />}
         {page === "tasks" && <Tasks currentUser={currentUser} />}
+        {page === "reports" && isAdmin && <Reports goTo={setPage} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}
         {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} />}
@@ -436,7 +442,7 @@ function App() {
 
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-fuel-line bg-white/90 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur-xl lg:hidden">
         <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-2 py-2 sm:gap-2">
-          {visibleNav.map((item) => {
+          {mobileNav.map((item) => {
             const Icon = item.icon;
             const active = page === item.id;
             return (
