@@ -380,7 +380,7 @@ app.post("/api/users/:id/reset-password", requireAdmin, async (req, res, next) =
 
 app.put("/api/settings/branding", requireAdmin, async (req, res, next) => {
   try {
-    const { businessName, logoDataUrl } = req.body;
+    const { businessName, logoDataUrl, performanceTrackerEnabled } = req.body;
     if (businessName !== undefined && String(businessName).trim().length < 2) {
       return res.status(400).json({ error: "Business name is required." });
     }
@@ -391,8 +391,8 @@ app.put("/api/settings/branding", requireAdmin, async (req, res, next) => {
       return res.status(400).json({ error: "Logo image is too large. Use an image under 500KB." });
     }
 
-    res.json(await updateBranding({ businessName, logoDataUrl }));
-    await addAudit(req.user.id, "update_branding", "Updated business branding");
+    res.json(await updateBranding({ businessName, logoDataUrl, performanceTrackerEnabled }));
+    await addAudit(req.user.id, "update_branding", "Updated business branding and features");
   } catch (error) {
     next(error);
   }

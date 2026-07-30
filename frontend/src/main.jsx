@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, UserRound, Users, X } from "lucide-react";
+import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, TrendingUp, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { buildClockPayload, findClockPromptShift, formatClockTime, shouldPromptClockOut } from "./attendanceClock.js";
@@ -19,6 +19,7 @@ import { Tasks } from "./pages/Tasks.jsx";
 import { TimeOff } from "./pages/TimeOff.jsx";
 import { WeeklyRota } from "./pages/WeeklyRota.jsx";
 import { Reports } from "./pages/Reports.jsx";
+import { Performance } from "./pages/Performance.jsx";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home, roles: ["admin", "staff"] },
@@ -31,6 +32,7 @@ const navItems = [
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "edit-shift", label: "Edit Shift", icon: CalendarDays, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
+  { id: "performance", label: "Performance", icon: TrendingUp, roles: ["admin"] },
   { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
   { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"], hidden: true },
@@ -43,19 +45,21 @@ function App() {
   const [addShiftDefaults, setAddShiftDefaults] = React.useState(null);
   const [editingShift, setEditingShift] = React.useState(null);
   const [currentUser, setCurrentUser] = React.useState(null);
-  const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "" });
+  const [branding, setBranding] = React.useState({ businessName: "Your Business", logoDataUrl: "", performanceTrackerEnabled: true });
   const [checkingSession, setCheckingSession] = React.useState(true);
   const [popupNotification, setPopupNotification] = React.useState(null);
   const [clockPrompt, setClockPrompt] = React.useState(null);
   const [dismissedClockPrompt, setDismissedClockPrompt] = React.useState(null);
   const isAdmin = currentUser?.role === "admin";
+  const performanceEnabled = branding.performanceTrackerEnabled !== false;
   const mobileNavIds = isAdmin
     ? ["dashboard", "staff", "rota", "time-off", "account"]
     : ["dashboard", "my-shifts", "rota", "time-off", "account"];
   const mobileNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && mobileNavIds.includes(item.id));
   const desktopNav = navItems.filter((item) =>
     item.roles.includes(currentUser?.role) &&
-    ["dashboard", "my-shifts", "staff", "rota", "tasks", "time-off", "reminders", "reports", "settings"].includes(item.id)
+    ["dashboard", "my-shifts", "staff", "rota", "tasks", "time-off", "reminders", "performance", "reports", "settings"].includes(item.id) &&
+    (item.id !== "performance" || performanceEnabled)
   );
   const appTitle = buildRotaTitle(branding.businessName);
   const pageProps = { goTo: setPage, currentUser, branding: { ...branding, appTitle } };
@@ -89,8 +93,8 @@ function App() {
   React.useEffect(() => {
     if (!currentUser) return;
     const allowed = navItems.find((item) => item.id === page)?.roles.includes(currentUser.role);
-    if (!allowed) setPage("dashboard");
-  }, [currentUser, page]);
+    if (!allowed || (page === "performance" && !performanceEnabled)) setPage("dashboard");
+  }, [currentUser, page, performanceEnabled]);
 
   React.useEffect(() => {
     if (page !== "add-shift") setAddShiftDefaults(null);
@@ -422,6 +426,7 @@ function App() {
           />
         )}
         {page === "tasks" && <Tasks currentUser={currentUser} />}
+        {page === "performance" && isAdmin && performanceEnabled && <Performance branding={branding} />}
         {page === "reports" && isAdmin && <Reports goTo={setPage} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}

@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Building2, Clock, History, ImagePlus, KeyRound, MapPin, Plus, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Trash2 } from "lucide-react";
+import { AlertTriangle, Building2, Clock, History, ImagePlus, KeyRound, MapPin, Plus, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -40,7 +40,7 @@ const DEFAULT_SHIFT_RANGE_PRESETS = [
 ];
 const UK_ROTA_RULES_CACHE_KEY = "localops.ukRotaRules";
 const SETTINGS_SECTIONS = [
-  { id: "business", label: "Business", description: "Business name and logo", icon: Building2 },
+  { id: "business", label: "Business", description: "Branding and optional features", icon: Building2 },
   { id: "rota", label: "Rota rules", description: "Hours, presets and planning rules", icon: SlidersHorizontal },
   { id: "access", label: "Login access", description: "Admin and staff accounts", icon: KeyRound },
   { id: "activity", label: "Activity", description: "Recent admin changes", icon: History }
@@ -157,7 +157,7 @@ export function Settings({ branding, onBrandingSaved }) {
     try {
       const saved = await api.updateBranding(form);
       onBrandingSaved(saved);
-      showSavedPopup("Branding updated.");
+      showSavedPopup("Business settings updated.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -406,8 +406,8 @@ export function Settings({ branding, onBrandingSaved }) {
         <form className="space-y-4" onSubmit={save}>
           <SectionHeader
             icon={<ImagePlus size={20} />}
-            title="Branding"
-            description="This name and logo appear in the header, browser title, rota printouts, and staff screens."
+            title="Business Profile"
+            description="Manage the business name, logo, and optional admin features."
           />
 
           <div className="space-y-4 px-5 pb-5">
@@ -454,12 +454,41 @@ export function Settings({ branding, onBrandingSaved }) {
             </div>
           </div>
 
+          <div className="rounded-lg border border-fuel-line bg-white p-4">
+            <label className="flex cursor-pointer items-start justify-between gap-4">
+              <span className="flex min-w-0 gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green">
+                  <TrendingUp size={20} />
+                </span>
+                <span>
+                  <span className="block font-black text-fuel-ink">Performance Tracker</span>
+                  <span className="mt-1 block text-sm font-semibold text-slate-600">
+                    Show weekly sales comparisons in a separate admin menu.
+                  </span>
+                  <span className="mt-1 block text-xs font-semibold text-slate-500">
+                    Turning this off hides the page but keeps all saved sales figures.
+                  </span>
+                </span>
+              </span>
+              <span className="relative mt-1 inline-flex shrink-0 items-center">
+                <input
+                  type="checkbox"
+                  className="peer sr-only"
+                  checked={form.performanceTrackerEnabled !== false}
+                  onChange={(event) => setForm({ ...form, performanceTrackerEnabled: event.target.checked })}
+                />
+                <span className="h-7 w-12 rounded-full bg-slate-300 transition peer-checked:bg-fuel-green" />
+                <span className="absolute left-1 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+              </span>
+            </label>
+          </div>
+
           <button
             className={`${darkButton} w-full sm:w-auto`}
             disabled={saving}
           >
             <Save size={20} />
-            {saving ? "Saving..." : "Save Branding"}
+            {saving ? "Saving..." : "Save Business Settings"}
           </button>
           </div>
         </form>

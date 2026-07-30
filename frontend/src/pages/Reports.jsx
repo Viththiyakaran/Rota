@@ -109,8 +109,6 @@ export function Reports({ goTo }) {
         <p className="mt-3 text-sm font-bold text-slate-500">{formatDateLabel(range.start)} to {formatDateLabel(range.end)}</p>
       </Card>
 
-      <WeeklySalesTracker />
-
       <Status loading={loading} error={error}>
         <div className="grid gap-4 lg:grid-cols-2">
           <ReportCard icon={CalendarDays} title="Weekly Rota Report" action="Open rota" onAction={() => goTo("rota")}>

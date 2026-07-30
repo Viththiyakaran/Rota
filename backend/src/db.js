@@ -949,12 +949,16 @@ export function publicUser(user) {
 }
 
 export async function getBranding() {
-  const rows = await all("SELECT key, value FROM settings WHERE key IN (?, ?, ?)", ["businessName", "logoDataUrl", "businessTimezone"]);
+  const rows = await all(
+    "SELECT key, value FROM settings WHERE key IN (?, ?, ?, ?)",
+    ["businessName", "logoDataUrl", "businessTimezone", "performanceTrackerEnabled"]
+  );
   const values = Object.fromEntries(rows.map((row) => [row.key, row.value]));
   return {
     businessName: values.businessName || "Your Business",
     logoDataUrl: values.logoDataUrl || "",
-    businessTimezone: validTimeZone(values.businessTimezone) ? values.businessTimezone : DEFAULT_TIME_ZONE
+    businessTimezone: validTimeZone(values.businessTimezone) ? values.businessTimezone : DEFAULT_TIME_ZONE,
+    performanceTrackerEnabled: values.performanceTrackerEnabled !== "false"
   };
 }
 
@@ -1092,7 +1096,7 @@ function toNumberSetting(value, fallback) {
   return Number.isFinite(number) && number >= 0 ? number : fallback;
 }
 
-export async function updateBranding({ businessName, logoDataUrl }) {
+export async function updateBranding({ businessName, logoDataUrl, performanceTrackerEnabled }) {
   if (businessName !== undefined) {
     await run(
       `INSERT INTO settings (key, value)
@@ -1108,6 +1112,15 @@ export async function updateBranding({ businessName, logoDataUrl }) {
        VALUES (?, ?)
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
       ["logoDataUrl", String(logoDataUrl || "")]
+    );
+  }
+
+  if (performanceTrackerEnabled !== undefined) {
+    await run(
+      `INSERT INTO settings (key, value)
+       VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      ["performanceTrackerEnabled", performanceTrackerEnabled ? "true" : "false"]
     );
   }
 

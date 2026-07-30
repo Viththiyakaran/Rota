@@ -118,8 +118,17 @@ async function runSmoke() {
   await request("/api/settings/branding", {
     cookie: admin.cookie,
     method: "PUT",
-    body: { businessName: "Smoke Shop", logoDataUrl: "" }
+    body: { businessName: "Smoke Shop", logoDataUrl: "", performanceTrackerEnabled: false }
   });
+  const disabledPerformanceBranding = await request("/api/settings/branding");
+  assert(disabledPerformanceBranding.performanceTrackerEnabled === false, "performance tracker can be disabled");
+  await request("/api/settings/branding", {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { performanceTrackerEnabled: true }
+  });
+  const enabledPerformanceBranding = await request("/api/settings/branding");
+  assert(enabledPerformanceBranding.performanceTrackerEnabled === true, "performance tracker can be enabled");
 
   await request("/api/settings/opening-hours", {
     cookie: admin.cookie,
