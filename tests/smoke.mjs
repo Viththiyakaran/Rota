@@ -153,6 +153,50 @@ async function runSmoke() {
 
   await expectStatus("/api/users", 403, { cookie: staff.cookie });
 
+  const assignedTask = await request("/api/tasks", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: {
+      title: "Check task assignment",
+      description: "Smoke test",
+      dueDate: "2026-07-01",
+      status: "todo",
+      assignedStaffId: staffRows[0].id
+    }
+  });
+  assert(assignedTask.assignedStaffId === staffRows[0].id, "admin assigns task");
+
+  const reassignedTask = await request(`/api/tasks/${assignedTask.id}`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { assignedStaffId: createdStaff.id }
+  });
+  assert(reassignedTask.assignedStaffId === createdStaff.id, "admin reassigns task");
+
+  const claimableTask = await request("/api/tasks", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: { title: "Claim this task", dueDate: "2026-07-01", status: "backlog" }
+  });
+  const claimedTask = await request(`/api/tasks/${claimableTask.id}`, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { assignedStaffId: staff.user.staffId }
+  });
+  assert(claimedTask.assignedStaffId === staff.user.staffId, "staff claims unassigned task");
+
+  await expectStatus(`/api/tasks/${claimableTask.id}`, 403, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { assignedStaffId: createdStaff.id }
+  });
+  await expectStatus(`/api/tasks/${claimableTask.id}`, 403, {
+    cookie: staff.cookie,
+    method: "DELETE"
+  });
+  await request(`/api/tasks/${assignedTask.id}`, { cookie: admin.cookie, method: "DELETE" });
+  await request(`/api/tasks/${claimableTask.id}`, { cookie: admin.cookie, method: "DELETE" });
+
   const shift = await request("/api/shifts", {
     cookie: admin.cookie,
     method: "POST",

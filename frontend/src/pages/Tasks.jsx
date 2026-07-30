@@ -1,5 +1,5 @@
 import React from "react";
-import { CheckCircle2, GripVertical, ListChecks, Plus, Trash2 } from "lucide-react";
+import { AtSign, CheckCircle2, ChevronDown, GripVertical, ListChecks, Plus, Trash2 } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -22,7 +22,12 @@ export function Tasks({ currentUser }) {
   const [draggingId, setDraggingId] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
+  const [savingAssignmentId, setSavingAssignmentId] = React.useState(null);
   const [error, setError] = React.useState("");
+  const isAdmin = currentUser?.role === "admin";
+  const assignableStaff = isAdmin
+    ? staff
+    : staff.filter((person) => String(person.id) === String(currentUser?.staffId));
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -68,6 +73,23 @@ export function Tasks({ currentUser }) {
     } catch (err) {
       setError(err.message);
       load();
+    }
+  };
+
+  const assignTask = async (taskId, assignedStaffId) => {
+    const task = tasks.find((item) => String(item.id) === String(taskId));
+    if (!task || String(task.assignedStaffId || "") === String(assignedStaffId || "")) return;
+
+    setSavingAssignmentId(task.id);
+    setError("");
+    try {
+      const saved = await api.updateTask(task.id, { assignedStaffId: assignedStaffId || null });
+      setTasks((current) => current.map((item) => item.id === saved.id ? saved : item));
+    } catch (err) {
+      setError(err.message);
+      load();
+    } finally {
+      setSavingAssignmentId(null);
     }
   };
 
@@ -127,7 +149,7 @@ export function Tasks({ currentUser }) {
           <Field label="Assign">
             <select className={inputClass} value={form.assignedStaffId} onChange={(event) => setForm({ ...form, assignedStaffId: event.target.value })}>
               <option value="">Anyone</option>
-              {staff.map((person) => (
+              {assignableStaff.map((person) => (
                 <option key={person.id} value={person.id}>{person.name}</option>
               ))}
             </select>
@@ -192,38 +214,50 @@ export function Tasks({ currentUser }) {
                             {task.dueDate}
                           </span>
                         )}
-                        <span className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-black text-fuel-green">
-                          {task.assignedStaffName || "Anyone"}
-                        </span>
+                        <TaskAssignee
+                          currentUser={currentUser}
+                          isAdmin={isAdmin}
+                          onAssign={assignTask}
+                          saving={savingAssignmentId === task.id}
+                          staff={staff}
+                          task={task}
+                        />
                         <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-500">
-                          {task.createdByUsername || currentUser?.username || "System"}
+                          Created by {task.createdByUsername || currentUser?.username || "System"}
                         </span>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {COLUMNS.filter((item) => item.id !== task.status).map((item) => (
-                          <button
-                            key={item.id}
-                            type="button"
-                            className="rounded-md bg-fuel-mist px-2 py-1 text-xs font-black text-fuel-green"
-                            onClick={() => moveTask(task.id, item.id)}
+                      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                        <label className="flex items-center gap-2 text-xs font-black text-slate-500">
+                          <span>Move to</span>
+                          <select
+                            aria-label={`Move ${task.title}`}
+                            className="rounded-md border border-fuel-line bg-fuel-mist px-2 py-1.5 text-xs font-black text-fuel-green outline-none focus:border-fuel-green"
+                            value={task.status}
+                            onChange={(event) => moveTask(task.id, event.target.value)}
                           >
-                            {item.label}
-                          </button>
-                        ))}
+                            {COLUMNS.map((item) => (
+                              <option key={item.id} value={item.id}>{item.label}</option>
+                            ))}
+                          </select>
+                        </label>
                         {task.status === "done" && (
                           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">
                             <CheckCircle2 size={14} />
                             Complete
                           </span>
                         )}
-                        <button
-                          type="button"
-                          className="ml-auto inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-black text-red-700"
-                          onClick={() => removeTask(task.id)}
-                        >
-                          <Trash2 size={14} />
-                          Delete
-                        </button>
+                        {isAdmin ? (
+                          <button
+                            type="button"
+                            className="ml-auto inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-black text-red-700"
+                            onClick={() => {
+                              if (window.confirm(`Delete "${task.title}"?`)) removeTask(task.id);
+                            }}
+                          >
+                            <Trash2 size={14} />
+                            Delete
+                          </button>
+                        ) : null}
                       </div>
                     </article>
                   ))}
@@ -240,5 +274,72 @@ export function Tasks({ currentUser }) {
         </div>
       </Status>
     </div>
+  );
+}
+
+function TaskAssignee({ currentUser, isAdmin, onAssign, saving, staff, task }) {
+  const assignedToCurrentUser =
+    task.assignedStaffId &&
+    String(task.assignedStaffId) === String(currentUser?.staffId);
+
+  if (isAdmin) {
+    return (
+      <details className="group relative">
+        <summary className="flex cursor-pointer list-none items-center gap-1 rounded-md bg-fuel-mist px-2 py-1 text-xs font-black text-fuel-green hover:bg-fuel-line [&::-webkit-details-marker]:hidden">
+          <AtSign size={13} />
+          {saving ? "Assigning..." : task.assignedStaffName || "Assign"}
+          <ChevronDown size={13} className="transition group-open:rotate-180" />
+        </summary>
+        <div className="absolute left-0 top-8 z-30 w-52 rounded-lg border border-fuel-line bg-white p-2 shadow-xl">
+          <p className="px-2 pb-2 text-[11px] font-black uppercase tracking-wide text-slate-400">Assign task</p>
+          {[{ id: "", name: "Anyone" }, ...staff].map((person) => {
+            const selected = String(task.assignedStaffId || "") === String(person.id || "");
+            return (
+              <button
+                key={person.id || "anyone"}
+                type="button"
+                disabled={saving || selected}
+                className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-bold ${
+                  selected ? "bg-fuel-mist text-fuel-green" : "text-slate-700 hover:bg-slate-50"
+                }`}
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  onAssign(task.id, person.id);
+                }}
+              >
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-[11px] font-black text-fuel-green">
+                  {person.id ? String(person.name).charAt(0).toUpperCase() : <AtSign size={12} />}
+                </span>
+                {person.name}
+                {selected ? <span className="ml-auto text-xs">Selected</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </details>
+    );
+  }
+
+  if (!task.assignedStaffId) {
+    return (
+      <button
+        type="button"
+        disabled={saving || !currentUser?.staffId}
+        onClick={() => onAssign(task.id, currentUser.staffId)}
+        className="inline-flex items-center gap-1 rounded-md bg-fuel-green px-2 py-1 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <AtSign size={13} />
+        {saving ? "Assigning..." : "Assign to me"}
+      </button>
+    );
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-black ${
+      assignedToCurrentUser ? "bg-emerald-50 text-emerald-700" : "bg-fuel-mist text-fuel-green"
+    }`}>
+      <AtSign size={13} />
+      {assignedToCurrentUser ? "Assigned to you" : task.assignedStaffName || "Assigned"}
+    </span>
   );
 }

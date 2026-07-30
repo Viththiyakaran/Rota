@@ -693,9 +693,21 @@ app.post("/api/tasks", async (req, res, next) => {
     const { title = "", description = "", status = "todo", assignedStaffId = null } = req.body;
     const dueDate = req.body.dueDate || datePartsInBusinessTimeZone().date;
     const cleanTitle = String(title).trim();
+    const cleanAssigneeId = normaliseTaskAssigneeId(assignedStaffId);
     if (!cleanTitle) return res.status(400).json({ error: "Task title is required." });
     if (!isTaskStatus(status)) return res.status(400).json({ error: "Task status is invalid." });
     if (!isDate(dueDate)) return res.status(400).json({ error: "Task date is invalid." });
+    if (Number.isNaN(cleanAssigneeId)) return res.status(400).json({ error: "Task assignee is invalid." });
+    if (cleanAssigneeId && !(await activeStaffExists(cleanAssigneeId))) {
+      return res.status(400).json({ error: "Task assignee is not an active staff member." });
+    }
+    if (
+      req.user.role !== "admin" &&
+      cleanAssigneeId &&
+      String(cleanAssigneeId) !== String(req.user.staffId)
+    ) {
+      return res.status(403).json({ error: "Staff can only assign a new task to themselves." });
+    }
 
     const result = await run(
       `INSERT INTO tasks (title, description, dueDate, status, assignedStaffId, createdBy)
@@ -705,7 +717,7 @@ app.post("/api/tasks", async (req, res, next) => {
         String(description || "").trim(),
         dueDate,
         status,
-        assignedStaffId || null,
+        cleanAssigneeId,
         req.user.id
       ]
     );
@@ -729,6 +741,28 @@ app.put("/api/tasks/:id", async (req, res, next) => {
     if (!nextTitle) return res.status(400).json({ error: "Task title is required." });
     const nextDueDate = req.body.dueDate === undefined ? current.dueDate : req.body.dueDate || null;
     if (nextDueDate && !isDate(nextDueDate)) return res.status(400).json({ error: "Task date is invalid." });
+    let nextAssigneeId = current.assignedStaffId || null;
+    if (req.body.assignedStaffId !== undefined) {
+      nextAssigneeId = normaliseTaskAssigneeId(req.body.assignedStaffId);
+      if (Number.isNaN(nextAssigneeId)) return res.status(400).json({ error: "Task assignee is invalid." });
+      if (nextAssigneeId && !(await activeStaffExists(nextAssigneeId))) {
+        return res.status(400).json({ error: "Task assignee is not an active staff member." });
+      }
+      if (req.user.role !== "admin") {
+        const ownStaffId = req.user.staffId;
+        const alreadyAssignedToAnother =
+          current.assignedStaffId &&
+          String(current.assignedStaffId) !== String(ownStaffId);
+        if (
+          !ownStaffId ||
+          !nextAssigneeId ||
+          String(nextAssigneeId) !== String(ownStaffId) ||
+          alreadyAssignedToAnother
+        ) {
+          return res.status(403).json({ error: "Staff can only claim an unassigned task for themselves." });
+        }
+      }
+    }
 
     await run(
       `UPDATE tasks
@@ -739,7 +773,7 @@ app.put("/api/tasks/:id", async (req, res, next) => {
         req.body.description === undefined ? current.description || "" : String(req.body.description || "").trim(),
         nextDueDate,
         nextStatus,
-        req.body.assignedStaffId === undefined ? current.assignedStaffId : req.body.assignedStaffId || null,
+        nextAssigneeId,
         req.params.id
       ]
     );
@@ -751,7 +785,7 @@ app.put("/api/tasks/:id", async (req, res, next) => {
   }
 });
 
-app.delete("/api/tasks/:id", async (req, res, next) => {
+app.delete("/api/tasks/:id", requireAdmin, async (req, res, next) => {
   try {
     const current = await getTask(req.params.id);
     if (!current) return res.status(404).json({ error: "Task not found." });
@@ -1768,6 +1802,17 @@ function readAttendanceLocation(body, required, actionLabel) {
 
 function isTaskStatus(status) {
   return ["backlog", "todo", "process", "done"].includes(status);
+}
+
+function normaliseTaskAssigneeId(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : Number.NaN;
+}
+
+async function activeStaffExists(staffId) {
+  const row = await get("SELECT id FROM staff WHERE id = ? AND active = 1", [staffId]);
+  return Boolean(row);
 }
 
 function isDate(value) {
