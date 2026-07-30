@@ -29,7 +29,7 @@ export const darkButton =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-fuel-line bg-white px-4 py-2.5 text-sm font-bold text-fuel-ink shadow-sm transition hover:border-fuel-green hover:bg-fuel-mist hover:text-fuel-green disabled:cursor-not-allowed disabled:opacity-60";
 
 export const softButton =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-2.5 text-sm font-bold text-fuel-green transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-2.5 text-sm font-bold text-fuel-green transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-60";
 
 export const dangerButton =
   "inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60";

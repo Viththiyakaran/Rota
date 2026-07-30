@@ -261,8 +261,8 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f7faf9]">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-gradient-to-b from-fuel-deep via-fuel-green to-[#064e3b] px-3 py-4 text-white shadow-lift lg:flex">
+    <div className="min-h-screen bg-[#f4f6fa]">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col bg-gradient-to-b from-fuel-deep via-[#101d4f] to-[#07102e] px-3 py-4 text-white shadow-lift lg:flex">
         <button className="mb-6 flex items-center gap-3 rounded-xl px-2 py-2 text-left" onClick={() => setPage("dashboard")}>
           <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/12 text-lg font-black text-fuel-lime ring-1 ring-white/15">
             {branding.logoDataUrl ? (
@@ -273,7 +273,7 @@ function App() {
           </span>
           <span className="min-w-0">
             <span className="block truncate text-base font-black">{branding.businessName || "Your Business"}</span>
-            <span className="text-xs font-semibold text-emerald-100">Rota, tasks and reminders</span>
+            <span className="text-xs font-semibold text-blue-100">Rota, tasks and reminders</span>
           </span>
         </button>
 
@@ -286,7 +286,7 @@ function App() {
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 className={`flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-bold transition ${
-                  active ? "bg-white/16 text-white shadow-sm" : "text-emerald-50/90 hover:bg-white/10 hover:text-white"
+                  active ? "bg-fuel-green text-white shadow-sm" : "text-blue-50/90 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <Icon size={18} />
@@ -303,9 +303,9 @@ function App() {
             </span>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black">{currentUser.staffName || currentUser.username}</p>
-              <p className="text-xs font-semibold capitalize text-emerald-100">{currentUser.role}</p>
+              <p className="text-xs font-semibold capitalize text-blue-100">{currentUser.role}</p>
             </div>
-            <button onClick={logout} title="Log out" className="rounded-lg p-2 text-emerald-50 hover:bg-white/10">
+            <button onClick={logout} title="Log out" className="rounded-lg p-2 text-blue-50 hover:bg-white/10">
               <LogOut size={18} />
             </button>
           </div>

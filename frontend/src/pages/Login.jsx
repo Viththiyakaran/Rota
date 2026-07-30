@@ -29,12 +29,12 @@ export function Login({ branding, onLogin }) {
   return (
     <main className="min-h-screen bg-[#f8fafc] px-4 py-8 sm:py-12">
       <section className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lift lg:grid-cols-[1fr_0.88fr]">
-        <div className="hidden bg-gradient-to-br from-fuel-deep via-fuel-green to-[#0f766e] p-8 text-white lg:block">
+        <div className="hidden bg-gradient-to-br from-fuel-deep via-fuel-green to-[#0d47a1] p-8 text-white lg:block">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/12 text-xl font-black text-fuel-lime ring-1 ring-white/20">L</span>
             <div>
               <h1 className="text-2xl font-black">LocalPlanner</h1>
-              <p className="text-sm font-semibold text-emerald-50">Rota, tasks, reminders and reports</p>
+              <p className="text-sm font-semibold text-blue-50">Rota, tasks, reminders and reports</p>
             </div>
           </div>
           <div className="mt-12">

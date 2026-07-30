@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  color: #17201b;
-  background: #f4f8f5;
+  color: #101735;
+  background: #f4f6fa;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -12,7 +12,7 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    linear-gradient(180deg, #f4f8f5 0%, #ffffff 42%, #f4f8f5 100%);
+    linear-gradient(180deg, #f4f6fa 0%, #ffffff 42%, #f4f6fa 100%);
 }
 
 button,
@@ -31,8 +31,8 @@ textarea {
 }
 
 ::selection {
-  background: #d7f75b;
-  color: #17201b;
+  background: #cfe1ff;
+  color: #101735;
 }
 
 @media print {
@@ -80,7 +80,7 @@ textarea {
   }
 
   .print-rota-table th {
-    background: #eef7f1 !important;
+    background: #eef4ff !important;
     font-weight: 900;
   }
 
@@ -108,7 +108,7 @@ textarea {
   }
 
   .print-shift strong {
-    color: #00684a;
+    color: #0d5fd7;
   }
 
   .print-muted {
@@ -123,7 +123,7 @@ textarea {
   }
 
   .print-total-row td {
-    background: #eef7f1 !important;
+    background: #eef4ff !important;
     font-weight: 900;
   }
 }

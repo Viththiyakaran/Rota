@@ -3,8 +3,8 @@
   "short_name": "Rota",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f4f8f5",
-  "theme_color": "#006b4f",
+  "background_color": "#f4f6fa",
+  "theme_color": "#146ef5",
   "icons": [
     {
       "src": "/pwa-icon.svg",

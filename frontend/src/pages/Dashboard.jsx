@@ -282,7 +282,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.15fr_1fr_auto_auto_auto]">
         <button
           type="button"
-          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-emerald-800"
+          className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-blue-700"
           onClick={() => goTo(isAdmin ? "add-shift" : "my-shifts")}
         >
           <PlusCircle size={19} />
@@ -308,7 +308,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
             </button>
             <button
               type="button"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-emerald-100"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-blue-100"
               onClick={() => goTo("rota")}
             >
               <Printer size={18} />
@@ -316,7 +316,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
             </button>
             <button
               type="button"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-emerald-100"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-blue-100"
               onClick={() => goTo("rota-ai")}
             >
               <Bot size={18} />
@@ -327,7 +327,7 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
         {isAdmin && (
           <button
             type="button"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-ink transition hover:bg-emerald-100 xl:w-14 xl:px-0"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-ink transition hover:bg-blue-100 xl:w-14 xl:px-0"
             onClick={onToggleMore}
             aria-expanded={moreOpen}
             title="More actions"
@@ -432,7 +432,7 @@ function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminde
           const isToday = day === toDateInputValue(new Date());
 
           return (
-            <div key={day} className={`rounded-xl border bg-fuel-mist/35 p-3 shadow-sm ${isToday ? "border-fuel-green ring-2 ring-emerald-100" : "border-fuel-line/80"}`}>
+            <div key={day} className={`rounded-xl border bg-fuel-mist/35 p-3 shadow-sm ${isToday ? "border-fuel-green ring-2 ring-blue-100" : "border-fuel-line/80"}`}>
               <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
                   <p className="font-black">{formatWeekday(day)} {isToday && <span className="ml-1 rounded-full bg-fuel-green px-2 py-0.5 text-[10px] uppercase text-white">Today</span>}</p>
