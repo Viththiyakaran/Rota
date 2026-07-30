@@ -1,8 +1,8 @@
-# LocalOps Planner Complete Product Manual
+# LocalPlanner Complete Product Manual
 
-LocalOps Planner is a mobile-friendly rota planner for UK small businesses. It helps managers build weekly rotas, generate repeating patterns, manage staff, approve time off, share rota information, send reminders, and spot common rota issues.
+LocalPlanner is a mobile-friendly operations planner for UK small businesses. It helps managers build weekly rotas, generate repeating patterns, manage staff, assign tasks, approve time off, share rota information, send reminders, review reports, and spot common rota issues.
 
-The app was originally called FuelOps Rota. Businesses can change the name and logo in Settings, so the same app can be used by fuel stations, convenience shops, cafes, takeaways, restaurants, salons, cleaning teams, security teams, warehouses, and other small teams that work by rota.
+Businesses can change the name and logo in Settings, so the same app can be used by fuel stations, convenience shops, cafes, takeaways, restaurants, salons, cleaning teams, security teams, warehouses, and other small teams that work by rota.
 
 ## What The App Does
 
@@ -331,7 +331,7 @@ Estimated Wage Cost:
 Disclaimer shown in the app:
 
 ```text
-LocalOps Planner provides rota, reminder, task and estimated wage planning tools only. It does not replace legal, HR, payroll, tax or employment advice. Employers remain responsible for following UK employment law and payroll rules.
+LocalPlanner provides rota, reminder, task and estimated wage planning tools only. It does not replace legal, HR, payroll, tax or employment advice. Employers remain responsible for following UK employment law and payroll rules.
 ```
 
 ## Business Settings
@@ -724,4 +724,3 @@ Keep private:
 - `ADMIN_RESET_TOKEN`
 - Calendar feed tokens
 - Railway account access
-

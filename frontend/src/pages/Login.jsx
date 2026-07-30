@@ -34,18 +34,18 @@ export function Login({ branding, onLogin }) {
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/12 text-xl font-black text-fuel-lime ring-1 ring-white/20">L</span>
             <div>
               <h1 className="text-2xl font-black">LocalPlanner</h1>
-              <p className="text-sm font-semibold text-emerald-50">Simple rota planning for local businesses</p>
+              <p className="text-sm font-semibold text-emerald-50">Rota, tasks, reminders and reports</p>
             </div>
           </div>
           <div className="mt-12">
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-fuel-lime">Small business rota control</p>
-            <h2 className="mt-3 text-4xl font-black leading-tight">Plan staff, time off and reminders in one tidy place.</h2>
+            <p className="text-sm font-black uppercase tracking-[0.16em] text-fuel-lime">Small business operations</p>
+            <h2 className="mt-3 text-4xl font-black leading-tight">Plan rotas, tasks, time off and reminders in one tidy place.</h2>
           </div>
           <div className="mt-10 grid gap-3">
             <LoginBenefit icon={CalendarDays} text="Create weekly rotas quickly" />
             <LoginBenefit icon={CheckCircle2} text="Track staff time off" />
             <LoginBenefit icon={Bell} text="Send rota reminders" />
-            <LoginBenefit icon={Printer} text="Print and share weekly rota" />
+            <LoginBenefit icon={Printer} text="Review reports and share weekly plans" />
           </div>
         </div>
 
@@ -54,7 +54,7 @@ export function Login({ branding, onLogin }) {
             <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-fuel-deep text-xl font-black text-fuel-lime shadow-sm">L</span>
             <div className="min-w-0">
               <h1 className="truncate text-2xl font-black leading-none text-fuel-ink">LocalPlanner</h1>
-              <p className="mt-1 text-sm font-bold text-slate-500">Simple rota planning for local businesses</p>
+              <p className="mt-1 text-sm font-bold text-slate-500">Rota, tasks, reminders and reports</p>
             </div>
           </div>
 
@@ -68,7 +68,7 @@ export function Login({ branding, onLogin }) {
             </span>
             <div className="min-w-0">
               <h2 className="truncate text-xl font-black leading-none text-fuel-ink">{branding.businessName || "Your Business"}</h2>
-              <p className="mt-1 text-sm font-bold text-slate-500">Rota & staff planning</p>
+              <p className="mt-1 text-sm font-bold text-slate-500">Rota, tasks and staff planning</p>
             </div>
           </div>
 

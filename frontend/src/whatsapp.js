@@ -15,7 +15,7 @@ export function whatsappReminderUrl(reminder) {
 }
 
 export function whatsappGroupShareUrl({ weekRange, weekDays, shifts, formatDay, formatRange }) {
-  const lines = [`FuelOps Rota`, weekRange, ""];
+  const lines = ["LocalPlanner weekly rota", weekRange, ""];
 
   for (const day of weekDays) {
     const dayShifts = shifts.filter((shift) => shift.shiftDate === day);

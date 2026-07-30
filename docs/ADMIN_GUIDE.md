@@ -1,4 +1,4 @@
-# LocalOps Planner Admin Guide
+# LocalPlanner Admin Guide
 
 This guide is for business owners, managers, and rota administrators.
 

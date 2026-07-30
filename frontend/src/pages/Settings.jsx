@@ -646,7 +646,7 @@ export function Settings({ branding, onBrandingSaved }) {
           </div>
 
           <div className="rounded-lg bg-amber-50 p-4 text-sm font-semibold text-amber-900">
-            LocalOps Planner provides rota, reminder, task and estimated wage planning tools only. It does not replace legal, HR, payroll, tax or employment advice. Employers remain responsible for following UK employment law and payroll rules.
+            LocalPlanner provides rota, reminder, task and estimated wage planning tools only. It does not replace legal, HR, payroll, tax or employment advice. Employers remain responsible for following UK employment law and payroll rules.
           </div>
 
           <button className={`${primaryButton} w-full sm:w-auto`} disabled={!ukRulesChanged || savingUkRules}>

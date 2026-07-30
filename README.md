@@ -1,6 +1,8 @@
-# LocalOps Planner / FuelOps Rota
+# LocalPlanner
 
-LocalOps Planner is a mobile-friendly rota, staff, time-off, task, calendar, and reminder app for small UK businesses. It was originally built as FuelOps Rota for a UK fuel station, but the business name, logo, opening hours, timezone, and rota rules can be changed from admin settings so other SMEs can use it too.
+LocalPlanner is a mobile-friendly operations planner for small UK businesses. It helps teams manage rotas, staff, tasks, reminders, time off, reports, calendar links, and common UK rota warnings in one place.
+
+The app keeps each business name and logo configurable, so it can be used by fuel stations, convenience shops, cafes, takeaways, restaurants, salons, cleaning teams, warehouses, and other local teams that work by rota.
 
 ## Tech Stack
 

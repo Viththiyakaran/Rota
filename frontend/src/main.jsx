@@ -273,7 +273,7 @@ function App() {
           </span>
           <span className="min-w-0">
             <span className="block truncate text-base font-black">{branding.businessName || "Your Business"}</span>
-            <span className="text-xs font-semibold text-emerald-100">Simple rota planning</span>
+            <span className="text-xs font-semibold text-emerald-100">Rota, tasks and reminders</span>
           </span>
         </button>
 
@@ -332,7 +332,7 @@ function App() {
             </button>
             <div className="hidden lg:block">
               <p className="text-sm font-black text-fuel-ink">{branding.businessName || "Your Business"}</p>
-              <p className="text-xs font-semibold text-slate-500">Rota & staff planning</p>
+              <p className="text-xs font-semibold text-slate-500">Rota, tasks, reminders and reports</p>
             </div>
           </div>
           <div className="flex items-center justify-end gap-2">

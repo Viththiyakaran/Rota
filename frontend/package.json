@@ -1,7 +1,7 @@
 {
   "name": "fuelops-rota-frontend",
   "version": "1.0.0",
-  "description": "React frontend for FuelOps Rota",
+  "description": "React frontend for LocalPlanner",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",

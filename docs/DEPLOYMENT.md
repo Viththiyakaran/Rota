@@ -1,6 +1,6 @@
-# LocalOps Planner Deployment Guide
+# LocalPlanner Deployment Guide
 
-LocalOps Planner is a React frontend with a Node/Express backend. It supports SQLite for local/simple installs and Supabase/Postgres for production by setting `DATABASE_URL`.
+LocalPlanner is a React frontend with a Node/Express backend. It supports SQLite for local/simple installs and Supabase/Postgres for production by setting `DATABASE_URL`.
 
 ## Requirements
 

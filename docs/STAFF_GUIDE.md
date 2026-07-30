@@ -1,4 +1,4 @@
-# LocalOps Planner Staff Guide
+# LocalPlanner Staff Guide
 
 This guide is for staff users.
 

@@ -87,7 +87,7 @@ app.get("/", (req, res) => {
   }
 
   res.json({
-    app: "FuelOps Rota Backend",
+    app: "LocalPlanner Backend",
     status: "running",
     version: appVersion,
     message: "API is live"
@@ -106,7 +106,7 @@ app.get("/health", (_req, res) => {
 app.get("/api/health", (_req, res) => {
   res.json({
     status: "ok",
-    app: "FuelOps Rota Backend",
+    app: "LocalPlanner Backend",
     version: appVersion,
     authMigration: 3
   });
@@ -114,7 +114,7 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api", (_req, res) => {
   res.json({
-    app: "FuelOps Rota Backend",
+    app: "LocalPlanner Backend",
     version: appVersion,
     endpoints: [
       "GET /",
@@ -1383,7 +1383,7 @@ function requireAdmin(req, res, next) {
 initDb().then(async () => {
   await configurePushNotifications();
   app.listen(PORT, () => {
-    console.log(`FuelOps Rota Backend running on port ${PORT}`);
+    console.log(`LocalPlanner Backend running on port ${PORT}`);
   });
   startReminderPushScheduler();
 });
@@ -1796,7 +1796,7 @@ function buildIcsCalendar({ name, shifts }) {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//FuelOps Rota//Rota Calendar//EN",
+    "PRODID:-//LocalPlanner//Rota Calendar//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "X-WR-CALNAME:" + escapeIcsText(name),
@@ -1825,7 +1825,7 @@ function buildShiftEvent(shift, timeZone = getBusinessTimezone()) {
 
   return [
     "BEGIN:VEVENT",
-    `UID:fuelops-shift-${shift.id}@fuelops-rota`,
+    `UID:localplanner-shift-${shift.id}@localplanner`,
     `DTSTAMP:${toUtcIcsDate(new Date())}`,
     `DTSTART;TZID=${timeZone}:${toLocalIcsDateTime(shift.shiftDate, shift.startTime)}`,
     `DTEND;TZID=${timeZone}:${toLocalIcsDateTime(endDate, shift.endTime)}`,

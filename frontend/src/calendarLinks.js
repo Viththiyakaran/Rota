@@ -16,11 +16,11 @@ export function phoneCalendarDataUrl(shift, businessName = "Rota", timeZone = "E
   const ics = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//FuelOps Rota//Shift//EN",
+    "PRODID:-//LocalPlanner//Shift//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `UID:fuelops-shift-${shift.id}@fuelops-rota`,
+    `UID:localplanner-shift-${shift.id}@localplanner`,
     `DTSTAMP:${utcStamp(new Date())}`,
     `DTSTART;TZID=${calendarTimeZone}:${localIcsDateTime(shift.shiftDate, shift.startTime)}`,
     `DTEND;TZID=${calendarTimeZone}:${localIcsDateTime(endDateForShift(shift), shift.endTime)}`,

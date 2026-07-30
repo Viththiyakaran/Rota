@@ -1,4 +1,4 @@
-# LocalOps Planner API Reference
+# LocalPlanner API Reference
 
 Base URL:
 
