@@ -149,6 +149,7 @@ app.get("/api", (_req, res) => {
       "GET /calendar/:token.ics",
       "GET /api/notifications",
       "POST /api/notifications/read-all",
+      "POST /api/notifications/:id/read",
       "GET /api/attendance/status",
       "GET /api/attendance",
       "POST /api/attendance/clock-in",
@@ -807,6 +808,20 @@ app.get("/api/tasks", async (_req, res, next) => {
          tasks.id DESC`
     );
     res.json(rows.map(normaliseTask).filter((task) => !task.archived));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/notifications/:id/read", async (req, res, next) => {
+  try {
+    const notification = await get("SELECT id, staffId FROM notifications WHERE id = ?", [req.params.id]);
+    if (!notification) return res.status(404).json({ error: "Notification not found." });
+    if (req.user.role === "staff" && Number(notification.staffId) !== Number(req.user.staffId)) {
+      return res.status(403).json({ error: "You cannot update this notification." });
+    }
+    await run("UPDATE notifications SET readAt = COALESCE(readAt, CURRENT_TIMESTAMP) WHERE id = ?", [req.params.id]);
+    res.json({ ok: true });
   } catch (error) {
     next(error);
   }

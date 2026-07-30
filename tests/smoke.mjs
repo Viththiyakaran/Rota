@@ -285,6 +285,13 @@ async function runSmoke() {
   const untouchedShift = followingWeek.find((item) => item.id === followingWeekShift.id);
   assert(untouchedShift?.startTime === "06:00" && untouchedShift?.endTime === "14:00", "single shift edit does not change another week");
 
+  const staffNotifications = await request("/api/notifications", { cookie: admin.cookie });
+  const unreadNotification = staffNotifications.find((notification) => notification.unread);
+  assert(unreadNotification?.id, "shift creates a notification");
+  await request(`/api/notifications/${unreadNotification.id}/read`, { cookie: admin.cookie, method: "POST" });
+  const updatedNotifications = await request("/api/notifications", { cookie: admin.cookie });
+  assert(updatedNotifications.find((notification) => notification.id === unreadNotification.id)?.unread === false, "single notification can be marked read");
+
   const week = await request("/api/shifts/week?startDate=2026-06-29", { cookie: admin.cookie });
   assert(week.some((item) => item.id === shift.id), "week includes created shift");
 

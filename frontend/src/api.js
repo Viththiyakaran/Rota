@@ -76,6 +76,7 @@ export const api = {
   deleteShift: (id) => request(`/api/shifts/${id}`, { method: "DELETE" }),
   notifications: () => request("/api/notifications"),
   readNotifications: () => request("/api/notifications/read-all", { method: "POST" }),
+  readNotification: (id) => request(`/api/notifications/${id}/read`, { method: "POST" }),
   attendanceStatus: () => request("/api/attendance/status"),
   attendanceList: () => request("/api/attendance"),
   clockIn: (payload) => request("/api/attendance/clock-in", { method: "POST", body: JSON.stringify(payload) }),
