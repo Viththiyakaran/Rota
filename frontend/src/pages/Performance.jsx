@@ -432,11 +432,13 @@ async function createTrackerImage({ businessName, communication, currentDates, p
       context.fillRect(cellX, y, columns[cellIndex], rowHeight);
       context.strokeStyle = "#ffffff";
       context.strokeRect(cellX, y, columns[cellIndex], rowHeight);
-      context.fillStyle = cellIndex >= 3 && Number(String(cell).replace(/[£+,]/g, "")) < 0
-        ? "#b91c1c"
-        : cellIndex >= 3 && String(cell).startsWith("+")
-          ? "#047857"
-          : "#0f172a";
+      context.fillStyle = cellIndex === 2
+        ? "#176ef2"
+        : cellIndex >= 3 && Number(String(cell).replace(/[£+,]/g, "")) < 0
+          ? "#b91c1c"
+          : cellIndex >= 3 && String(cell).startsWith("+")
+            ? "#047857"
+            : "#0f172a";
       context.font = cellIndex === 0 ? "800 22px Arial" : "800 28px Arial";
       context.textAlign = cellIndex === 0 ? "left" : "center";
       context.fillText(cell, cellIndex === 0 ? cellX + 18 : cellX + columns[cellIndex] / 2, y + 55);
@@ -458,7 +460,13 @@ async function createTrackerImage({ businessName, communication, currentDates, p
     context.fillRect(x, totalY, columns[index], rowHeight);
     context.strokeStyle = "#ffffff";
     context.strokeRect(x, totalY, columns[index], rowHeight);
-    context.fillStyle = index >= 3 && comparison.difference < 0 ? "#b91c1c" : index >= 3 && comparison.difference > 0 ? "#047857" : "#0f172a";
+    context.fillStyle = index === 2
+      ? "#176ef2"
+      : index >= 3 && comparison.difference < 0
+        ? "#b91c1c"
+        : index >= 3 && comparison.difference > 0
+          ? "#047857"
+          : "#0f172a";
     context.font = "900 25px Arial";
     context.textAlign = index === 0 ? "left" : "center";
     context.fillText(cell, index === 0 ? x + 18 : x + columns[index] / 2, totalY + 55);
