@@ -1,5 +1,5 @@
 import React from "react";
-import { CalendarDays, ClipboardCheck, Clock, FileText, Users } from "lucide-react";
+import { Archive, CalendarDays, ClipboardCheck, Clock, FileText, RotateCcw, Trash2, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -7,8 +7,9 @@ import { addDays, formatDateLabel, formatDayLabel, getMonday, toDateInputValue }
 
 export function Reports({ goTo }) {
   const [period, setPeriod] = React.useState("this-week");
-  const [data, setData] = React.useState({ staff: [], shifts: [], timeOff: [], tasks: [], audit: [] });
+  const [data, setData] = React.useState({ staff: [], shifts: [], timeOff: [], tasks: [], completedTasks: [], audit: [] });
   const [loading, setLoading] = React.useState(true);
+  const [workingTaskId, setWorkingTaskId] = React.useState(null);
   const [error, setError] = React.useState("");
 
   const range = React.useMemo(() => getReportRange(period), [period]);
@@ -21,17 +22,20 @@ export function Reports({ goTo }) {
       api.week(range.start),
       api.timeOff(),
       api.tasks(),
+      api.completedTasks(),
       api.audit()
     ])
-      .then(([staffResult, shiftResult, timeOffResult, taskResult, auditResult]) => {
+      .then(([staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult]) => {
         setData({
           staff: staffResult.status === "fulfilled" ? staffResult.value : [],
           shifts: shiftResult.status === "fulfilled" ? shiftResult.value : [],
           timeOff: timeOffResult.status === "fulfilled" ? timeOffResult.value : [],
           tasks: taskResult.status === "fulfilled" ? taskResult.value : [],
+          completedTasks: completedTaskResult.status === "fulfilled" ? completedTaskResult.value : [],
           audit: auditResult.status === "fulfilled" ? auditResult.value : []
         });
-        const failed = [staffResult, shiftResult, timeOffResult, taskResult, auditResult].find((result) => result.status === "rejected");
+        const failed = [staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult]
+          .find((result) => result.status === "rejected");
         if (failed) setError(failed.reason.message);
       })
       .finally(() => setLoading(false));
@@ -41,8 +45,47 @@ export function Reports({ goTo }) {
   const staffHours = buildStaffHours(data.staff, periodShifts);
   const periodTimeOff = data.timeOff.filter((request) => request.startDate <= range.end && request.endDate >= range.start);
   const periodTasks = data.tasks.filter((task) => task.dueDate >= range.start && task.dueDate <= range.end);
-  const completedTasks = periodTasks.filter((task) => task.status === "done").length;
+  const openTasks = periodTasks.filter((task) => task.status !== "done");
+  const periodCompletedTasks = data.completedTasks.filter((task) => {
+    const completedDate = task.completedAt ? toDateInputValue(new Date(task.completedAt)) : "";
+    return completedDate >= range.start && completedDate <= range.end;
+  });
   const recentAudit = data.audit.slice(0, 8);
+
+  const restoreTask = async (task) => {
+    setWorkingTaskId(task.id);
+    setError("");
+    try {
+      const restored = await api.updateTask(task.id, { status: "todo" });
+      setData((current) => ({
+        ...current,
+        tasks: [restored, ...current.tasks.filter((item) => item.id !== task.id)],
+        completedTasks: current.completedTasks.filter((item) => item.id !== task.id)
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorkingTaskId(null);
+    }
+  };
+
+  const deleteCompletedTask = async (task) => {
+    if (!window.confirm(`Permanently delete "${task.title}"?`)) return;
+    setWorkingTaskId(task.id);
+    setError("");
+    try {
+      await api.deleteTask(task.id);
+      setData((current) => ({
+        ...current,
+        tasks: current.tasks.filter((item) => item.id !== task.id),
+        completedTasks: current.completedTasks.filter((item) => item.id !== task.id)
+      }));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setWorkingTaskId(null);
+    }
+  };
 
   return (
     <div className="space-y-5">
@@ -87,11 +130,54 @@ export function Reports({ goTo }) {
           </ReportCard>
 
           <ReportCard icon={ClipboardCheck} title="Task Completion Report" action="Open tasks" onAction={() => goTo("tasks")}>
-            <MetricRow label="Tasks due" value={periodTasks.length} />
-            <MetricRow label="Completed" value={completedTasks} />
-            <MetricRow label="Still open" value={periodTasks.length - completedTasks} />
+            <MetricRow label="Completed" value={periodCompletedTasks.length} />
+            <MetricRow label="Archived from board" value={periodCompletedTasks.filter((task) => task.archived).length} />
+            <MetricRow label="Still open" value={openTasks.length} />
           </ReportCard>
         </div>
+
+        <ReportCard icon={Archive} title="Completed Task History">
+          {periodCompletedTasks.length ? periodCompletedTasks.map((task) => (
+            <div
+              key={task.id}
+              className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-black text-fuel-ink">{task.title}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${
+                    task.archived ? "bg-slate-200 text-slate-600" : "bg-emerald-100 text-emerald-700"
+                  }`}>
+                    {task.archived ? "Archived" : "On board"}
+                  </span>
+                </div>
+                <p className="mt-1 text-sm font-bold text-slate-500">
+                  {task.assignedStaffName || "Anyone"} · Completed {formatCompletedDate(task.completedAt)}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  disabled={workingTaskId === task.id}
+                  onClick={() => restoreTask(task)}
+                  className="inline-flex items-center gap-1 rounded-md bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green disabled:opacity-60"
+                >
+                  <RotateCcw size={14} />
+                  Restore
+                </button>
+                <button
+                  type="button"
+                  disabled={workingTaskId === task.id}
+                  onClick={() => deleteCompletedTask(task)}
+                  className="inline-flex items-center gap-1 rounded-md bg-red-50 px-3 py-2 text-xs font-black text-red-700 disabled:opacity-60"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          )) : <EmptyLine />}
+        </ReportCard>
 
         <ReportCard icon={FileText} title="Audit Log Report">
           {recentAudit.length ? recentAudit.map((entry) => (
@@ -173,6 +259,18 @@ function sumHours(shifts) {
 
 function formatHours(value) {
   return Number(value || 0).toFixed(Number.isInteger(Number(value || 0)) ? 0 : 2);
+}
+
+function formatCompletedDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "date unavailable";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function getBusiestDay(shifts) {

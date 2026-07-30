@@ -324,6 +324,7 @@ export async function initDb() {
       status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('backlog', 'todo', 'process', 'done')),
       assignedStaffId INTEGER,
       createdBy INTEGER,
+      completedAt TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (assignedStaffId) REFERENCES staff(id),
@@ -377,6 +378,8 @@ export async function initDb() {
   await ensureTableColumn("sessions", "expiresAt", "TEXT");
   await ensureTableColumn("sessions", "createdAt", "TEXT");
   await ensureTableColumn("tasks", "dueDate", "TEXT");
+  await ensureTableColumn("tasks", "completedAt", "TEXT");
+  await run("UPDATE tasks SET completedAt = updatedAt WHERE status = 'done' AND completedAt IS NULL");
   await ensureTableColumn("attendance", "shiftId", "INTEGER");
   await ensureTableColumn("attendance", "clockOutAt", "TEXT");
   await ensureTableColumn("attendance", "clockInLatitude", "REAL");
@@ -547,6 +550,7 @@ async function createPostgresSchema() {
       status TEXT NOT NULL DEFAULT 'todo' CHECK(status IN ('backlog', 'todo', 'process', 'done')),
       assignedStaffId INTEGER REFERENCES staff(id),
       createdBy INTEGER REFERENCES users(id),
+      completedAt TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )

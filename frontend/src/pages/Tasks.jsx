@@ -185,7 +185,12 @@ export function Tasks({ currentUser }) {
                 }}
               >
                 <div className="mb-3 flex items-center justify-between gap-2">
-                  <h3 className="text-lg font-black">{column.label}</h3>
+                  <div>
+                    <h3 className="text-lg font-black">{column.label}</h3>
+                    {column.id === "done" ? (
+                      <p className="text-xs font-bold text-slate-500">Visible here for 24 hours</p>
+                    ) : null}
+                  </div>
                   <span className={`rounded-full px-3 py-1 text-xs font-black ${column.tone}`}>{columnTasks.length}</span>
                 </div>
 
@@ -214,6 +219,11 @@ export function Tasks({ currentUser }) {
                             {task.dueDate}
                           </span>
                         )}
+                        {task.status === "done" && task.completedAt ? (
+                          <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">
+                            Completed {formatCompletedTime(task.completedAt)}
+                          </span>
+                        ) : null}
                         <TaskAssignee
                           currentUser={currentUser}
                           isAdmin={isAdmin}
@@ -342,4 +352,15 @@ function TaskAssignee({ currentUser, isAdmin, onAssign, saving, staff, task }) {
       {assignedToCurrentUser ? "Assigned to you" : task.assignedStaffName || "Assigned"}
     </span>
   );
+}
+
+function formatCompletedTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(date);
 }

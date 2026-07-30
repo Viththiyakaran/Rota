@@ -55,6 +55,7 @@ export const api = {
   createTimeOff: (payload) => request("/api/time-off", { method: "POST", body: JSON.stringify(payload) }),
   updateTimeOff: (id, payload) => request(`/api/time-off/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   tasks: () => request("/api/tasks"),
+  completedTasks: () => request("/api/tasks/completed"),
   createTask: (payload) => request("/api/tasks", { method: "POST", body: JSON.stringify(payload) }),
   updateTask: (id, payload) => request(`/api/tasks/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteTask: (id) => request(`/api/tasks/${id}`, { method: "DELETE" }),

@@ -48,6 +48,7 @@ const frontendDist = path.join(__dirname, "..", "..", "frontend", "dist");
 const loginAttempts = new Map();
 const loginWindowMs = 15 * 60 * 1000;
 const maxLoginAttempts = 5;
+const taskArchiveAfterMs = 24 * 60 * 60 * 1000;
 let pushConfigured = false;
 const configuredFrontendUrls = [
   process.env.FRONTEND_URL,
@@ -160,6 +161,7 @@ app.get("/api", (_req, res) => {
       "POST /api/availability",
       "DELETE /api/availability/:id",
       "GET /api/tasks",
+      "GET /api/tasks/completed",
       "POST /api/tasks",
       "PUT /api/tasks/:id",
       "DELETE /api/tasks/:id",
@@ -682,6 +684,22 @@ app.get("/api/tasks", async (_req, res, next) => {
          tasks.updatedAt DESC,
          tasks.id DESC`
     );
+    res.json(rows.map(normaliseTask).filter((task) => !task.archived));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/tasks/completed", requireAdmin, async (_req, res, next) => {
+  try {
+    const rows = await all(
+      `SELECT tasks.*, staff.name AS assignedStaffName, users.username AS createdByUsername
+       FROM tasks
+       LEFT JOIN staff ON staff.id = tasks.assignedStaffId
+       LEFT JOIN users ON users.id = tasks.createdBy
+       WHERE tasks.status = 'done'
+       ORDER BY COALESCE(tasks.completedAt, tasks.updatedAt) DESC, tasks.id DESC`
+    );
     res.json(rows.map(normaliseTask));
   } catch (error) {
     next(error);
@@ -709,16 +727,18 @@ app.post("/api/tasks", async (req, res, next) => {
       return res.status(403).json({ error: "Staff can only assign a new task to themselves." });
     }
 
+    const completedAt = status === "done" ? new Date().toISOString() : null;
     const result = await run(
-      `INSERT INTO tasks (title, description, dueDate, status, assignedStaffId, createdBy)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tasks (title, description, dueDate, status, assignedStaffId, createdBy, completedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         cleanTitle,
         String(description || "").trim(),
         dueDate,
         status,
         cleanAssigneeId,
-        req.user.id
+        req.user.id,
+        completedAt
       ]
     );
     await addAudit(req.user.id, "create_task", `Created task ${cleanTitle}`);
@@ -741,6 +761,9 @@ app.put("/api/tasks/:id", async (req, res, next) => {
     if (!nextTitle) return res.status(400).json({ error: "Task title is required." });
     const nextDueDate = req.body.dueDate === undefined ? current.dueDate : req.body.dueDate || null;
     if (nextDueDate && !isDate(nextDueDate)) return res.status(400).json({ error: "Task date is invalid." });
+    const nextCompletedAt = nextStatus === "done"
+      ? (current.status === "done" && current.completedAt ? current.completedAt : new Date().toISOString())
+      : null;
     let nextAssigneeId = current.assignedStaffId || null;
     if (req.body.assignedStaffId !== undefined) {
       nextAssigneeId = normaliseTaskAssigneeId(req.body.assignedStaffId);
@@ -766,7 +789,7 @@ app.put("/api/tasks/:id", async (req, res, next) => {
 
     await run(
       `UPDATE tasks
-       SET title = ?, description = ?, dueDate = ?, status = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP
+       SET title = ?, description = ?, dueDate = ?, status = ?, assignedStaffId = ?, completedAt = ?, updatedAt = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         nextTitle,
@@ -774,6 +797,7 @@ app.put("/api/tasks/:id", async (req, res, next) => {
         nextDueDate,
         nextStatus,
         nextAssigneeId,
+        nextCompletedAt,
         req.params.id
       ]
     );
@@ -1723,10 +1747,13 @@ async function getTask(id) {
 
 function normaliseTask(row) {
   if (!row) return row;
+  const completedAt = normaliseStoredTimestamp(row.completedAt);
   return {
     ...row,
     assignedStaffId: row.assignedStaffId || null,
-    createdBy: row.createdBy || null
+    createdBy: row.createdBy || null,
+    completedAt,
+    archived: isTaskArchived({ ...row, completedAt })
   };
 }
 
@@ -1802,6 +1829,22 @@ function readAttendanceLocation(body, required, actionLabel) {
 
 function isTaskStatus(status) {
   return ["backlog", "todo", "process", "done"].includes(status);
+}
+
+function isTaskArchived(task) {
+  if (task.status !== "done" || !task.completedAt) return false;
+  const completedAt = new Date(task.completedAt).getTime();
+  return Number.isFinite(completedAt) && Date.now() - completedAt >= taskArchiveAfterMs;
+}
+
+function normaliseStoredTimestamp(value) {
+  if (!value) return null;
+  const text = String(value);
+  const withTimeZone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(text)
+    ? text
+    : `${text.replace(" ", "T")}Z`;
+  const date = new Date(withTimeZone);
+  return Number.isNaN(date.getTime()) ? text : date.toISOString();
 }
 
 function normaliseTaskAssigneeId(value) {

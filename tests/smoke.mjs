@@ -194,6 +194,29 @@ async function runSmoke() {
     cookie: staff.cookie,
     method: "DELETE"
   });
+
+  const completedTask = await request(`/api/tasks/${assignedTask.id}`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { status: "done" }
+  });
+  assert(completedTask.completedAt, "completed task records completion time");
+  assert(completedTask.archived === false, "newly completed task remains on board");
+  const completedTasks = await request("/api/tasks/completed", { cookie: admin.cookie });
+  assert(completedTasks.some((task) => task.id === assignedTask.id), "completed task appears in history");
+  await expectStatus("/api/tasks/completed", 403, { cookie: staff.cookie });
+  const activeTasks = await request("/api/tasks", { cookie: admin.cookie });
+  assert(activeTasks.some((task) => task.id === assignedTask.id), "completed task remains active for archive window");
+
+  const restoredTask = await request(`/api/tasks/${assignedTask.id}`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { status: "todo" }
+  });
+  assert(restoredTask.completedAt === null, "restoring task clears completion time");
+  const completedAfterRestore = await request("/api/tasks/completed", { cookie: admin.cookie });
+  assert(!completedAfterRestore.some((task) => task.id === assignedTask.id), "restored task leaves completed history");
+
   await request(`/api/tasks/${assignedTask.id}`, { cookie: admin.cookie, method: "DELETE" });
   await request(`/api/tasks/${claimableTask.id}`, { cookie: admin.cookie, method: "DELETE" });
 
