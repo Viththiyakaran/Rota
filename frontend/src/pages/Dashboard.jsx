@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock, Info, Layers, ListChecks, PlusCircle, Printer, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, Clock, ListChecks, PlusCircle, Printer, Sparkles, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -73,15 +73,6 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const weekStart = new Date(`${dashboardWeekStart}T00:00:00`);
   const weekDays = Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index)));
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
-  const weekTasks = tasks.filter((task) =>
-    task.status !== "done" &&
-    task.dueDate &&
-    task.dueDate >= weekDays[0] &&
-    task.dueDate <= weekDays[6]
-  );
-  const moveDashboardWeek = (weeks) => {
-    setDashboardWeekStart(toDateInputValue(addDays(weekStart, weeks * 7)));
-  };
   const attentionItems = getAttentionItems({ shifts, ukRules, weekDays });
   const workingNow = getWorkingNow(shifts, today);
   const clockedInNow = ukRules.clockInEnabled ? attendance.filter((entry) => entry.clockInAt && !entry.clockOutAt) : [];
@@ -89,7 +80,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const tasksDueToday = tasks.filter((task) => task.status !== "done" && task.dueDate === today);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <DashboardWelcome currentUser={currentUser} />
 
       {error && !loading && (
@@ -107,69 +98,25 @@ export function Dashboard({ goTo, currentUser, branding }) {
           workingNow={workingNow}
         />
 
+        <CompactDashboardSummary
+          activeStaff={staff.filter((person) => person.active)}
+          attentionItems={attentionItems}
+          reminders={reminders}
+          shifts={shifts}
+          timeOff={timeOff}
+          today={today}
+          weekDays={weekDays}
+          weekRange={weekRange}
+          onOpenWeek={() => goTo("rota")}
+          onOpenNotifications={() => goTo("reminders")}
+        />
+
         <QuickActions
           goTo={goTo}
           isAdmin={isAdmin}
           moreOpen={moreOpen}
           onToggleMore={() => setMoreOpen((value) => !value)}
         />
-
-        <Card>
-          <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-xl font-black">This Week</h3>
-                <span className="group relative inline-flex">
-                  <button
-                    type="button"
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-fuel-mist text-fuel-green outline-none ring-fuel-green transition hover:bg-fuel-green hover:text-white focus:ring-2"
-                    aria-label="Rota calendar information"
-                  >
-                    <Info size={16} />
-                  </button>
-                  <span className="pointer-events-none absolute left-1/2 top-9 z-20 hidden w-64 -translate-x-1/2 rounded-md bg-fuel-ink px-3 py-2 text-xs font-bold text-white shadow-lift group-hover:block group-focus-within:block">
-                    Dashboard shows a compact summary. Open Weekly Rota for every shift detail.
-                  </span>
-                </span>
-              </div>
-              <p className="mt-1 text-sm font-medium text-slate-600">{weekRange}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-ink"
-                onClick={() => moveDashboardWeek(-1)}
-              >
-                <ChevronLeft size={16} />
-                Prev
-              </button>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1 rounded-md bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-ink"
-                onClick={() => moveDashboardWeek(1)}
-              >
-                Next
-                <ChevronRight size={16} />
-              </button>
-              <button className="rounded-md px-3 py-2 text-sm font-bold text-fuel-green" onClick={() => goTo("rota")}>
-                Open week
-              </button>
-            </div>
-          </div>
-          <DashboardRotaSummary
-            activeStaff={staff.filter((person) => person.active)}
-            attendance={attendance}
-            clockInEnabled={ukRules.clockInEnabled}
-            reminders={reminders}
-            shifts={shifts}
-            tasks={weekTasks}
-            timeOff={timeOff}
-            ukRules={ukRules}
-            weekDays={weekDays}
-            onOpenWeek={() => goTo("rota")}
-            onOpenNotifications={() => goTo("reminders")}
-          />
-        </Card>
       </Status>
     </div>
   );
@@ -185,20 +132,13 @@ function DashboardWelcome({ currentUser }) {
   }).format(new Date());
 
   return (
-    <Card className="p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-black leading-tight text-fuel-ink">
-            {greeting}, {name}
-          </h1>
-          <p className="mt-1 text-sm font-medium text-slate-600">Review today's rota, tasks and reminders.</p>
-        </div>
-        <div className="w-fit rounded-lg bg-fuel-mist px-3 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Today</p>
-          <p className="mt-1 text-base font-bold text-fuel-ink">{today}</p>
-        </div>
+    <section className="flex flex-col gap-2 px-1 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-black leading-tight text-fuel-ink">{greeting}, {name}</h1>
+        <p className="mt-1 text-sm font-medium text-slate-600">Here is what needs your attention today.</p>
       </div>
-    </Card>
+      <p className="text-sm font-bold text-slate-500">{today}</p>
+    </section>
   );
 }
 
@@ -214,11 +154,7 @@ function TodayActionPlan({ attentionItems, clockedInNow, nextShift, tasksDueToda
       : "No one is currently clocked/scheduled in.";
 
   return (
-    <section className="space-y-3">
-      <div>
-        <h2 className="text-xl font-black text-fuel-ink">Today</h2>
-        <p className="text-sm font-medium text-slate-600">The checks that matter before the day gets busy.</p>
-      </div>
+    <section>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <ActionMiniCard
           icon={Users}
@@ -254,32 +190,33 @@ function ActionMiniCard({ detail, icon: Icon, title, tone = "default", value }) 
   const toneClass = tone === "warning" ? "bg-amber-50 text-amber-700" : tone === "good" ? "bg-emerald-50 text-fuel-green" : "bg-fuel-mist text-fuel-green";
 
   return (
-    <Card className="p-4">
+    <article className="rounded-lg border border-fuel-line bg-white p-3.5 shadow-sm">
       <div className="flex items-start gap-3">
-        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
-          <Icon size={21} />
+        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-md ${toneClass}`}>
+          <Icon size={19} />
         </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-slate-600">{title}</p>
-          <p className="mt-1 text-lg font-black text-fuel-ink">{value}</p>
+          <p className="text-xs font-semibold text-slate-500">{title}</p>
+          <p className="mt-0.5 truncate text-base font-black text-fuel-ink">{value}</p>
           <p className="mt-1 line-clamp-2 text-xs font-medium text-slate-500">{detail}</p>
         </div>
       </div>
-    </Card>
+    </article>
   );
 }
 
 function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
   const moreActions = [
+    { label: "Generate Rota", page: "rota-pattern", icon: Sparkles },
+    { label: "Print Rota", page: "rota", icon: Printer },
+    { label: "Rota AI", page: "rota-ai", icon: Bot },
     { label: "Reports", page: "reports", icon: BarChart3 },
-    { label: "Rota Pattern", page: "rota-pattern", icon: Layers },
-    { label: "One-off Shift", page: "add-shift", icon: PlusCircle },
     { label: "Tasks", page: "tasks", icon: ListChecks }
   ];
 
   return (
     <div className="relative">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[1.15fr_1fr_auto_auto_auto]">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto]">
         <button
           type="button"
           className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-3 text-base font-bold text-white shadow-sm transition hover:bg-blue-700"
@@ -297,42 +234,14 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
           Open Rota
         </button>
         {isAdmin && (
-          <>
-            <button
-              type="button"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-fuel-line bg-white px-4 py-3 text-base font-bold text-fuel-ink shadow-sm transition hover:bg-fuel-mist hover:text-fuel-green"
-              onClick={() => goTo("rota-pattern")}
-            >
-              <Sparkles size={18} />
-              Generate Rota
-            </button>
-            <button
-              type="button"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-blue-100"
-              onClick={() => goTo("rota")}
-            >
-              <Printer size={18} />
-              Print Rota
-            </button>
-            <button
-              type="button"
-              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-green transition hover:bg-blue-100"
-              onClick={() => goTo("rota-ai")}
-            >
-              <Bot size={18} />
-              Rota AI
-            </button>
-          </>
-        )}
-        {isAdmin && (
           <button
             type="button"
-            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 py-3 text-base font-bold text-fuel-ink transition hover:bg-blue-100 xl:w-14 xl:px-0"
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-5 py-3 text-base font-bold text-fuel-ink transition hover:bg-blue-100"
             onClick={onToggleMore}
             aria-expanded={moreOpen}
             title="More actions"
           >
-            <span className="xl:hidden">More</span>
+            <span>More</span>
             <ChevronDown size={18} />
           </button>
         )}
@@ -346,7 +255,10 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
                 key={action.label}
                 type="button"
                 className="flex items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-bold text-fuel-ink transition hover:bg-fuel-mist"
-                onClick={() => goTo(action.page)}
+                onClick={() => {
+                  goTo(action.page);
+                  onToggleMore();
+                }}
               >
                 <Icon size={17} className="text-fuel-green" />
                 {action.label}
@@ -355,6 +267,124 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+function CompactDashboardSummary({
+  activeStaff,
+  attentionItems,
+  reminders,
+  shifts,
+  timeOff,
+  today,
+  weekDays,
+  weekRange,
+  onOpenWeek,
+  onOpenNotifications
+}) {
+  const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
+  const todayShifts = visibleShifts
+    .filter((shift) => shift.shiftDate === today)
+    .sort((left, right) => timeToMinutes(left.startTime) - timeToMinutes(right.startTime));
+  const staffOnRota = new Set(visibleShifts.map((shift) => String(shift.staffId))).size;
+  const totalHours = visibleShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+  const approvedTimeOffCount = timeOff.filter((request) =>
+    request.status === "approved" &&
+    request.endDate >= request.startDate &&
+    weekDays.some((day) => day >= request.startDate && day <= request.endDate)
+  ).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 lg:grid-cols-[1.3fr_0.9fr]">
+        <Card className="p-4 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Today</p>
+              <h2 className="mt-1 text-lg font-black text-fuel-ink">Today&apos;s shifts</h2>
+            </div>
+            <button type="button" className="text-sm font-bold text-fuel-green" onClick={onOpenWeek}>
+              Open rota →
+            </button>
+          </div>
+
+          <div className="mt-3 divide-y divide-fuel-line">
+            {todayShifts.map((shift) => (
+              <div key={shift.id} className="grid grid-cols-[2.25rem_1fr_auto] items-center gap-3 py-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-fuel-mist text-xs font-black text-fuel-green">
+                  {String(shift.staffName || "?").charAt(0).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black text-fuel-ink">{shift.staffName}</p>
+                  <p className="mt-0.5 truncate text-xs font-semibold text-slate-500">{shift.notes || "Scheduled shift"}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-black text-fuel-ink">{formatShiftRange(shift.startTime, shift.endTime)}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-500">{formatHourTotal(shift.paidHours)}h paid</p>
+                </div>
+              </div>
+            ))}
+            {todayShifts.length === 0 && (
+              <p className="py-6 text-center text-sm font-semibold text-slate-500">No shifts scheduled today.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-4 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Review</p>
+              <h2 className="mt-1 text-lg font-black text-fuel-ink">Attention</h2>
+            </div>
+            <button type="button" className="text-sm font-bold text-fuel-green" onClick={onOpenNotifications}>
+              View all →
+            </button>
+          </div>
+
+          <div className="mt-3 space-y-2">
+            {attentionItems.slice(0, 2).map((item) => (
+              <div key={item} className="flex items-start gap-3 rounded-lg bg-amber-50 px-3 py-2.5">
+                <AlertTriangle size={17} className="mt-0.5 shrink-0 text-amber-700" />
+                <p className="text-sm font-bold text-amber-900">{item}</p>
+              </div>
+            ))}
+            {attentionItems.length === 0 && (
+              <div className="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-2.5">
+                <CheckCircle2 size={17} className="shrink-0 text-emerald-700" />
+                <p className="text-sm font-bold text-emerald-800">No rota warnings today.</p>
+              </div>
+            )}
+            {reminders.slice(0, 2).map((reminder) => (
+              <div key={reminder.id} className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
+                <Clock size={17} className="mt-0.5 shrink-0 text-fuel-green" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-bold text-fuel-ink">{reminder.staffName} shift reminder</p>
+                  <p className="text-xs font-medium text-slate-500">
+                    {formatTimeLabel(reminder.startTime)} · {formatDayLabel(reminder.shiftDate)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <section className="flex flex-col gap-3 rounded-lg border border-fuel-line bg-white px-4 py-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-sm font-black text-fuel-ink">This week</p>
+          <p className="mt-0.5 text-xs font-semibold text-slate-500">{weekRange}</p>
+        </div>
+        <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-2 text-sm sm:flex sm:items-center sm:justify-end">
+          <span><strong className="text-fuel-ink">{visibleShifts.length}</strong> <span className="text-slate-500">shifts</span></span>
+          <span><strong className="text-fuel-ink">{formatHourTotal(totalHours)}h</strong> <span className="text-slate-500">paid</span></span>
+          <span><strong className="text-fuel-ink">{staffOnRota}/{activeStaff.length}</strong> <span className="text-slate-500">staff</span></span>
+          <span><strong className="text-fuel-ink">{approvedTimeOffCount}</strong> <span className="text-slate-500">off</span></span>
+          <button type="button" className="col-span-2 text-left font-black text-fuel-green sm:text-right" onClick={onOpenWeek}>
+            Open full rota →
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
