@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, CalendarDays, CheckCircle2, LockKeyhole, Printer, UserRound } from "lucide-react";
+import { Bell, CalendarDays, Check, CheckCircle2, Clock3, LockKeyhole, UserRound, UsersRound } from "lucide-react";
 import { api, setAuthToken } from "../api.js";
 import { Field, inputClass } from "../components/Field.jsx";
 import { primaryButton } from "../components/PageHeader.jsx";
@@ -29,7 +29,7 @@ export function Login({ branding, onLogin }) {
   return (
     <main className="min-h-screen bg-[#f8fafc] px-4 py-8 sm:py-12">
       <section className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lift lg:grid-cols-[1fr_0.88fr]">
-        <div className="hidden bg-gradient-to-br from-fuel-deep via-fuel-green to-[#0d47a1] p-8 text-white lg:block">
+        <div className="login-story-panel hidden p-8 text-white lg:block">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/12 text-xl font-black text-fuel-lime ring-1 ring-white/20">L</span>
             <div>
@@ -37,16 +37,14 @@ export function Login({ branding, onLogin }) {
               <p className="text-sm font-semibold text-blue-50">Rota, tasks, reminders and reports</p>
             </div>
           </div>
-          <div className="mt-12">
-            <p className="text-sm font-black uppercase tracking-[0.16em] text-fuel-lime">Small business operations</p>
-            <h2 className="mt-3 text-4xl font-black leading-tight">Plan rotas, tasks, time off and reminders in one tidy place.</h2>
+          <div className="mt-8">
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100">Your week, organised</p>
+            <h2 className="mt-2 text-3xl font-black leading-tight">From an empty rota to a ready team.</h2>
+            <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-blue-100">
+              Plan shifts, assign work and keep everyone updated from one simple workspace.
+            </p>
           </div>
-          <div className="mt-10 grid gap-3">
-            <LoginBenefit icon={CalendarDays} text="Create weekly rotas quickly" />
-            <LoginBenefit icon={CheckCircle2} text="Track staff time off" />
-            <LoginBenefit icon={Bell} text="Send rota reminders" />
-            <LoginBenefit icon={Printer} text="Review reports and share weekly plans" />
-          </div>
+          <LocalPlannerStory />
         </div>
 
         <div className="p-5 sm:p-8">
@@ -111,13 +109,97 @@ export function Login({ branding, onLogin }) {
   );
 }
 
-function LoginBenefit({ icon: Icon, text }) {
+function LocalPlannerStory() {
+  const days = [
+    { day: "Mon", name: "Veera", time: "05:30–14:00" },
+    { day: "Tue", name: "Viththi", time: "13:00–22:00" },
+    { day: "Wed", name: "Afridi", time: "06:00–14:00" },
+  ];
+
   return (
-    <div className="flex items-center gap-3 rounded-xl bg-white/10 px-3 py-3 ring-1 ring-white/15">
-      <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/12">
-        <Icon size={18} />
-      </span>
-      <span className="text-sm font-bold">{text}</span>
+    <div className="login-story mt-6" aria-label="LocalPlanner organises shifts, tasks and reminders">
+      <div className="login-story-glow" aria-hidden="true" />
+      <div className="login-story-board">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-fuel-green">
+              <CalendarDays size={17} />
+            </span>
+            <div>
+              <p className="text-xs font-black text-slate-900">Weekly rota</p>
+              <p className="text-[10px] font-bold text-slate-400">Monday – Sunday</p>
+            </div>
+          </div>
+          <span className="login-story-live">
+            <span />
+            Live
+          </span>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 p-3">
+          {days.map((shift, index) => (
+            <div className="login-story-shift" style={{ "--shift-delay": `${index * 0.45}s` }} key={shift.day}>
+              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{shift.day}</p>
+              <div className="mt-2 rounded-lg border-l-[3px] border-fuel-green bg-blue-50 px-2 py-2">
+                <p className="truncate text-[11px] font-black text-slate-900">{shift.name}</p>
+                <p className="mt-0.5 whitespace-nowrap text-[9px] font-bold text-fuel-green">{shift.time}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mx-3 mb-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+          <div className="flex -space-x-1.5">
+            {["V", "V", "A"].map((initial, index) => (
+              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-blue-100 text-[9px] font-black text-fuel-green" key={`${initial}-${index}`}>
+                {initial}
+              </span>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-600">
+            <Clock3 size={13} className="text-fuel-green" />
+            3 staff · 7 shifts
+          </div>
+        </div>
+      </div>
+
+      <div className="login-story-event login-story-event-task">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+          <Check size={16} strokeWidth={3} />
+        </span>
+        <div>
+          <p className="text-[11px] font-black text-slate-900">Task completed</p>
+          <p className="text-[9px] font-bold text-slate-400">Forecourt safety check</p>
+        </div>
+      </div>
+
+      <div className="login-story-event login-story-event-reminder">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+          <Bell size={15} />
+        </span>
+        <div>
+          <p className="text-[11px] font-black text-slate-900">Team notified</p>
+          <p className="text-[9px] font-bold text-slate-400">Rota reminder sent</p>
+        </div>
+      </div>
+
+      <div className="login-story-ready">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/20">
+          <CheckCircle2 size={16} />
+        </span>
+        <div>
+          <p className="text-[11px] font-black">Week ready</p>
+          <p className="text-[9px] font-semibold text-blue-100">Everyone knows what’s next</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-center gap-5 text-[10px] font-black uppercase tracking-[0.12em] text-blue-100">
+        <span className="flex items-center gap-1.5"><UsersRound size={13} /> Assign</span>
+        <span className="h-1 w-1 rounded-full bg-blue-200/70" />
+        <span className="flex items-center gap-1.5"><Bell size={13} /> Remind</span>
+        <span className="h-1 w-1 rounded-full bg-blue-200/70" />
+        <span className="flex items-center gap-1.5"><CheckCircle2 size={13} /> Done</span>
+      </div>
     </div>
   );
 }
