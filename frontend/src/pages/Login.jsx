@@ -27,8 +27,8 @@ export function Login({ branding, onLogin }) {
   };
 
   return (
-    <main className="min-h-screen bg-[#f8fafc] px-4 py-8 sm:py-12">
-      <section className="mx-auto grid w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lift lg:grid-cols-[1fr_0.88fr]">
+    <main className="flex min-h-screen min-h-[100dvh] items-center bg-[#f8fafc] sm:px-4 sm:py-10">
+      <section className="mx-auto grid min-h-[100dvh] w-full min-w-0 max-w-5xl overflow-hidden bg-white sm:min-h-0 sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-lift lg:grid-cols-[1fr_0.88fr]">
         <div className="login-story-panel hidden p-8 text-white lg:block">
           <div className="flex items-center gap-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/12 text-xl font-black text-fuel-lime ring-1 ring-white/20">L</span>
@@ -47,30 +47,35 @@ export function Login({ branding, onLogin }) {
           <LocalPlannerStory />
         </div>
 
-        <div className="p-5 sm:p-8">
-          <div className="mb-7 flex items-center gap-3 lg:hidden">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-fuel-deep text-xl font-black text-fuel-lime shadow-sm">L</span>
-            <div className="min-w-0">
-              <h1 className="truncate text-2xl font-black leading-none text-fuel-ink">LocalPlanner</h1>
-              <p className="mt-1 text-sm font-bold text-slate-500">Rota, tasks, reminders and reports</p>
+        <div className="flex min-w-0 flex-col justify-center px-5 py-8 sm:p-8">
+          <div className="mb-8 flex flex-col items-center text-center lg:hidden">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-fuel-deep text-xl font-black text-fuel-lime shadow-sm">L</span>
+            <div className="mt-3 min-w-0">
+              <h1 className="text-2xl font-black leading-none text-fuel-ink">LocalPlanner</h1>
+              <p className="mt-2 text-sm font-semibold text-slate-500">Rota, tasks, reminders and reports</p>
             </div>
           </div>
 
-          <div className="mb-6 flex items-center gap-3 rounded-xl bg-slate-50 p-3">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-fuel-deep text-xl font-black text-fuel-lime shadow-sm">
+          <div className="mb-7 min-w-0 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center sm:flex sm:items-center sm:gap-3 sm:text-left">
+            <span className="mx-auto flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-fuel-deep text-xl font-black text-fuel-lime shadow-sm sm:mx-0 sm:h-12 sm:w-12">
               {branding.logoDataUrl ? (
                 <img src={branding.logoDataUrl} alt="" className="h-full w-full rounded-xl object-contain p-1" />
               ) : (
                 String(branding.businessName || "R").trim().charAt(0).toUpperCase()
               )}
             </span>
-            <div className="min-w-0">
-              <h2 className="truncate text-xl font-black leading-none text-fuel-ink">{branding.businessName || "Your Business"}</h2>
-              <p className="mt-1 text-sm font-bold text-slate-500">Rota, tasks and staff planning</p>
+            <div className="mt-3 min-w-0 sm:mt-0">
+              <h2 className="break-words text-lg font-black leading-tight text-fuel-ink sm:text-xl">{branding.businessName || "Your Business"}</h2>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Rota, tasks and staff planning</p>
             </div>
           </div>
 
-          <form className="space-y-4" onSubmit={submit}>
+          <div className="mb-5">
+            <h2 className="text-xl font-black text-fuel-ink">Sign in</h2>
+            <p className="mt-1 text-sm font-medium text-slate-500">Use your staff or admin account.</p>
+          </div>
+
+          <form className="min-w-0 space-y-4" onSubmit={submit}>
           <Field label="Username">
             <div className="relative">
               <UserRound className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={19} />
