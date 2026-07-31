@@ -1,11 +1,12 @@
 import React from "react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
+import { AvatarField } from "../components/AvatarField.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { PageHeader, primaryButton } from "../components/PageHeader.jsx";
 
 export function AddStaff({ onSaved }) {
-  const [form, setForm] = React.useState({ name: "", phone: "", email: "", role: "Cashier", active: true });
+  const [form, setForm] = React.useState({ name: "", phone: "", email: "", role: "Cashier", avatarDataUrl: "", active: true });
   const [error, setError] = React.useState("");
 
   const submit = async (event) => {
@@ -28,6 +29,9 @@ export function AddStaff({ onSaved }) {
       <Card>
         <form onSubmit={submit} className="grid gap-4 md:grid-cols-2">
           {error && <p className="rounded-md bg-red-50 p-3 font-bold text-red-700 md:col-span-2">{error}</p>}
+          <div className="md:col-span-2">
+            <AvatarField name={form.name || "New staff"} value={form.avatarDataUrl} onChange={(avatarDataUrl) => setForm({ ...form, avatarDataUrl })} />
+          </div>
           <Field label="Name">
             <input required className={inputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           </Field>

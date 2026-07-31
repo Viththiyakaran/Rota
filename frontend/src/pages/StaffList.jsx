@@ -2,6 +2,8 @@ import React from "react";
 import { Mail, Pencil, Phone, PlusCircle, Search, UserCheck, Users, UserX, X } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
+import { AvatarField } from "../components/AvatarField.jsx";
+import { StaffAvatar } from "../components/StaffAvatar.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { PageHeader, Pill, dangerButton, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { Status } from "../components/Status.jsx";
@@ -182,6 +184,9 @@ export function StaffList({ goTo }) {
 
             <div className="grid gap-4 p-5 md:grid-cols-2">
               {error && <p className="rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700 md:col-span-2">{error}</p>}
+              <div className="md:col-span-2">
+                <AvatarField name={form.name || "Staff"} value={form.avatarDataUrl || ""} onChange={(avatarDataUrl) => setForm({ ...form, avatarDataUrl })} />
+              </div>
               <Field label="Name">
                 <input required className={inputClass} value={form.name || ""} onChange={(event) => setForm({ ...form, name: event.target.value })} />
               </Field>
@@ -238,9 +243,7 @@ function StaffCard({ onEdit, onToggleStatus, person }) {
   return (
     <Card className="overflow-hidden p-0">
       <div className="flex items-start gap-3 p-4">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-fuel-deep text-lg font-black text-white shadow-sm">
-          {String(person.name || "S").charAt(0).toUpperCase()}
-        </span>
+        <StaffAvatar avatarDataUrl={person.avatarDataUrl} className="h-12 w-12 text-lg" name={person.name} rounded="rounded-xl" />
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">

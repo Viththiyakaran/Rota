@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { api } from "../api.js";
 import { Status } from "../components/Status.jsx";
+import { StaffAvatar } from "../components/StaffAvatar.jsx";
 import { addDays, formatDateLabel, formatDayLabel, formatShiftRange, getMonday, toDateInputValue } from "../dateUtils.js";
 import { whatsappGroupShareUrl } from "../whatsapp.js";
 
@@ -772,9 +773,7 @@ function StaffPlannerRow({
     <div className="grid grid-cols-[210px_repeat(7,minmax(120px,1fr))] bg-white">
       <div className="sticky left-0 z-10 border-r border-fuel-line bg-white px-4 py-3 shadow-[6px_0_12px_rgba(15,23,42,0.035)]">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-sm font-black text-fuel-green ring-1 ring-blue-100">
-            {String(person.name || "?").charAt(0).toUpperCase()}
-          </div>
+          <StaffAvatar avatarDataUrl={person.avatarDataUrl} className="h-9 w-9 text-sm" name={person.name} />
           <div className="min-w-0">
             <p className="truncate font-black text-fuel-ink">{person.name}</p>
             <p className="truncate text-[11px] font-bold text-slate-400">{person.role || "Staff"}</p>

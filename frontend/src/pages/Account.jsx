@@ -2,11 +2,12 @@ import React from "react";
 import { Bell, CalendarDays, Copy, ExternalLink, Eye, EyeOff, KeyRound } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
+import { AvatarField } from "../components/AvatarField.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { PageHeader, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { canUsePushNotifications, enablePushNotifications } from "../pushNotifications.js";
 
-export function Account({ currentUser, forced = false, onPasswordChanged = () => {} }) {
+export function Account({ currentUser, forced = false, onPasswordChanged = () => {}, onProfileUpdated = () => {} }) {
   const [form, setForm] = React.useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
   const [message, setMessage] = React.useState("");
   const [error, setError] = React.useState("");
@@ -17,6 +18,14 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
   const [calendarFeed, setCalendarFeed] = React.useState(null);
   const [calendarMessage, setCalendarMessage] = React.useState("");
   const [showPasswords, setShowPasswords] = React.useState(false);
+  const [avatarDataUrl, setAvatarDataUrl] = React.useState(currentUser.avatarDataUrl || "");
+  const [avatarMessage, setAvatarMessage] = React.useState("");
+  const [avatarError, setAvatarError] = React.useState("");
+  const [savingAvatar, setSavingAvatar] = React.useState(false);
+
+  React.useEffect(() => {
+    setAvatarDataUrl(currentUser.avatarDataUrl || "");
+  }, [currentUser.avatarDataUrl]);
 
   React.useEffect(() => {
     if (!canUsePushNotifications()) return;
@@ -88,6 +97,22 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
     }
   };
 
+  const saveAvatar = async () => {
+    setSavingAvatar(true);
+    setAvatarMessage("");
+    setAvatarError("");
+    try {
+      const saved = await api.updateMyAvatar(avatarDataUrl);
+      const updatedUser = { ...currentUser, avatarDataUrl: saved.avatarDataUrl || "" };
+      onProfileUpdated(updatedUser);
+      setAvatarMessage(saved.avatarDataUrl ? "Profile photo saved." : "Profile photo removed.");
+    } catch (err) {
+      setAvatarError(err.message);
+    } finally {
+      setSavingAvatar(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -95,6 +120,24 @@ export function Account({ currentUser, forced = false, onPasswordChanged = () =>
         title="My Account"
         description={forced ? "Please change your temporary password before using the rota." : "Manage your password, phone notifications, and calendar sync."}
       />
+      {!forced && currentUser.staffId && (
+        <Card className="mx-auto max-w-2xl">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-extrabold">Profile photo</h3>
+              <p className="text-sm text-slate-500">This avatar appears on the staff list and weekly rota.</p>
+            </div>
+          </div>
+          <div className="mt-4">
+            <AvatarField name={currentUser.staffName || currentUser.username} value={avatarDataUrl} onChange={setAvatarDataUrl} />
+          </div>
+          {avatarMessage && <p className="mt-3 rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{avatarMessage}</p>}
+          {avatarError && <p className="mt-3 rounded-md bg-red-50 p-3 font-bold text-red-700">{avatarError}</p>}
+          <button className={`${primaryButton} mt-4 w-full disabled:bg-slate-300`} type="button" disabled={savingAvatar || avatarDataUrl === (currentUser.avatarDataUrl || "")} onClick={saveAvatar}>
+            {savingAvatar ? "Saving photo..." : "Save Profile Photo"}
+          </button>
+        </Card>
+      )}
       <Card className="mx-auto max-w-2xl">
         <form className="space-y-4" onSubmit={submit}>
           {message && <p className="rounded-md bg-fuel-mist p-3 font-bold text-fuel-green">{message}</p>}

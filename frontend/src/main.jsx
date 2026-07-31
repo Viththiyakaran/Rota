@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, TrendingUp, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
+import { StaffAvatar } from "./components/StaffAvatar.jsx";
 import { buildClockPayload, findClockPromptShift, formatClockTime, shouldPromptClockOut } from "./attendanceClock.js";
 import { AddShift } from "./pages/AddShift.jsx";
 import { AddStaff } from "./pages/AddStaff.jsx";
@@ -318,9 +319,11 @@ function App() {
 
         <div className="mt-auto rounded-xl border border-white/10 bg-white/10 p-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-fuel-green text-sm font-black ring-1 ring-white/20">
-              {String(currentUser.staffName || currentUser.username || "A").charAt(0).toUpperCase()}
-            </span>
+            <StaffAvatar
+              avatarDataUrl={currentUser.avatarDataUrl}
+              className="h-10 w-10 text-sm ring-white/20"
+              name={currentUser.staffName || currentUser.username}
+            />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-black">{currentUser.staffName || currentUser.username}</p>
               <p className="text-xs font-semibold capitalize text-blue-100">{currentUser.role}</p>
@@ -430,7 +433,7 @@ function App() {
         {page === "reports" && isAdmin && <Reports goTo={setPage} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}
-        {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} />}
+        {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} onProfileUpdated={setCurrentUser} />}
         {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
       </main>
 

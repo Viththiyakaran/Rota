@@ -67,6 +67,7 @@ export const api = {
   staff: () => request("/api/staff"),
   createStaff: (payload) => request("/api/staff", { method: "POST", body: JSON.stringify(payload) }),
   updateStaff: (id, payload) => request(`/api/staff/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  updateMyAvatar: (avatarDataUrl) => request("/api/staff/me/avatar", { method: "PUT", body: JSON.stringify({ avatarDataUrl }) }),
   week: (startDate) => request(`/api/shifts/week?startDate=${startDate}`),
   myShifts: () => request("/api/shifts/my"),
   rotaPublication: (startDate) => request(`/api/shifts/publication?startDate=${startDate}`),

@@ -115,6 +115,27 @@ async function runSmoke() {
   const staffRows = await request("/api/staff", { cookie: admin.cookie });
   assert(staffRows.length >= 3, "seed staff exists");
 
+  const testAvatar = "data:image/png;base64,iVBORw0KGgo=";
+  const updatedStaffAvatar = await request(`/api/staff/${staffRows[0].id}`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { avatarDataUrl: testAvatar }
+  });
+  assert(updatedStaffAvatar.avatarDataUrl === testAvatar, "admin can save a staff avatar");
+  const ownAvatar = await request("/api/staff/me/avatar", {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { avatarDataUrl: testAvatar }
+  });
+  assert(ownAvatar.avatarDataUrl === testAvatar, "staff can save their own avatar");
+  const staffWithAvatar = await request("/api/auth/me", { cookie: staff.cookie });
+  assert(staffWithAvatar.user.avatarDataUrl === testAvatar, "staff avatar is returned with the session user");
+  await expectStatus("/api/staff/me/avatar", 400, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { avatarDataUrl: "data:text/plain;base64,bm8=" }
+  });
+
   await request("/api/settings/branding", {
     cookie: admin.cookie,
     method: "PUT",

@@ -79,7 +79,7 @@ app.use(cors({
   },
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 app.get("/", (req, res) => {
   const wantsHtml = String(req.get("accept") || "").includes("text/html");
@@ -1063,11 +1063,12 @@ app.get("/api/staff", async (_req, res, next) => {
 app.post("/api/staff", requireAdmin, async (req, res, next) => {
   try {
     const { name, phone = "", email = "", role, active = true } = req.body;
+    const avatarDataUrl = validateAvatarDataUrl(req.body.avatarDataUrl);
     if (!name || !role) return res.status(400).json({ error: "Name and role are required." });
 
     const result = await run(
-      "INSERT INTO staff (name, phone, email, role, active) VALUES (?, ?, ?, ?, ?)",
-      [name, phone, email, role, active ? 1 : 0]
+      "INSERT INTO staff (name, phone, email, role, avatarDataUrl, active) VALUES (?, ?, ?, ?, ?, ?)",
+      [name, phone, email, role, avatarDataUrl, active ? 1 : 0]
     );
     await createStaffUser(result.id, name);
     const row = await get("SELECT * FROM staff WHERE id = ?", [result.id]);
@@ -1088,14 +1089,15 @@ app.put("/api/staff/:id", requireAdmin, async (req, res, next) => {
       phone: req.body.phone ?? current.phone,
       email: req.body.email ?? current.email,
       role: req.body.role ?? current.role,
+      avatarDataUrl: req.body.avatarDataUrl === undefined ? current.avatarDataUrl : validateAvatarDataUrl(req.body.avatarDataUrl),
       active: req.body.active === undefined ? current.active : req.body.active ? 1 : 0
     };
 
     await run(
       `UPDATE staff
-       SET name = ?, phone = ?, email = ?, role = ?, active = ?, updatedAt = CURRENT_TIMESTAMP
+       SET name = ?, phone = ?, email = ?, role = ?, avatarDataUrl = ?, active = ?, updatedAt = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [nextStaff.name, nextStaff.phone, nextStaff.email, nextStaff.role, nextStaff.active, req.params.id]
+      [nextStaff.name, nextStaff.phone, nextStaff.email, nextStaff.role, nextStaff.avatarDataUrl, nextStaff.active, req.params.id]
     );
     await run("UPDATE users SET active = ?, updatedAt = CURRENT_TIMESTAMP WHERE staffId = ?", [nextStaff.active, req.params.id]);
     const row = await get("SELECT * FROM staff WHERE id = ?", [req.params.id]);
@@ -1157,6 +1159,18 @@ app.get("/api/shifts/my", async (req, res, next) => {
       [req.user.staffId, today]
     );
     res.json(rows.map(decorateShift));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/staff/me/avatar", async (req, res, next) => {
+  try {
+    if (!req.user.staffId) return res.status(400).json({ error: "This login is not linked to a staff profile." });
+    const avatarDataUrl = validateAvatarDataUrl(req.body.avatarDataUrl);
+    await run("UPDATE staff SET avatarDataUrl = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [avatarDataUrl, req.user.staffId]);
+    await addAudit(req.user.id, "update_staff_avatar", `Updated avatar for staff #${req.user.staffId}`);
+    res.json({ avatarDataUrl });
   } catch (error) {
     next(error);
   }
@@ -1641,6 +1655,22 @@ function normalisePatternEntry(entry, index) {
 
 function isTime(value) {
   return /^\d{2}:\d{2}$/.test(String(value || ""));
+}
+
+function validateAvatarDataUrl(value) {
+  const avatarDataUrl = String(value || "");
+  if (!avatarDataUrl) return "";
+  if (!/^data:image\/(?:png|jpeg|webp);base64,/i.test(avatarDataUrl)) {
+    const error = new Error("Profile photo must be a PNG, JPG, or WebP image.");
+    error.statusCode = 400;
+    throw error;
+  }
+  if (avatarDataUrl.length > 700000) {
+    const error = new Error("Profile photo is too large. Choose an image under 500KB.");
+    error.statusCode = 400;
+    throw error;
+  }
+  return avatarDataUrl;
 }
 
 function getShift(id) {

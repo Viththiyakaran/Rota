@@ -113,6 +113,7 @@ function preparePostgresSql(sql) {
 const pgKeyMap = new Map(Object.entries({
   staffid: "staffId",
   staffname: "staffName",
+  avatardataurl: "avatarDataUrl",
   coverforstaffid: "coverForStaffId",
   coverforstaffname: "coverForStaffName",
   assignedstaffid: "assignedStaffId",
@@ -189,6 +190,7 @@ export async function initDb() {
       phone TEXT,
       email TEXT,
       role TEXT NOT NULL,
+      avatarDataUrl TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -420,6 +422,7 @@ export async function initDb() {
   await ensureShiftColumn("startReminderSentAt", "TEXT");
   await ensureShiftColumn("patternGenerated", "INTEGER NOT NULL DEFAULT 0");
   await ensureShiftColumn("patternBatchId", "TEXT");
+  await ensureTableColumn("staff", "avatarDataUrl", "TEXT");
   await ensureUsersTableShape();
   await ensureSessionsTableShape();
   await ensureTableColumn("notifications", "shiftId", "INTEGER");
@@ -478,6 +481,7 @@ async function createPostgresSchema() {
       phone TEXT,
       email TEXT,
       role TEXT NOT NULL,
+      avatarDataUrl TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -991,7 +995,8 @@ export async function deleteSession(token) {
 export async function getSessionUser(token) {
   if (!token) return null;
   return get(
-    `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword,
+            staff.name AS staffName, staff.avatarDataUrl
      FROM sessions
      JOIN users ON users.id = sessions.userId
      LEFT JOIN staff ON staff.id = users.staffId
@@ -1008,6 +1013,7 @@ export function publicUser(user) {
     role: user.role,
     staffId: user.staffId,
     staffName: user.staffName,
+    avatarDataUrl: user.avatarDataUrl || "",
     mustChangePassword: Boolean(user.mustChangePassword)
   };
 }
@@ -1257,7 +1263,8 @@ export async function changePassword(userId, newPassword) {
 
 export async function listUsers() {
   const users = await all(
-    `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword, staff.name AS staffName
+    `SELECT users.id, users.username, users.role, users.staffId, users.active, users.mustChangePassword,
+            staff.name AS staffName, staff.avatarDataUrl
      FROM users
      LEFT JOIN staff ON staff.id = users.staffId
      ORDER BY users.active DESC, users.role ASC, users.username ASC`
