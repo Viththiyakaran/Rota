@@ -137,6 +137,7 @@ const pgKeyMap = new Map(Object.entries({
   patternbatchid: "patternBatchId",
   shiftdate: "shiftDate",
   shiftid: "shiftId",
+  sourceshiftid: "sourceShiftId",
   timeoffrequestid: "timeOffRequestId",
   startdate: "startDate",
   enddate: "endDate",
@@ -163,7 +164,9 @@ const pgKeyMap = new Map(Object.entries({
   clockinlocationchecked: "clockInLocationChecked",
   clockoutlocationchecked: "clockOutLocationChecked",
   saledate: "saleDate",
-  weekstart: "weekStart"
+  weekstart: "weekStart",
+  publishedat: "publishedAt",
+  publishedby: "publishedBy"
 }));
 
 function cameliseRow(row) {
@@ -357,6 +360,36 @@ export async function initDb() {
     `);
 
     await run(`
+      CREATE TABLE IF NOT EXISTS publishedShifts (
+      sourceShiftId INTEGER NOT NULL,
+      weekStart TEXT NOT NULL,
+      staffId INTEGER NOT NULL,
+      shiftDate TEXT NOT NULL,
+      startTime TEXT NOT NULL,
+      endTime TEXT NOT NULL,
+      breakMinutes INTEGER NOT NULL DEFAULT 0,
+      reminderMinutes INTEGER NOT NULL DEFAULT 30,
+      reminderTime TEXT NOT NULL,
+      reminderSentAt TEXT,
+      startReminderSentAt TEXT,
+      notes TEXT,
+      isExtra INTEGER NOT NULL DEFAULT 0,
+      coverForStaffId INTEGER,
+      patternGenerated INTEGER NOT NULL DEFAULT 0,
+      patternBatchId TEXT,
+      PRIMARY KEY (weekStart, sourceShiftId)
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS rotaPublications (
+      weekStart TEXT PRIMARY KEY,
+      publishedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      publishedBy INTEGER
+      )
+    `);
+
+    await run(`
       CREATE TABLE IF NOT EXISTS salesEntries (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       saleDate TEXT NOT NULL UNIQUE,
@@ -433,6 +466,7 @@ export async function initDb() {
   await normaliseLegacyReminderMinutes();
   await refreshFutureReminderTimes();
   await ensurePermanentRotaThroughYear(new Date());
+  await backfillPublishedRotas();
   await refreshBusinessTimezoneCache();
 }
 
@@ -599,6 +633,36 @@ async function createPostgresSchema() {
       clockOutLocationChecked INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS publishedShifts (
+      sourceShiftId INTEGER NOT NULL,
+      weekStart TEXT NOT NULL,
+      staffId INTEGER NOT NULL,
+      shiftDate TEXT NOT NULL,
+      startTime TEXT NOT NULL,
+      endTime TEXT NOT NULL,
+      breakMinutes INTEGER NOT NULL DEFAULT 0,
+      reminderMinutes INTEGER NOT NULL DEFAULT 30,
+      reminderTime TEXT NOT NULL,
+      reminderSentAt TEXT,
+      startReminderSentAt TEXT,
+      notes TEXT,
+      isExtra INTEGER NOT NULL DEFAULT 0,
+      coverForStaffId INTEGER,
+      patternGenerated INTEGER NOT NULL DEFAULT 0,
+      patternBatchId TEXT,
+      PRIMARY KEY (weekStart, sourceShiftId)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS rotaPublications (
+      weekStart TEXT PRIMARY KEY,
+      publishedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      publishedBy INTEGER
     )
   `);
 
@@ -960,6 +1024,49 @@ export async function getBranding() {
     businessTimezone: validTimeZone(values.businessTimezone) ? values.businessTimezone : DEFAULT_TIME_ZONE,
     performanceTrackerEnabled: values.performanceTrackerEnabled !== "false"
   };
+}
+
+async function backfillPublishedRotas() {
+  const existing = await get("SELECT COUNT(*) AS count FROM rotaPublications");
+  if (Number(existing?.count || 0) > 0) return;
+
+  const shifts = await all("SELECT * FROM shifts ORDER BY shiftDate ASC, startTime ASC");
+  const weeks = new Map();
+  for (const shift of shifts) {
+    const weekStart = formatDate(getMonday(new Date(`${shift.shiftDate}T00:00:00`)));
+    if (!weeks.has(weekStart)) weeks.set(weekStart, []);
+    weeks.get(weekStart).push(shift);
+  }
+
+  for (const [weekStart, rows] of weeks) {
+    for (const shift of rows) {
+      await run(
+        `INSERT INTO publishedShifts
+          (sourceShiftId, weekStart, staffId, shiftDate, startTime, endTime, breakMinutes, reminderMinutes,
+           reminderTime, reminderSentAt, startReminderSentAt, notes, isExtra, coverForStaffId, patternGenerated, patternBatchId)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          shift.id,
+          weekStart,
+          shift.staffId,
+          shift.shiftDate,
+          shift.startTime,
+          shift.endTime,
+          shift.breakMinutes,
+          shift.reminderMinutes,
+          shift.reminderTime,
+          shift.reminderSentAt || null,
+          shift.startReminderSentAt || null,
+          shift.notes,
+          shift.isExtra,
+          shift.coverForStaffId,
+          shift.patternGenerated || 0,
+          shift.patternBatchId || null
+        ]
+      );
+    }
+    await run("INSERT INTO rotaPublications (weekStart, publishedBy) VALUES (?, ?)", [weekStart, null]);
+  }
 }
 
 export async function getOpeningHours() {

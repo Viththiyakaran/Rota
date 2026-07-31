@@ -11,6 +11,7 @@ import {
   Pencil,
   PlusCircle,
   Printer,
+  Send,
   Trash2,
   X
 } from "lucide-react";
@@ -32,20 +33,30 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
   const [moreOpen, setMoreOpen] = React.useState(false);
+  const [publication, setPublication] = React.useState(null);
+  const [publishing, setPublishing] = React.useState(false);
+  const [publishMessage, setPublishMessage] = React.useState("");
   const toolsRef = React.useRef(null);
 
   const load = React.useCallback(() => {
     setLoading(true);
-    Promise.all([api.week(startDate), api.timeOff(), api.staff(), api.tasks()])
-      .then(([shiftRows, timeOffRows, staffRows, taskRows]) => {
+    return Promise.all([
+      api.week(startDate),
+      api.timeOff(),
+      api.staff(),
+      api.tasks(),
+      currentUser?.role === "admin" ? api.rotaPublication(startDate) : Promise.resolve(null)
+    ])
+      .then(([shiftRows, timeOffRows, staffRows, taskRows, publicationRow]) => {
         setShifts(shiftRows);
         setTimeOff(timeOffRows);
         setStaff(staffRows);
         setTasks(taskRows);
+        setPublication(publicationRow);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, [startDate]);
+  }, [startDate, currentUser?.role]);
 
   React.useEffect(() => {
     load();
@@ -114,6 +125,21 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
   };
 
   const goToCurrentWeek = () => setStartDate(toDateInputValue(getMonday()));
+
+  const publishWeek = async () => {
+    setPublishing(true);
+    setPublishMessage("");
+    setError("");
+    try {
+      const result = await api.publishRota(startDate);
+      setPublishMessage(`${result.shifts} shifts published. Staff can now see the latest rota.`);
+      await load();
+    } catch (err) {
+      setError(err.message || "Could not publish the rota.");
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const weekRange = `${formatDayLabel(weekDays[0])} - ${formatDayLabel(weekDays[6])}`;
   const visibleShifts = shifts.filter((shift) => !isApprovedOffShift(shift, timeOff, shift.shiftDate));
@@ -194,14 +220,25 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
               Today
             </button>
             {isAdmin ? (
-              <button
-                type="button"
-                onClick={() => onAddShift?.()}
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700"
-              >
-                <PlusCircle className="h-5 w-5" />
-                Add shift
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => onAddShift?.()}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-3 text-sm font-black text-fuel-green hover:bg-blue-100"
+                >
+                  <PlusCircle className="h-4 w-4" />
+                  Add shift
+                </button>
+                <button
+                  type="button"
+                  onClick={publishWeek}
+                  disabled={publishing || (publication?.published && publication?.changes === 0)}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 text-sm font-black text-white shadow-sm hover:bg-blue-700 disabled:cursor-default disabled:bg-emerald-100 disabled:text-emerald-700 disabled:shadow-none"
+                >
+                  {publication?.published && publication?.changes === 0 ? <Check className="h-4 w-4" /> : <Send className="h-4 w-4" />}
+                  {publishing ? "Publishing..." : publication?.published && publication?.changes === 0 ? "Published" : "Publish rota"}
+                </button>
+              </>
             ) : null}
 
             <div ref={toolsRef} className="relative">
@@ -268,12 +305,30 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
           <span><strong className="text-fuel-ink">{activeStaff.length}</strong> staff</span>
           <span><strong className="text-fuel-ink">{visibleShifts.length}</strong> shifts</span>
           <span><strong className="text-fuel-ink">{formatHourTotal(totalPaidHours)}h</strong> paid</span>
-          <span className="ml-auto hidden items-center gap-2 text-fuel-green sm:flex">
-            <span className={`h-2 w-2 rounded-full ${weekDays.includes(today) ? "bg-emerald-500" : "bg-slate-300"}`} />
-            {weekDays.includes(today) ? "Viewing current week" : "Viewing another week"}
-          </span>
+          {isAdmin ? (
+            <span className={`ml-auto flex items-center gap-2 font-black ${publication?.changes > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+              <span className={`h-2 w-2 rounded-full ${publication?.changes > 0 ? "bg-amber-500" : "bg-emerald-500"}`} />
+              {publication?.changes > 0
+                ? `${publication.changes} unpublished ${publication.changes === 1 ? "change" : "changes"}`
+                : publication?.published
+                  ? "Staff rota is up to date"
+                  : "Not published"}
+            </span>
+          ) : (
+            <span className="ml-auto hidden items-center gap-2 text-fuel-green sm:flex">
+              <span className={`h-2 w-2 rounded-full ${weekDays.includes(today) ? "bg-emerald-500" : "bg-slate-300"}`} />
+              Published rota
+            </span>
+          )}
         </div>
       </section>
+
+      {publishMessage && (
+        <div className="screen-only flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-800">
+          <Check className="h-4 w-4" />
+          {publishMessage}
+        </div>
+      )}
 
       <Status loading={loading} error={error}>
         <PlannerGrid

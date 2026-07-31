@@ -69,6 +69,8 @@ export const api = {
   updateStaff: (id, payload) => request(`/api/staff/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   week: (startDate) => request(`/api/shifts/week?startDate=${startDate}`),
   myShifts: () => request("/api/shifts/my"),
+  rotaPublication: (startDate) => request(`/api/shifts/publication?startDate=${startDate}`),
+  publishRota: (startDate) => request("/api/shifts/publish", { method: "POST", body: JSON.stringify({ startDate }) }),
   copyWeek: (payload) => request("/api/shifts/copy-week", { method: "POST", body: JSON.stringify(payload) }),
   generateRotaPattern: (payload) => request("/api/rota-patterns/generate", { method: "POST", body: JSON.stringify(payload) }),
   createShift: (payload) => request("/api/shifts", { method: "POST", body: JSON.stringify(payload) }),

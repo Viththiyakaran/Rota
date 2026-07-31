@@ -135,6 +135,8 @@ app.get("/api", (_req, res) => {
       "PUT /api/staff/:id",
       "GET /api/shifts/week?startDate=yyyy-mm-dd",
       "GET /api/shifts/my",
+      "GET /api/shifts/publication?startDate=yyyy-mm-dd",
+      "POST /api/shifts/publish",
       "POST /api/shifts/copy-week",
       "POST /api/rota-patterns/generate",
       "POST /api/shifts",
@@ -215,20 +217,20 @@ app.get("/calendar/:token.ics", async (req, res, next) => {
     const today = new Date().toISOString().slice(0, 10);
     const until = addDays(today, 180);
     const rows = await all(
-      `SELECT shifts.*, staff.name AS staffName, staff.role, staff.active,
+      `SELECT publishedShifts.sourceShiftId AS id, publishedShifts.*, staff.name AS staffName, staff.role, staff.active,
               coverStaff.name AS coverForStaffName
-       FROM shifts
-       JOIN staff ON staff.id = shifts.staffId
-       LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+       FROM publishedShifts
+       JOIN staff ON staff.id = publishedShifts.staffId
+       LEFT JOIN staff AS coverStaff ON coverStaff.id = publishedShifts.coverForStaffId
        LEFT JOIN timeOffRequests
-         ON timeOffRequests.staffId = shifts.staffId
+         ON timeOffRequests.staffId = publishedShifts.staffId
         AND timeOffRequests.status = 'approved'
         AND timeOffRequests.endDate >= timeOffRequests.startDate
-        AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
-       WHERE shifts.staffId = ?
-         AND shifts.shiftDate BETWEEN ? AND ?
+        AND publishedShifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
+       WHERE publishedShifts.staffId = ?
+         AND publishedShifts.shiftDate BETWEEN ? AND ?
          AND timeOffRequests.id IS NULL
-       ORDER BY shifts.shiftDate ASC, shifts.startTime ASC`,
+       ORDER BY publishedShifts.shiftDate ASC, publishedShifts.startTime ASC`,
       [user.staffId, today, until]
     );
 
@@ -1113,21 +1115,24 @@ app.get("/api/shifts/week", async (req, res, next) => {
     if (!startDate) return res.status(400).json({ error: "startDate is required." });
 
     const endDate = addDays(startDate, 6);
+    const staffPublishedView = req.user.role === "staff";
+    const shiftTable = staffPublishedView ? "publishedShifts" : "shifts";
+    const idColumn = staffPublishedView ? "publishedShifts.sourceShiftId AS id," : "";
     const rows = await all(
-      `SELECT shifts.*, staff.name AS staffName, staff.role, staff.active,
+      `SELECT ${idColumn} ${shiftTable}.*, staff.name AS staffName, staff.role, staff.active,
               coverStaff.name AS coverForStaffName,
               CASE WHEN timeOffRequests.id IS NULL THEN 0 ELSE 1 END AS approvedTimeOff
-       FROM shifts
-       JOIN staff ON staff.id = shifts.staffId
-       LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+       FROM ${shiftTable}
+       JOIN staff ON staff.id = ${shiftTable}.staffId
+       LEFT JOIN staff AS coverStaff ON coverStaff.id = ${shiftTable}.coverForStaffId
        LEFT JOIN timeOffRequests
-         ON timeOffRequests.staffId = shifts.staffId
+         ON timeOffRequests.staffId = ${shiftTable}.staffId
         AND timeOffRequests.status = 'approved'
         AND timeOffRequests.endDate >= timeOffRequests.startDate
-        AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
-       WHERE shiftDate BETWEEN ? AND ?
+        AND ${shiftTable}.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
+       WHERE ${shiftTable}.shiftDate BETWEEN ? AND ?
          AND timeOffRequests.id IS NULL
-       ORDER BY shiftDate ASC, isExtra ASC, startTime ASC`,
+       ORDER BY ${shiftTable}.shiftDate ASC, ${shiftTable}.isExtra ASC, ${shiftTable}.startTime ASC`,
       [startDate, endDate]
     );
     res.json(rows.map(decorateShift));
@@ -1141,17 +1146,100 @@ app.get("/api/shifts/my", async (req, res, next) => {
     if (!req.user.staffId) return res.json([]);
     const today = new Date().toISOString().slice(0, 10);
     const rows = await all(
-      `SELECT shifts.*, staff.name AS staffName, staff.role, staff.active,
+      `SELECT publishedShifts.sourceShiftId AS id, publishedShifts.*, staff.name AS staffName, staff.role, staff.active,
               coverStaff.name AS coverForStaffName
-       FROM shifts
-       JOIN staff ON staff.id = shifts.staffId
-       LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
-       WHERE shifts.staffId = ? AND shiftDate >= ?
-       ORDER BY shiftDate ASC, startTime ASC
+       FROM publishedShifts
+       JOIN staff ON staff.id = publishedShifts.staffId
+       LEFT JOIN staff AS coverStaff ON coverStaff.id = publishedShifts.coverForStaffId
+       WHERE publishedShifts.staffId = ? AND publishedShifts.shiftDate >= ?
+       ORDER BY publishedShifts.shiftDate ASC, publishedShifts.startTime ASC
        LIMIT 30`,
       [req.user.staffId, today]
     );
     res.json(rows.map(decorateShift));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/shifts/publication", requireAdmin, async (req, res, next) => {
+  try {
+    const requestedDate = String(req.query.startDate || "");
+    if (!isDate(requestedDate)) return res.status(400).json({ error: "Valid startDate is required." });
+    const startDate = mondayForDate(requestedDate);
+    const endDate = addDays(startDate, 6);
+    const current = await all("SELECT * FROM shifts WHERE shiftDate BETWEEN ? AND ? ORDER BY id", [startDate, endDate]);
+    const published = await all("SELECT * FROM publishedShifts WHERE weekStart = ? ORDER BY sourceShiftId", [startDate]);
+    const publication = await get("SELECT * FROM rotaPublications WHERE weekStart = ?", [startDate]);
+    const changes = countPublicationChanges(current, published);
+    res.json({
+      weekStart: startDate,
+      published: Boolean(publication),
+      publishedAt: publication?.publishedAt || null,
+      publishedBy: publication?.publishedBy || null,
+      changes,
+      currentShifts: current.length,
+      publishedShifts: published.length
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/shifts/publish", requireAdmin, async (req, res, next) => {
+  try {
+    const requestedDate = String(req.body.startDate || "");
+    if (!isDate(requestedDate)) return res.status(400).json({ error: "Valid week start date is required." });
+    const startDate = mondayForDate(requestedDate);
+    const endDate = addDays(startDate, 6);
+    const current = await all("SELECT * FROM shifts WHERE shiftDate BETWEEN ? AND ? ORDER BY id", [startDate, endDate]);
+    const previous = await all("SELECT * FROM publishedShifts WHERE weekStart = ? ORDER BY sourceShiftId", [startDate]);
+    const previousById = new Map(previous.map((shift) => [String(shift.sourceShiftId), shift]));
+    const currentIds = new Set(current.map((shift) => String(shift.id)));
+
+    for (const shift of current) {
+      const old = previousById.get(String(shift.id));
+      const unchanged = old && publishedShiftFingerprint(old) === sourceShiftFingerprint(shift);
+      await run(
+        `INSERT INTO publishedShifts
+          (sourceShiftId, weekStart, staffId, shiftDate, startTime, endTime, breakMinutes, reminderMinutes,
+           reminderTime, reminderSentAt, startReminderSentAt, notes, isExtra, coverForStaffId, patternGenerated, patternBatchId)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(weekStart, sourceShiftId) DO UPDATE SET
+           staffId = excluded.staffId, shiftDate = excluded.shiftDate, startTime = excluded.startTime,
+           endTime = excluded.endTime, breakMinutes = excluded.breakMinutes, reminderMinutes = excluded.reminderMinutes,
+           reminderTime = excluded.reminderTime, reminderSentAt = excluded.reminderSentAt,
+           startReminderSentAt = excluded.startReminderSentAt, notes = excluded.notes, isExtra = excluded.isExtra,
+           coverForStaffId = excluded.coverForStaffId, patternGenerated = excluded.patternGenerated,
+           patternBatchId = excluded.patternBatchId`,
+        [
+          shift.id, startDate, shift.staffId, shift.shiftDate, shift.startTime, shift.endTime,
+          shift.breakMinutes, shift.reminderMinutes,
+          calculateReminderTime(shift.shiftDate, shift.startTime, shift.reminderMinutes),
+          unchanged ? old.reminderSentAt : null,
+          unchanged ? old.startReminderSentAt : null,
+          shift.notes, shift.isExtra, shift.coverForStaffId, shift.patternGenerated || 0, shift.patternBatchId || null
+        ]
+      );
+    }
+
+    for (const old of previous) {
+      if (!currentIds.has(String(old.sourceShiftId))) {
+        await run("DELETE FROM publishedShifts WHERE weekStart = ? AND sourceShiftId = ?", [startDate, old.sourceShiftId]);
+      }
+    }
+
+    await run(
+      `INSERT INTO rotaPublications (weekStart, publishedAt, publishedBy)
+       VALUES (?, CURRENT_TIMESTAMP, ?)
+       ON CONFLICT(weekStart) DO UPDATE SET publishedAt = CURRENT_TIMESTAMP, publishedBy = excluded.publishedBy`,
+      [startDate, req.user.id]
+    );
+
+    await sendPublicationNotifications(current, previous);
+    const changes = countPublicationChanges(current, previous);
+    await addAudit(req.user.id, "publish_rota", `Published ${current.length} shifts for week ${startDate} (${changes} changes)`);
+    res.json({ ok: true, weekStart: startDate, shifts: current.length, changes, publishedAt: new Date().toISOString() });
   } catch (error) {
     next(error);
   }
@@ -1172,7 +1260,7 @@ app.post("/api/shifts/copy-week", requireAdmin, async (req, res, next) => {
         [shift.staffId, shiftDate, shift.startTime, shift.endTime]
       );
       if (existing) continue;
-      const copyResult = await run(
+      await run(
         `INSERT INTO shifts
           (staffId, shiftDate, startTime, endTime, breakMinutes, reminderMinutes, reminderTime, notes, isExtra, coverForStaffId, googleCalendarEventId)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1190,10 +1278,6 @@ app.post("/api/shifts/copy-week", requireAdmin, async (req, res, next) => {
           null
         ]
       );
-      await notifyStaff(shift.staffId, "Shift copied to next week", `You have a copied shift on ${shiftDate} from ${shift.startTime} to ${shift.endTime}.`, {
-        type: "shift_created",
-        shiftId: copyResult.id
-      });
       copied += 1;
     }
     await addAudit(req.user.id, "copy_week", `Copied ${copied} shifts from ${fromStartDate} to ${toStartDate}`);
@@ -1319,10 +1403,6 @@ app.post("/api/shifts", requireAdmin, async (req, res, next) => {
     );
     const row = await getShift(result.id);
     await addAudit(req.user.id, "create_shift", `Created shift #${result.id}`);
-    await notifyStaff(row.staffId, "New shift assigned", `You have a shift on ${row.shiftDate} from ${row.startTime} to ${row.endTime}.`, {
-      type: "shift_created",
-      shiftId: row.id
-    });
     res.status(201).json(decorateShift(row));
   } catch (error) {
     next(error);
@@ -1346,24 +1426,11 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
       coverForStaffId: req.body.coverForStaffId === undefined ? current.coverForStaffId : req.body.coverForStaffId || null,
       googleCalendarEventId: req.body.googleCalendarEventId ?? current.googleCalendarEventId
     };
-    const previousNotes = String(current.notes || "").trim();
-    const nextNotes = String(nextShift.notes || "").trim();
-    const notesChanged = previousNotes !== nextNotes;
     const reminderChanged =
       Number(current.staffId) !== Number(nextShift.staffId) ||
       current.shiftDate !== nextShift.shiftDate ||
       current.startTime !== nextShift.startTime ||
       Number(current.reminderMinutes) !== Number(nextShift.reminderMinutes);
-    const rotaChanged =
-      Number(current.staffId) !== Number(nextShift.staffId) ||
-      current.shiftDate !== nextShift.shiftDate ||
-      current.startTime !== nextShift.startTime ||
-      current.endTime !== nextShift.endTime ||
-      Number(current.breakMinutes) !== Number(nextShift.breakMinutes) ||
-      Number(current.reminderMinutes) !== Number(nextShift.reminderMinutes) ||
-      Number(current.isExtra || 0) !== Number(nextShift.isExtra || 0) ||
-      Number(current.coverForStaffId || 0) !== Number(nextShift.coverForStaffId || 0);
-
     await run(
       `UPDATE shifts
        SET staffId = ?, shiftDate = ?, startTime = ?, endTime = ?, breakMinutes = ?,
@@ -1389,24 +1456,6 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
     );
     const row = await getShift(req.params.id);
     await addAudit(req.user.id, "update_shift", `Updated shift #${req.params.id}`);
-    if (notesChanged && nextNotes) {
-      await notifyStaff(row.staffId, previousNotes ? "Shift note updated" : "Shift note added", `Note for ${row.shiftDate} ${row.startTime}-${row.endTime}: ${nextNotes}`, {
-        type: "shift_note",
-        shiftId: row.id
-      });
-    }
-    if (rotaChanged) {
-      await notifyStaff(row.staffId, "Shift updated", `Your shift on ${row.shiftDate} is now ${row.startTime} to ${row.endTime}.`, {
-        type: "shift_updated",
-        shiftId: row.id
-      });
-    }
-    if (Number(current.staffId) !== Number(row.staffId)) {
-      await notifyStaff(current.staffId, "Shift reassigned", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was reassigned.`, {
-        type: "shift_reassigned",
-        shiftId: row.id
-      });
-    }
     res.json(decorateShift(row));
   } catch (error) {
     next(error);
@@ -1415,15 +1464,9 @@ app.put("/api/shifts/:id", requireAdmin, async (req, res, next) => {
 
 app.delete("/api/shifts/:id", requireAdmin, async (req, res, next) => {
   try {
-    const current = await getShift(req.params.id);
     const result = await run("DELETE FROM shifts WHERE id = ?", [req.params.id]);
     if (result.changes === 0) return res.status(404).json({ error: "Shift not found." });
     await addAudit(req.user.id, "delete_shift", `Deleted shift #${req.params.id}`);
-    if (current) {
-      await notifyStaff(current.staffId, "Shift removed", `Your shift on ${current.shiftDate} from ${current.startTime} to ${current.endTime} was removed.`, {
-        type: "shift_deleted"
-      });
-    }
     res.status(204).send();
   } catch (error) {
     next(error);
@@ -1437,14 +1480,14 @@ app.get("/api/reminders/upcoming", async (req, res, next) => {
     const staffFilter = req.user.role === "staff" && req.user.staffId ? "AND staff.id = ?" : "";
     const params = req.user.role === "staff" && req.user.staffId ? [today, req.user.staffId] : [today];
     const rows = await all(
-      `SELECT shifts.*, staff.name AS staffName, staff.phone, staff.role,
+      `SELECT publishedShifts.sourceShiftId AS id, publishedShifts.*, staff.name AS staffName, staff.phone, staff.role,
               coverStaff.name AS coverForStaffName
-       FROM shifts
-       JOIN staff ON staff.id = shifts.staffId
-       LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
-       WHERE staff.active = 1 AND shifts.shiftDate >= ?
+       FROM publishedShifts
+       JOIN staff ON staff.id = publishedShifts.staffId
+       LEFT JOIN staff AS coverStaff ON coverStaff.id = publishedShifts.coverForStaffId
+       WHERE staff.active = 1 AND publishedShifts.shiftDate >= ?
        ${staffFilter}
-       ORDER BY shifts.shiftDate ASC, shifts.startTime ASC
+       ORDER BY publishedShifts.shiftDate ASC, publishedShifts.startTime ASC
        LIMIT 80`,
       params
     );
@@ -1612,6 +1655,87 @@ function getShift(id) {
   );
 }
 
+const publicationFields = [
+  "staffId",
+  "shiftDate",
+  "startTime",
+  "endTime",
+  "breakMinutes",
+  "reminderMinutes",
+  "notes",
+  "isExtra",
+  "coverForStaffId"
+];
+
+function sourceShiftFingerprint(shift) {
+  return JSON.stringify(publicationFields.map((field) => normalisePublicationValue(field, shift[field])));
+}
+
+function publishedShiftFingerprint(shift) {
+  return JSON.stringify(publicationFields.map((field) => normalisePublicationValue(field, shift[field])));
+}
+
+function normalisePublicationValue(field, value) {
+  if (["staffId", "breakMinutes", "reminderMinutes", "isExtra", "coverForStaffId"].includes(field)) {
+    return Number(value || 0);
+  }
+  return String(value || "");
+}
+
+function countPublicationChanges(current, published) {
+  const currentById = new Map(current.map((shift) => [String(shift.id), shift]));
+  const publishedById = new Map(published.map((shift) => [String(shift.sourceShiftId), shift]));
+  const ids = new Set([...currentById.keys(), ...publishedById.keys()]);
+  let changes = 0;
+  for (const id of ids) {
+    const source = currentById.get(id);
+    const snapshot = publishedById.get(id);
+    if (!source || !snapshot || sourceShiftFingerprint(source) !== publishedShiftFingerprint(snapshot)) changes += 1;
+  }
+  return changes;
+}
+
+async function sendPublicationNotifications(current, previous) {
+  const currentById = new Map(current.map((shift) => [String(shift.id), shift]));
+  const previousById = new Map(previous.map((shift) => [String(shift.sourceShiftId), shift]));
+
+  for (const shift of current) {
+    const old = previousById.get(String(shift.id));
+    if (!old) {
+      await notifyStaff(shift.staffId, "New rota published", `You have a shift on ${shift.shiftDate} from ${shift.startTime} to ${shift.endTime}.`, {
+        type: "shift_created",
+        shiftId: shift.id
+      });
+      continue;
+    }
+    if (sourceShiftFingerprint(shift) === publishedShiftFingerprint(old)) continue;
+    if (Number(old.staffId) !== Number(shift.staffId)) {
+      await notifyStaff(old.staffId, "Published shift reassigned", `Your shift on ${old.shiftDate} from ${old.startTime} to ${old.endTime} was reassigned.`, {
+        type: "shift_reassigned",
+        shiftId: shift.id
+      });
+      await notifyStaff(shift.staffId, "New rota assignment", `You have a shift on ${shift.shiftDate} from ${shift.startTime} to ${shift.endTime}.`, {
+        type: "shift_created",
+        shiftId: shift.id
+      });
+    } else {
+      await notifyStaff(shift.staffId, "Published shift updated", `Your shift on ${shift.shiftDate} is now ${shift.startTime} to ${shift.endTime}.`, {
+        type: "shift_updated",
+        shiftId: shift.id
+      });
+    }
+  }
+
+  for (const old of previous) {
+    if (!currentById.has(String(old.sourceShiftId))) {
+      await notifyStaff(old.staffId, "Published shift removed", `Your shift on ${old.shiftDate} from ${old.startTime} to ${old.endTime} was removed.`, {
+        type: "shift_deleted",
+        shiftId: old.sourceShiftId
+      });
+    }
+  }
+}
+
 async function notifyStaff(staffId, title, message, { type = "rota_update", shiftId = null, timeOffRequestId = null } = {}) {
   if (!staffId) return;
   await run(
@@ -1731,22 +1855,22 @@ async function processDueReminderPushes() {
   const nowDate = new Date(now);
   const today = now.slice(0, 10);
   const due = await all(
-    `SELECT shifts.*, staff.name AS staffName, staff.active,
+    `SELECT publishedShifts.sourceShiftId AS id, publishedShifts.*, staff.name AS staffName, staff.active,
             coverStaff.name AS coverForStaffName
-     FROM shifts
-     JOIN staff ON staff.id = shifts.staffId
-     LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+     FROM publishedShifts
+     JOIN staff ON staff.id = publishedShifts.staffId
+     LEFT JOIN staff AS coverStaff ON coverStaff.id = publishedShifts.coverForStaffId
      LEFT JOIN timeOffRequests
-       ON timeOffRequests.staffId = shifts.staffId
+       ON timeOffRequests.staffId = publishedShifts.staffId
       AND timeOffRequests.status = 'approved'
       AND timeOffRequests.endDate >= timeOffRequests.startDate
-      AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
+      AND publishedShifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
      WHERE staff.active = 1
-       AND shifts.reminderSentAt IS NULL
-       AND shifts.reminderTime <= ?
-       AND shifts.shiftDate >= ?
+       AND publishedShifts.reminderSentAt IS NULL
+       AND publishedShifts.reminderTime <= ?
+       AND publishedShifts.shiftDate >= ?
        AND timeOffRequests.id IS NULL
-     ORDER BY shifts.reminderTime ASC
+     ORDER BY publishedShifts.reminderTime ASC
      LIMIT 25`,
     [now, today]
   );
@@ -1755,7 +1879,7 @@ async function processDueReminderPushes() {
     const decorated = decorateShift(shift);
     const startDate = shiftStartDate(decorated);
     if (startDate <= nowDate) {
-      await run("UPDATE shifts SET reminderSentAt = ? WHERE id = ?", [now, decorated.id]);
+      await run("UPDATE publishedShifts SET reminderSentAt = ? WHERE weekStart = ? AND sourceShiftId = ?", [now, shift.weekStart, decorated.id]);
       continue;
     }
     const coverText = decorated.isExtra && decorated.coverForStaffName ? ` Extra cover for ${decorated.coverForStaffName}.` : "";
@@ -1765,7 +1889,7 @@ async function processDueReminderPushes() {
       type: "shift_reminder",
       shiftId: decorated.id
     });
-    await run("UPDATE shifts SET reminderSentAt = ? WHERE id = ?", [now, decorated.id]);
+    await run("UPDATE publishedShifts SET reminderSentAt = ? WHERE weekStart = ? AND sourceShiftId = ?", [now, shift.weekStart, decorated.id]);
   }
 }
 
@@ -1774,21 +1898,21 @@ async function processDueStartPushes() {
   const nowDate = new Date(now);
   const today = now.slice(0, 10);
   const due = await all(
-    `SELECT shifts.*, staff.name AS staffName, staff.active,
+    `SELECT publishedShifts.sourceShiftId AS id, publishedShifts.*, staff.name AS staffName, staff.active,
             coverStaff.name AS coverForStaffName
-     FROM shifts
-     JOIN staff ON staff.id = shifts.staffId
-     LEFT JOIN staff AS coverStaff ON coverStaff.id = shifts.coverForStaffId
+     FROM publishedShifts
+     JOIN staff ON staff.id = publishedShifts.staffId
+     LEFT JOIN staff AS coverStaff ON coverStaff.id = publishedShifts.coverForStaffId
      LEFT JOIN timeOffRequests
-       ON timeOffRequests.staffId = shifts.staffId
+       ON timeOffRequests.staffId = publishedShifts.staffId
       AND timeOffRequests.status = 'approved'
       AND timeOffRequests.endDate >= timeOffRequests.startDate
-      AND shifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
+      AND publishedShifts.shiftDate BETWEEN timeOffRequests.startDate AND timeOffRequests.endDate
      WHERE staff.active = 1
-       AND shifts.startReminderSentAt IS NULL
-       AND shifts.shiftDate >= ?
+       AND publishedShifts.startReminderSentAt IS NULL
+       AND publishedShifts.shiftDate >= ?
        AND timeOffRequests.id IS NULL
-     ORDER BY shifts.shiftDate ASC, shifts.startTime ASC
+     ORDER BY publishedShifts.shiftDate ASC, publishedShifts.startTime ASC
      LIMIT 40`,
     [today]
   );
@@ -1805,7 +1929,7 @@ async function processDueStartPushes() {
       type: "shift_start",
       shiftId: decorated.id
     });
-    await run("UPDATE shifts SET startReminderSentAt = ? WHERE id = ?", [now, decorated.id]);
+    await run("UPDATE publishedShifts SET startReminderSentAt = ? WHERE weekStart = ? AND sourceShiftId = ?", [now, shift.weekStart, decorated.id]);
   }
 }
 

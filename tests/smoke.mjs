@@ -285,6 +285,21 @@ async function runSmoke() {
   const untouchedShift = followingWeek.find((item) => item.id === followingWeekShift.id);
   assert(untouchedShift?.startTime === "06:00" && untouchedShift?.endTime === "14:00", "single shift edit does not change another week");
 
+  const staffDraftView = await request("/api/shifts/week?startDate=2026-06-29", { cookie: staff.cookie });
+  assert(!staffDraftView.some((item) => item.id === shift.id), "staff cannot see unpublished shift changes");
+  const publicationStatus = await request("/api/shifts/publication?startDate=2026-06-29", { cookie: admin.cookie });
+  assert(publicationStatus.changes > 0, "admin sees unpublished rota changes");
+  const publication = await request("/api/shifts/publish", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: { startDate: "2026-06-29" }
+  });
+  assert(publication.ok && publication.changes > 0, "admin publishes rota changes");
+  const staffPublishedView = await request("/api/shifts/week?startDate=2026-06-29", { cookie: staff.cookie });
+  assert(staffPublishedView.some((item) => item.id === shift.id && item.startTime === "13:30"), "staff sees latest published rota");
+  const publishedStatus = await request("/api/shifts/publication?startDate=2026-06-29", { cookie: admin.cookie });
+  assert(publishedStatus.changes === 0, "published rota has no pending changes");
+
   const staffNotifications = await request("/api/notifications", { cookie: admin.cookie });
   const unreadNotification = staffNotifications.find((notification) => notification.unread);
   assert(unreadNotification?.id, "shift creates a notification");
