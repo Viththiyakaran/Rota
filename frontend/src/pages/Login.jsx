@@ -31,7 +31,9 @@ export function Login({ branding, onLogin }) {
       <section className="mx-auto grid min-h-[100dvh] w-full min-w-0 max-w-5xl overflow-hidden bg-white sm:min-h-0 sm:rounded-2xl sm:border sm:border-slate-200 sm:shadow-lift lg:grid-cols-[1fr_0.88fr]">
         <div className="login-story-panel hidden p-8 text-white lg:block">
           <div className="flex items-center gap-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/12 text-xl font-black text-fuel-lime ring-1 ring-white/20">L</span>
+            <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-white p-1.5 shadow-sm ring-1 ring-white/20">
+              <img src="/localplanner-mark.svg" alt="" className="h-full w-full" />
+            </span>
             <div>
               <h1 className="text-2xl font-black">LocalPlanner</h1>
               <p className="text-sm font-semibold text-blue-50">Rota, tasks, reminders and reports</p>
@@ -49,7 +51,9 @@ export function Login({ branding, onLogin }) {
 
         <div className="flex min-w-0 flex-col justify-center px-5 py-8 sm:p-8">
           <div className="mb-8 flex flex-col items-center text-center lg:hidden">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-fuel-deep text-xl font-black text-fuel-lime shadow-sm">L</span>
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-slate-200">
+              <img src="/localplanner-mark.svg" alt="" className="h-full w-full" />
+            </span>
             <div className="mt-3 min-w-0">
               <h1 className="text-2xl font-black leading-none text-fuel-ink">LocalPlanner</h1>
               <p className="mt-2 text-sm font-semibold text-slate-500">Rota, tasks, reminders and reports</p>

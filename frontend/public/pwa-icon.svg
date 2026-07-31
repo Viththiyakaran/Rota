@@ -1,4 +1,17 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#146ef5"/>
-  <path fill="#d7f75b" d="M144 128h224v56H208v44h132v54H208v102h-64z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">LocalPlanner</title>
+  <defs>
+    <linearGradient id="bg" x1="44" y1="40" x2="468" y2="472" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#132A72"/>
+      <stop offset="1" stop-color="#071237"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="130" y1="396" x2="340" y2="188" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2380FF"/>
+      <stop offset="1" stop-color="#0759E6"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <path d="M120 108c0-26.5 21.5-48 48-48h72c26.5 0 48 21.5 48 48v164H168c-26.5 0-48 21.5-48 48V108Z" fill="#fff"/>
+  <path d="M288 272h56c26.5 0 48 21.5 48 48v84c0 26.5-21.5 48-48 48H264V296c0-13.3 10.7-24 24-24Z" fill="#DCEBFF"/>
+  <path d="M120 324c0-30.9 25.1-56 56-56h72v64c0 26.5 21.5 48 48 48h36v72H176c-30.9 0-56-25.1-56-56v-72Z" fill="url(#blue)" stroke="#fff" stroke-width="22" stroke-linejoin="round"/>
 </svg>
