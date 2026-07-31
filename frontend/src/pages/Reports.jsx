@@ -1,5 +1,5 @@
 import React from "react";
-import { Archive, ArrowDownRight, ArrowUpRight, CalendarDays, ClipboardCheck, Clock, FileText, Minus, PoundSterling, RotateCcw, Save, Trash2, Users } from "lucide-react";
+import { Activity, Archive, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, ClipboardCheck, Clock, FileText, Minus, PoundSterling, RotateCcw, Save, Trash2, TrendingUp, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -17,9 +17,10 @@ export function Reports({ goTo }) {
   React.useEffect(() => {
     setLoading(true);
     setError("");
+    const shiftRanges = getRangeChunks(range.start, range.end);
     Promise.allSettled([
       api.staff(),
-      api.week(range.start),
+      Promise.all(shiftRanges.map((start) => api.week(start))),
       api.timeOff(),
       api.tasks(),
       api.completedTasks(),
@@ -28,7 +29,7 @@ export function Reports({ goTo }) {
       .then(([staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult]) => {
         setData({
           staff: staffResult.status === "fulfilled" ? staffResult.value : [],
-          shifts: shiftResult.status === "fulfilled" ? shiftResult.value : [],
+          shifts: shiftResult.status === "fulfilled" ? uniqueRows(shiftResult.value.flat()) : [],
           timeOff: timeOffResult.status === "fulfilled" ? timeOffResult.value : [],
           tasks: taskResult.status === "fulfilled" ? taskResult.value : [],
           completedTasks: completedTaskResult.status === "fulfilled" ? completedTaskResult.value : [],
@@ -39,7 +40,7 @@ export function Reports({ goTo }) {
         if (failed) setError(failed.reason.message);
       })
       .finally(() => setLoading(false));
-  }, [range.start]);
+  }, [range.start, range.end]);
 
   const periodShifts = data.shifts.filter((shift) => shift.shiftDate >= range.start && shift.shiftDate <= range.end);
   const staffHours = buildStaffHours(data.staff, periodShifts);
@@ -51,6 +52,11 @@ export function Reports({ goTo }) {
     return completedDate >= range.start && completedDate <= range.end;
   });
   const recentAudit = data.audit.slice(0, 8);
+  const totalHours = sumHours(periodShifts);
+  const scheduledStaff = staffHours.length;
+  const taskTotal = periodCompletedTasks.length + openTasks.length;
+  const taskCompletionRate = taskTotal > 0 ? Math.round((periodCompletedTasks.length / taskTotal) * 100) : 0;
+  const hoursTrend = buildHoursTrend(range.start, range.end, periodShifts);
 
   const restoreTask = async (task) => {
     setWorkingTaskId(task.id);
@@ -88,51 +94,101 @@ export function Reports({ goTo }) {
   };
 
   return (
-    <div className="space-y-5">
-      <Card className="p-5">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-4">
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-fuel-green">Admin reports</p>
-            <h1 className="mt-2 text-3xl font-black text-fuel-ink">Reports</h1>
-            <p className="mt-1 text-sm font-medium text-slate-600">Simple rota, staff hours, time off and task summaries.</p>
+            <h1 className="mt-1 text-3xl font-black text-fuel-ink">Team overview</h1>
+            <p className="mt-1 text-sm font-medium text-slate-600">See staffing, hours, time off and task progress at a glance.</p>
           </div>
-          <select
-            className="min-h-11 rounded-lg border border-fuel-line bg-white px-3 text-sm font-bold text-fuel-ink"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-          >
-            <option value="this-week">This week</option>
-            <option value="last-week">Last week</option>
-            <option value="this-month">This month</option>
-          </select>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <p className="text-sm font-bold text-slate-500">{formatDateLabel(range.start)} – {formatDateLabel(range.end)}</p>
+            <select
+              className="min-h-11 rounded-lg border border-fuel-line bg-white px-3 text-sm font-bold text-fuel-ink outline-none focus:border-fuel-green focus:ring-2 focus:ring-blue-100"
+              value={period}
+              onChange={(event) => setPeriod(event.target.value)}
+            >
+              <option value="this-week">This week</option>
+              <option value="last-week">Last week</option>
+              <option value="this-month">This month</option>
+            </select>
+          </div>
         </div>
-        <p className="mt-3 text-sm font-bold text-slate-500">{formatDateLabel(range.start)} to {formatDateLabel(range.end)}</p>
       </Card>
 
       <Status loading={loading} error={error}>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ReportKpi
+            icon={CalendarDays}
+            label="Total shifts"
+            value={periodShifts.length}
+            helper={getBusiestDay(periodShifts) ? `Busiest: ${getBusiestDay(periodShifts)}` : "No shifts scheduled"}
+            tone="blue"
+          />
+          <ReportKpi
+            icon={Clock}
+            label="Paid hours"
+            value={`${formatHours(totalHours)}h`}
+            helper={scheduledStaff ? `${formatHours(totalHours / scheduledStaff)}h average per staff` : "No scheduled hours"}
+            tone="indigo"
+          />
+          <ReportKpi
+            icon={Users}
+            label="Staff scheduled"
+            value={scheduledStaff}
+            helper={`${data.staff.filter((person) => person.active).length} active staff`}
+            tone="emerald"
+          />
+          <ReportKpi
+            icon={CheckCircle2}
+            label="Task completion"
+            value={`${taskCompletionRate}%`}
+            helper={`${periodCompletedTasks.length} complete · ${openTasks.length} open`}
+            tone="amber"
+          />
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
+          <HoursTrendChart rows={hoursTrend} onOpenRota={() => goTo("rota")} />
+          <StaffHoursDonut rows={staffHours} totalHours={totalHours} />
+        </div>
+
         <div className="grid gap-4 lg:grid-cols-2">
-          <ReportCard icon={CalendarDays} title="Weekly Rota Report" action="Open rota" onAction={() => goTo("rota")}>
-            <MetricRow label="Total shifts" value={periodShifts.length} />
-            <MetricRow label="Paid hours" value={formatHours(sumHours(periodShifts))} />
-            <MetricRow label="Busiest day" value={getBusiestDay(periodShifts) || "No shifts"} />
-          </ReportCard>
-
-          <ReportCard icon={Users} title="Staff Hours Report">
-            {staffHours.length ? staffHours.map((row) => (
-              <MetricRow key={row.id} label={row.name} value={`${formatHours(row.hours)} · ${row.shifts} shifts`} />
+          <ReportCard icon={Clock} title="Time off" action="Manage" onAction={() => goTo("time-off")}>
+            {periodTimeOff.length ? periodTimeOff.slice(0, 5).map((request) => (
+              <div key={request.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black text-fuel-ink">{request.staffName}</p>
+                  <p className="text-xs font-bold text-slate-500">{formatDayLabel(request.startDate)} – {formatDayLabel(request.endDate)}</p>
+                </div>
+                <span className={`rounded-full px-2.5 py-1 text-[11px] font-black capitalize ${
+                  request.status === "approved" ? "bg-emerald-100 text-emerald-700" : request.status === "rejected" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"
+                }`}>
+                  {request.status}
+                </span>
+              </div>
             )) : <EmptyLine />}
           </ReportCard>
 
-          <ReportCard icon={Clock} title="Time Off Report" action="Open time off" onAction={() => goTo("time-off")}>
-            {periodTimeOff.length ? periodTimeOff.slice(0, 6).map((request) => (
-              <MetricRow key={request.id} label={`${request.staffName} · ${request.status}`} value={`${formatDayLabel(request.startDate)} - ${formatDayLabel(request.endDate)}`} />
-            )) : <EmptyLine />}
-          </ReportCard>
-
-          <ReportCard icon={ClipboardCheck} title="Task Completion Report" action="Open tasks" onAction={() => goTo("tasks")}>
-            <MetricRow label="Completed" value={periodCompletedTasks.length} />
-            <MetricRow label="Archived from board" value={periodCompletedTasks.filter((task) => task.archived).length} />
-            <MetricRow label="Still open" value={openTasks.length} />
+          <ReportCard icon={ClipboardCheck} title="Task progress" action="Open tasks" onAction={() => goTo("tasks")}>
+            <div className="rounded-xl bg-slate-50 p-4">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-3xl font-black text-fuel-ink">{taskCompletionRate}%</p>
+                  <p className="text-xs font-bold text-slate-500">completed in this period</p>
+                </div>
+                <p className="text-sm font-black text-fuel-green">{periodCompletedTasks.length}/{taskTotal}</p>
+              </div>
+              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
+                <div className="h-full rounded-full bg-fuel-green transition-all" style={{ width: `${taskCompletionRate}%` }} />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <MiniMetric label="Complete" value={periodCompletedTasks.length} />
+              <MiniMetric label="Open" value={openTasks.length} />
+              <MiniMetric label="Archived" value={periodCompletedTasks.filter((task) => task.archived).length} />
+            </div>
           </ReportCard>
         </div>
 
@@ -434,6 +490,156 @@ function formatSignedCurrency(value) {
   return `${number > 0 ? "+" : "-"}${formatCurrency(Math.abs(number))}`;
 }
 
+const reportTones = {
+  blue: { icon: "bg-blue-50 text-blue-700", accent: "bg-blue-500" },
+  indigo: { icon: "bg-indigo-50 text-indigo-700", accent: "bg-indigo-500" },
+  emerald: { icon: "bg-emerald-50 text-emerald-700", accent: "bg-emerald-500" },
+  amber: { icon: "bg-amber-50 text-amber-700", accent: "bg-amber-500" }
+};
+
+const chartColours = ["#176ef2", "#10b981", "#8b5cf6", "#f59e0b", "#ef4444", "#06b6d4", "#64748b"];
+
+function ReportKpi({ helper, icon: Icon, label, tone = "blue", value }) {
+  const colours = reportTones[tone] || reportTones.blue;
+  return (
+    <Card className="relative overflow-hidden p-4">
+      <span className={`absolute inset-y-0 left-0 w-1 ${colours.accent}`} />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.1em] text-slate-500">{label}</p>
+          <p className="mt-2 text-3xl font-black text-fuel-ink">{value}</p>
+          <p className="mt-1 truncate text-xs font-bold text-slate-500" title={helper}>{helper}</p>
+        </div>
+        <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${colours.icon}`}>
+          <Icon size={20} />
+        </span>
+      </div>
+    </Card>
+  );
+}
+
+function HoursTrendChart({ onOpenRota, rows }) {
+  const maxHours = Math.max(...rows.map((row) => row.hours), 1);
+  return (
+    <Card className="p-4 sm:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-fuel-green">
+            <TrendingUp size={20} />
+          </span>
+          <div>
+            <h2 className="text-lg font-black text-fuel-ink">Scheduled hours</h2>
+            <p className="text-xs font-bold text-slate-500">Paid hours across the selected period</p>
+          </div>
+        </div>
+        <button type="button" onClick={onOpenRota} className="rounded-md bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green hover:bg-blue-100">
+          Open rota
+        </button>
+      </div>
+
+      {rows.some((row) => row.hours > 0) ? (
+        <div className="mt-6 overflow-x-auto pb-1">
+          <div className="flex h-56 min-w-[520px] items-end gap-2 border-b border-slate-200 px-1">
+            {rows.map((row, index) => {
+              const height = Math.max((row.hours / maxHours) * 168, row.hours > 0 ? 12 : 2);
+              return (
+                <div key={row.key} className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end">
+                  <span className="mb-1 text-[10px] font-black text-slate-500 opacity-0 transition group-hover:opacity-100">{formatHours(row.hours)}h</span>
+                  <div
+                    className={`w-full max-w-12 rounded-t-md transition hover:opacity-80 ${index === rows.length - 1 ? "bg-blue-400" : "bg-fuel-green"}`}
+                    style={{ height }}
+                    title={`${row.label}: ${formatHours(row.hours)} paid hours`}
+                  />
+                  <span className="mt-2 max-w-full truncate text-[10px] font-black text-slate-500">{row.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 flex h-48 flex-col items-center justify-center rounded-xl bg-slate-50 text-center">
+          <Activity className="text-slate-300" size={28} />
+          <p className="mt-2 text-sm font-black text-slate-500">No scheduled hours</p>
+          <p className="text-xs font-bold text-slate-400">Add shifts to see the trend.</p>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function StaffHoursDonut({ rows, totalHours }) {
+  const radius = 44;
+  const circumference = 2 * Math.PI * radius;
+  let cumulative = 0;
+
+  return (
+    <Card className="p-4 sm:p-5">
+      <div className="flex items-center gap-3">
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-700">
+          <Users size={20} />
+        </span>
+        <div>
+          <h2 className="text-lg font-black text-fuel-ink">Hours by staff</h2>
+          <p className="text-xs font-bold text-slate-500">Share of scheduled paid hours</p>
+        </div>
+      </div>
+
+      {rows.length ? (
+        <>
+          <div className="relative mx-auto mt-4 h-48 w-48">
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" role="img" aria-label="Staff hours distribution chart">
+              <circle cx="60" cy="60" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="14" />
+              {rows.map((row, index) => {
+                const segment = totalHours > 0 ? (row.hours / totalHours) * circumference : 0;
+                const offset = -cumulative;
+                cumulative += segment;
+                return (
+                  <circle
+                    key={row.id}
+                    cx="60"
+                    cy="60"
+                    r={radius}
+                    fill="none"
+                    stroke={chartColours[index % chartColours.length]}
+                    strokeWidth="14"
+                    strokeDasharray={`${segment} ${circumference - segment}`}
+                    strokeDashoffset={offset}
+                  />
+                );
+              })}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+              <strong className="text-2xl font-black text-fuel-ink">{formatHours(totalHours)}h</strong>
+              <span className="text-[10px] font-black uppercase tracking-wide text-slate-400">Total hours</span>
+            </div>
+          </div>
+          <div className="mt-2 space-y-2">
+            {rows.slice(0, 6).map((row, index) => (
+              <div key={row.id} className="flex items-center gap-2 text-xs">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: chartColours[index % chartColours.length] }} />
+                <span className="min-w-0 flex-1 truncate font-bold text-slate-600">{row.name}</span>
+                <strong className="text-fuel-ink">{formatHours(row.hours)}h</strong>
+                <span className="w-9 text-right font-bold text-slate-400">{totalHours ? Math.round((row.hours / totalHours) * 100) : 0}%</span>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <EmptyLine />
+      )}
+    </Card>
+  );
+}
+
+function MiniMetric({ label, value }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-center">
+      <p className="text-lg font-black text-fuel-ink">{value}</p>
+      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</p>
+    </div>
+  );
+}
+
 function ReportCard({ action, children, icon: Icon, onAction, title }) {
   return (
     <Card className="p-4">
@@ -481,6 +687,57 @@ function getReportRange(period) {
   }
   const start = getMonday(now);
   return { start: toDateInputValue(start), end: toDateInputValue(addDays(start, 6)) };
+}
+
+function getRangeChunks(startDate, endDate) {
+  const chunks = [];
+  let cursor = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  while (cursor <= end) {
+    chunks.push(toDateInputValue(cursor));
+    cursor = addDays(cursor, 7);
+  }
+  return chunks;
+}
+
+function uniqueRows(rows) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = String(row.id ?? `${row.staffId}:${row.shiftDate}:${row.startTime}:${row.endTime}`);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildHoursTrend(startDate, endDate, shifts) {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T00:00:00`);
+  const dayCount = Math.round((end - start) / 86400000) + 1;
+
+  if (dayCount <= 10) {
+    return Array.from({ length: dayCount }, (_, index) => {
+      const date = toDateInputValue(addDays(start, index));
+      return {
+        key: date,
+        label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${date}T00:00:00`)),
+        hours: sumHours(shifts.filter((shift) => shift.shiftDate === date))
+      };
+    });
+  }
+
+  return getRangeChunks(startDate, endDate).map((chunkStart, index) => {
+    const chunkStartDate = new Date(`${chunkStart}T00:00:00`);
+    const chunkEndDate = addDays(chunkStartDate, 6);
+    const boundedEnd = chunkEndDate > end ? end : chunkEndDate;
+    const chunkEnd = toDateInputValue(boundedEnd);
+    return {
+      key: chunkStart,
+      label: `${new Intl.DateTimeFormat("en-GB", { day: "numeric" }).format(chunkStartDate)}–${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(boundedEnd)}`,
+      hours: sumHours(shifts.filter((shift) => shift.shiftDate >= chunkStart && shift.shiftDate <= chunkEnd)),
+      index
+    };
+  });
 }
 
 function buildStaffHours(staff, shifts) {
