@@ -12,6 +12,7 @@ import {
   PlusCircle,
   Printer,
   Send,
+  TriangleAlert,
   Trash2,
   X
 } from "lucide-react";
@@ -36,6 +37,8 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
   const [publication, setPublication] = React.useState(null);
   const [publishing, setPublishing] = React.useState(false);
   const [publishMessage, setPublishMessage] = React.useState("");
+  const [shiftToDelete, setShiftToDelete] = React.useState(null);
+  const [deletingShift, setDeletingShift] = React.useState(false);
   const toolsRef = React.useRef(null);
 
   const load = React.useCallback(() => {
@@ -81,14 +84,33 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
     };
   }, [moreOpen]);
 
+  React.useEffect(() => {
+    if (!shiftToDelete) return undefined;
+    const closeDialog = (event) => {
+      if (event.key === "Escape" && !deletingShift) setShiftToDelete(null);
+    };
+    document.addEventListener("keydown", closeDialog);
+    return () => document.removeEventListener("keydown", closeDialog);
+  }, [shiftToDelete, deletingShift]);
+
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(new Date(`${startDate}T00:00:00`), index);
     return toDateInputValue(date);
   });
 
-  const removeShift = async (id) => {
-    await api.deleteShift(id);
-    load();
+  const removeShift = async () => {
+    if (!shiftToDelete) return;
+    setDeletingShift(true);
+    setError("");
+    try {
+      await api.deleteShift(shiftToDelete.id);
+      setShiftToDelete(null);
+      await load();
+    } catch (err) {
+      setError(err.message || "Could not delete the shift.");
+    } finally {
+      setDeletingShift(false);
+    }
   };
 
   const startNoteEdit = (shift) => {
@@ -339,7 +361,7 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
           noteError={noteError}
           onAddShift={onAddShift}
           onCancelNote={cancelNoteEdit}
-          onDeleteShift={removeShift}
+          onDeleteShift={setShiftToDelete}
           onEditShift={onEditShift}
           onEditNote={startNoteEdit}
           onNoteDraftChange={setNoteDraft}
@@ -351,6 +373,65 @@ export function WeeklyRota({ currentUser, goTo, onAddShift, onEditShift }) {
           weekDays={weekDays}
         />
       </Status>
+
+      {shiftToDelete && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4 backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deletingShift) setShiftToDelete(null);
+          }}
+        >
+          <section
+            aria-labelledby="delete-shift-title"
+            aria-describedby="delete-shift-description"
+            aria-modal="true"
+            className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+            role="dialog"
+          >
+            <div className="flex items-start gap-4">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+                <TriangleAlert className="h-5 w-5" />
+              </span>
+              <div className="min-w-0">
+                <h2 id="delete-shift-title" className="text-xl font-black text-fuel-ink">Delete this shift?</h2>
+                <p id="delete-shift-description" className="mt-1 text-sm font-medium leading-6 text-slate-500">
+                  This removes the shift from the working rota. Staff will see the change after you publish the rota again.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="font-black text-fuel-ink">{shiftToDelete.staffName}</p>
+              <p className="mt-1 text-sm font-semibold text-slate-600">
+                {formatDateLabel(shiftToDelete.shiftDate)} · {formatShiftRange(shiftToDelete.startTime, shiftToDelete.endTime)}
+              </p>
+              {shiftToDelete.notes && <p className="mt-2 text-sm font-medium text-slate-500">{shiftToDelete.notes}</p>}
+            </div>
+
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                autoFocus
+                className="min-h-11 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                onClick={() => setShiftToDelete(null)}
+                disabled={deletingShift}
+              >
+                Keep shift
+              </button>
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-black text-white shadow-sm hover:bg-red-700 disabled:cursor-wait disabled:opacity-60"
+                onClick={removeShift}
+                disabled={deletingShift}
+              >
+                <Trash2 className="h-4 w-4" />
+                {deletingShift ? "Deleting..." : "Delete shift"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -854,7 +935,7 @@ function PlannerShiftCard({
                 className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-black text-red-700 hover:bg-red-50"
                 onClick={(event) => {
                   event.currentTarget.closest("details")?.removeAttribute("open");
-                  if (window.confirm("Delete this shift?")) onDeleteShift(shift.id);
+                  onDeleteShift(shift);
                 }}
               >
                 <Trash2 size={13} />
