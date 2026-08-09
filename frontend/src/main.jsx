@@ -62,7 +62,7 @@ function App() {
   const mobileNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && mobileNavIds.includes(item.id));
   const desktopNav = navItems.filter((item) =>
     item.roles.includes(currentUser?.role) &&
-    ["dashboard", "my-shifts", "staff", "rota", "tasks", "performance", "reports", "time-off"].includes(item.id) &&
+    ["dashboard", "my-shifts", "staff", "rota", "tasks", "performance", "reports", "time-off", "settings"].includes(item.id) &&
     (item.id !== "performance" || performanceEnabled)
   );
   const appTitle = buildRotaTitle(branding.businessName);
