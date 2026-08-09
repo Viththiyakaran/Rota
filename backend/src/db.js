@@ -110,7 +110,7 @@ function preparePostgresSql(sql) {
     .replace(/\?/g, () => `$${++index}`)
     .replace(/\bCURRENT_TIMESTAMP\b/g, "(CURRENT_TIMESTAMP::text)");
 
-  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|attendance|gasStockCounts|gasStockEntries)\b/i.test(query)
+  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|workSchedules|attendance|gasStockCounts|gasStockEntries)\b/i.test(query)
     && !/\bRETURNING\b/i.test(query)
     && !/\bON\s+CONFLICT\b/i.test(query)) {
     query = `${query.trim()} RETURNING id`;
@@ -180,6 +180,7 @@ const pgKeyMap = new Map(Object.entries({
   tasktype: "taskType",
   linkedrecordid: "linkedRecordId",
   taskid: "taskId",
+  scheduleid: "scheduleId",
   countedby: "countedBy",
   submittedat: "submittedAt",
   countid: "countId",
@@ -376,6 +377,24 @@ export async function initDb() {
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (staffId) REFERENCES staff(id),
       FOREIGN KEY (shiftId) REFERENCES shifts(id)
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS workSchedules (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Ordering',
+      supplier TEXT,
+      weekdays TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      assignedStaffId INTEGER,
+      createdBy INTEGER,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (assignedStaffId) REFERENCES staff(id),
+      FOREIGN KEY (createdBy) REFERENCES users(id)
       )
     `);
 
@@ -685,6 +704,22 @@ async function createPostgresSchema() {
       clockOutLocationAccuracy DOUBLE PRECISION,
       clockInLocationChecked INTEGER NOT NULL DEFAULT 0,
       clockOutLocationChecked INTEGER NOT NULL DEFAULT 0,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS workSchedules (
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'Ordering',
+      supplier TEXT,
+      weekdays TEXT NOT NULL DEFAULT '[]',
+      notes TEXT,
+      active INTEGER NOT NULL DEFAULT 1,
+      assignedStaffId INTEGER REFERENCES staff(id),
+      createdBy INTEGER REFERENCES users(id),
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )

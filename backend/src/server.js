@@ -171,6 +171,10 @@ app.get("/api", (_req, res) => {
       "POST /api/tasks",
       "PUT /api/tasks/:id",
       "DELETE /api/tasks/:id",
+      "GET /api/work-schedules",
+      "POST /api/work-schedules",
+      "PUT /api/work-schedules/:id",
+      "DELETE /api/work-schedules/:id",
       "GET /api/gas-stock/current?weekStart=yyyy-mm-dd",
       "PUT /api/gas-stock/draft",
       "POST /api/gas-stock/submit",
@@ -824,6 +828,7 @@ app.post("/api/attendance/clock-out", async (req, res, next) => {
 app.get("/api/tasks", async (_req, res, next) => {
   try {
     await ensureWeeklyGasStockTask();
+    await ensureRecurringWorkTasks();
     const rows = await all(
       `SELECT tasks.*, staff.name AS assignedStaffName, users.username AS createdByUsername
        FROM tasks
@@ -842,6 +847,93 @@ app.get("/api/tasks", async (_req, res, next) => {
          tasks.id DESC`
     );
     res.json(rows.map(normaliseTask).filter((task) => !task.archived));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/work-schedules", async (_req, res, next) => {
+  try {
+    await ensureRecurringWorkTasks();
+    const rows = await all(
+      `SELECT workSchedules.*, staff.name AS assignedStaffName
+       FROM workSchedules
+       LEFT JOIN staff ON staff.id = workSchedules.assignedStaffId
+       ORDER BY workSchedules.active DESC, workSchedules.name ASC, workSchedules.id ASC`
+    );
+    res.json(rows.map(normaliseWorkSchedule));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/work-schedules", requireAdmin, async (req, res, next) => {
+  try {
+    const schedule = await validateWorkSchedule(req.body);
+    const result = await run(
+      `INSERT INTO workSchedules (name, category, supplier, weekdays, notes, active, assignedStaffId, createdBy)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        schedule.name,
+        schedule.category,
+        schedule.supplier,
+        JSON.stringify(schedule.weekdays),
+        schedule.notes,
+        schedule.active ? 1 : 0,
+        schedule.assignedStaffId,
+        req.user.id
+      ]
+    );
+    await ensureRecurringWorkTasks();
+    await addAudit(req.user.id, "create_work_schedule", `Created ${schedule.name} order plan`);
+    res.status(201).json(normaliseWorkSchedule(await getWorkSchedule(result.id)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/work-schedules/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const current = await getWorkSchedule(req.params.id);
+    if (!current) return res.status(404).json({ error: "Order plan not found." });
+    const schedule = await validateWorkSchedule({ ...normaliseWorkSchedule(current), ...req.body });
+    await run(
+      `UPDATE workSchedules
+       SET name = ?, category = ?, supplier = ?, weekdays = ?, notes = ?, active = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        schedule.name,
+        schedule.category,
+        schedule.supplier,
+        JSON.stringify(schedule.weekdays),
+        schedule.notes,
+        schedule.active ? 1 : 0,
+        schedule.assignedStaffId,
+        req.params.id
+      ]
+    );
+    const today = datePartsInBusinessTimeZone().date;
+    await run(
+      `DELETE FROM tasks
+       WHERE taskType = 'recurring_order' AND linkedRecordId = ? AND status != 'done' AND dueDate >= ?`,
+      [req.params.id, mondayForDate(today)]
+    );
+    await ensureRecurringWorkTasks();
+    await addAudit(req.user.id, "update_work_schedule", `Updated ${schedule.name} order plan`);
+    res.json(normaliseWorkSchedule(await getWorkSchedule(req.params.id)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/work-schedules/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const current = await getWorkSchedule(req.params.id);
+    if (!current) return res.status(404).json({ error: "Order plan not found." });
+    await run("DELETE FROM tasks WHERE taskType = 'recurring_order' AND linkedRecordId = ? AND status != 'done'", [req.params.id]);
+    await run("DELETE FROM workSchedules WHERE id = ?", [req.params.id]);
+    await addAudit(req.user.id, "delete_work_schedule", `Deleted ${current.name} order plan`);
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
@@ -2238,6 +2330,88 @@ async function getTask(id) {
      WHERE tasks.id = ?`,
     [id]
   );
+}
+
+async function ensureRecurringWorkTasks(weekStart = mondayForDate(datePartsInBusinessTimeZone().date)) {
+  const schedules = await all("SELECT * FROM workSchedules WHERE active = 1 ORDER BY id ASC");
+  for (const row of schedules) {
+    const schedule = normaliseWorkSchedule(row);
+    for (const weekday of schedule.weekdays) {
+      const dueDate = addDays(weekStart, weekday === 0 ? 6 : weekday - 1);
+      const existing = await get(
+        `SELECT id FROM tasks
+         WHERE taskType = 'recurring_order' AND linkedRecordId = ? AND dueDate = ?
+         LIMIT 1`,
+        [schedule.id, dueDate]
+      );
+      if (existing) continue;
+      const detail = [schedule.supplier ? `Supplier: ${schedule.supplier}` : "", schedule.notes]
+        .filter(Boolean)
+        .join(" · ");
+      await run(
+        `INSERT INTO tasks (title, description, dueDate, status, assignedStaffId, createdBy, completedAt, taskType, linkedRecordId)
+         VALUES (?, ?, ?, 'todo', ?, ?, NULL, 'recurring_order', ?)`,
+        [
+          `Order — ${schedule.name}`,
+          detail,
+          dueDate,
+          schedule.assignedStaffId,
+          schedule.createdBy,
+          schedule.id
+        ]
+      );
+    }
+  }
+}
+
+function getWorkSchedule(id) {
+  return get(
+    `SELECT workSchedules.*, staff.name AS assignedStaffName
+     FROM workSchedules
+     LEFT JOIN staff ON staff.id = workSchedules.assignedStaffId
+     WHERE workSchedules.id = ?`,
+    [id]
+  );
+}
+
+function normaliseWorkSchedule(row) {
+  if (!row) return row;
+  let weekdays = [];
+  try {
+    const parsed = Array.isArray(row.weekdays) ? row.weekdays : JSON.parse(row.weekdays || "[]");
+    weekdays = [...new Set(parsed.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))];
+  } catch (_error) {
+    weekdays = [];
+  }
+  return {
+    ...row,
+    active: Boolean(row.active),
+    assignedStaffId: row.assignedStaffId || null,
+    weekdays
+  };
+}
+
+async function validateWorkSchedule(value = {}) {
+  const name = String(value.name || "").trim();
+  if (!name) throw requestError("Order category is required.");
+  const weekdays = [...new Set((Array.isArray(value.weekdays) ? value.weekdays : [])
+    .map(Number)
+    .filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))];
+  if (!weekdays.length) throw requestError("Choose at least one ordering day.");
+  const assignedStaffId = normaliseTaskAssigneeId(value.assignedStaffId);
+  if (Number.isNaN(assignedStaffId)) throw requestError("Order plan assignee is invalid.");
+  if (assignedStaffId && !(await activeStaffExists(assignedStaffId))) {
+    throw requestError("Order plan assignee is not an active staff member.");
+  }
+  return {
+    name,
+    category: String(value.category || "Ordering").trim() || "Ordering",
+    supplier: String(value.supplier || "").trim(),
+    weekdays,
+    notes: String(value.notes || "").trim(),
+    active: value.active !== false,
+    assignedStaffId
+  };
 }
 
 function normaliseTask(row) {

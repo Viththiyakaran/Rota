@@ -33,7 +33,7 @@ const navItems = [
   { id: "rota-pattern", label: "Pattern", icon: Layers, roles: ["admin"], hidden: true },
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "edit-shift", label: "Edit Shift", icon: CalendarDays, roles: ["admin"], hidden: true },
-  { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
+  { id: "tasks", label: "Work", icon: ListChecks, roles: ["admin", "staff"] },
   { id: "gas-stock", label: "Gas Stock", icon: PackageCheck, roles: ["admin", "staff"] },
   { id: "performance", label: "Performance", icon: TrendingUp, roles: ["admin"] },
   { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
@@ -62,7 +62,7 @@ function App() {
   const mobileNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && mobileNavIds.includes(item.id));
   const desktopNav = navItems.filter((item) =>
     item.roles.includes(currentUser?.role) &&
-    ["dashboard", "my-shifts", "staff", "rota", "tasks", "gas-stock", "time-off", "reminders", "performance", "reports", "settings"].includes(item.id) &&
+    ["dashboard", "my-shifts", "staff", "rota", "tasks", "time-off", "reports"].includes(item.id) &&
     (item.id !== "performance" || performanceEnabled)
   );
   const appTitle = buildRotaTitle(branding.businessName);

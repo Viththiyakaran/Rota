@@ -46,6 +46,7 @@ async function runSmoke() {
   const routeList = await request("/api");
   assert(routeList.endpoints?.includes("GET /api/staff"), "api route list works");
   assert(routeList.endpoints?.includes("PUT /api/sales"), "sales route is listed");
+  assert(routeList.endpoints?.includes("GET /api/work-schedules"), "work schedules route is listed");
 
   const publicBranding = await request("/api/settings/branding");
   assert(publicBranding.businessName, "public branding works");
@@ -58,6 +59,26 @@ async function runSmoke() {
     body: { currentPassword: "admin123", newPassword: "admin456" }
   });
   assert(changedAdmin.user?.mustChangePassword === false, "admin first password change");
+
+  const orderPlan = await request("/api/work-schedules", {
+    cookie: admin.cookie,
+    method: "POST",
+    body: { name: "Vape", supplier: "Test supplier", weekdays: [1, 5], notes: "Order before noon" }
+  });
+  assert(orderPlan.name === "Vape" && orderPlan.weekdays.length === 2, "recurring order plan saves selected weekdays");
+  const orderPlans = await request("/api/work-schedules", { cookie: admin.cookie });
+  assert(orderPlans.some((plan) => plan.id === orderPlan.id), "recurring order plan reloads");
+  const tasksWithOrders = await request("/api/tasks", { cookie: admin.cookie });
+  assert(tasksWithOrders.filter((task) => task.taskType === "recurring_order" && task.linkedRecordId === orderPlan.id).length === 2, "weekly order tasks are generated");
+  const updatedOrderPlan = await request(`/api/work-schedules/${orderPlan.id}`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { weekdays: [2, 4, 6] }
+  });
+  assert(updatedOrderPlan.weekdays.length === 3, "order frequency can change to three times weekly");
+  const tasksAfterPlanUpdate = await request("/api/tasks", { cookie: admin.cookie });
+  assert(tasksAfterPlanUpdate.filter((task) => task.taskType === "recurring_order" && task.linkedRecordId === orderPlan.id).length === 3, "changing order days regenerates the current week");
+  await request(`/api/work-schedules/${orderPlan.id}`, { cookie: admin.cookie, method: "DELETE" });
 
   const savedUkRules = await request("/api/settings/uk-rules", {
     cookie: admin.cookie,
