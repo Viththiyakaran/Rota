@@ -101,43 +101,49 @@ export function Dashboard({ goTo, currentUser, branding }) {
       )}
 
       <Status loading={loading} error="">
-        <TodayActionPlan
-          attentionItems={attentionItems}
-          clockedInNow={clockedInNow}
-          nextShift={nextShift}
-          tasksDueToday={tasksDueToday}
-          workingNow={workingNow}
-        />
-
-        <CompactDashboardSummary
-          activeStaff={staff.filter((person) => person.active)}
-          attentionItems={attentionItems}
-          reminders={reminders}
-          shifts={shifts}
-          timeOff={timeOff}
-          today={today}
-          weekDays={weekDays}
-          weekRange={weekRange}
-          onOpenWeek={() => goTo("rota")}
-          onOpenNotifications={() => goTo("reminders")}
-        />
-
-        {isAdmin && (
-          <OrderPerformanceChart
+        {isAdmin ? (
+          <AdminDashboardOverview
+            clockedInNow={clockedInNow}
             currentOrders={performanceData.currentOrders}
             goTo={goTo}
+            nextShift={nextShift}
             previousOrders={performanceData.previousOrders}
             sales={performanceData.sales}
             weekDays={weekDays}
+            weekRange={weekRange}
+            workingNow={workingNow}
           />
-        )}
+        ) : (
+          <>
+            <TodayActionPlan
+              attentionItems={attentionItems}
+              clockedInNow={clockedInNow}
+              nextShift={nextShift}
+              tasksDueToday={tasksDueToday}
+              workingNow={workingNow}
+            />
 
-        <QuickActions
-          goTo={goTo}
-          isAdmin={isAdmin}
-          moreOpen={moreOpen}
-          onToggleMore={() => setMoreOpen((value) => !value)}
-        />
+            <CompactDashboardSummary
+              activeStaff={staff.filter((person) => person.active)}
+              attentionItems={attentionItems}
+              reminders={reminders}
+              shifts={shifts}
+              timeOff={timeOff}
+              today={today}
+              weekDays={weekDays}
+              weekRange={weekRange}
+              onOpenWeek={() => goTo("rota")}
+              onOpenNotifications={() => goTo("reminders")}
+            />
+
+            <QuickActions
+              goTo={goTo}
+              isAdmin={isAdmin}
+              moreOpen={moreOpen}
+              onToggleMore={() => setMoreOpen((value) => !value)}
+            />
+          </>
+        )}
       </Status>
     </div>
   );
@@ -429,7 +435,7 @@ function CompactDashboardSummary({
   );
 }
 
-function OrderPerformanceChart({ currentOrders, goTo, previousOrders, sales, weekDays }) {
+function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, previousOrders, sales, weekDays, weekRange, workingNow }) {
   const previousDays = weekDays.map((day) => toDateInputValue(addDays(new Date(`${day}T00:00:00`), -7)));
   const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
   const submittedCurrentOrders = currentOrders.filter((order) => order.submissionStatus === "submitted");
@@ -447,69 +453,72 @@ function OrderPerformanceChart({ currentOrders, goTo, previousOrders, sales, wee
   const previousSales = previousDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
   const currentOrderValue = submittedCurrentOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const previousOrderValue = submittedPreviousOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const orderToSales = currentSales > 0 ? (currentOrderValue / currentSales) * 100 : null;
   const maxValue = Math.max(1, ...rows.flatMap((row) => [row.sales, row.orders]));
+  const usingClockedIn = clockedInNow.length > 0;
+  const workingRows = usingClockedIn ? clockedInNow : workingNow;
+  const workingNames = workingRows.map((row) => row.staffName).filter(Boolean).join(", ");
+  const workingDetail = usingClockedIn
+    ? `${workingRows.length} clocked in now`
+    : workingRows.length
+      ? workingRows.map((row) => formatShiftRange(row.startTime, row.endTime)).join(" · ")
+      : "No one scheduled at this time";
+  const nextShiftValue = nextShift ? nextShift.staffName : "No more shifts today";
+  const nextShiftDetail = nextShift ? `${formatTimeLabel(nextShift.startTime)} · ${formatShiftRange(nextShift.startTime, nextShift.endTime)}` : "All remaining staff are off";
 
   return (
     <Card className="overflow-hidden p-0 sm:p-0">
-      <div className="flex flex-col gap-3 border-b border-fuel-line p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
-        <div className="flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-fuel-mist text-fuel-green"><BarChart3 size={22} /></span>
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Performance comparison</p>
-            <h2 className="mt-1 text-xl font-black text-fuel-ink">Sales &amp; order value</h2>
-            <p className="mt-1 text-sm font-semibold text-slate-500">This week compared with last week.</p>
-          </div>
+      <div className="flex flex-col gap-2 border-b border-fuel-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Live station overview</p>
+          <h2 className="mt-0.5 text-xl font-black text-fuel-ink">Today &amp; this week</h2>
+          <p className="mt-0.5 text-xs font-semibold text-slate-500">{weekRange}</p>
         </div>
-        <button type="button" onClick={() => goTo("performance")} className="rounded-lg bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green">Open Performance →</button>
-      </div>
-
-      <div className="grid gap-3 border-b border-fuel-line bg-slate-50/70 p-4 sm:grid-cols-3">
-        <PerformanceKpi icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} current={currentSales} previous={previousSales} />
-        <PerformanceKpi icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} current={currentOrderValue} previous={previousOrderValue} tone="amber" />
-        <div className="rounded-xl border border-fuel-line bg-white p-3.5 shadow-sm">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">Order-to-sales</p>
-          <p className="mt-2 text-2xl font-black text-fuel-ink">{orderToSales === null ? "—" : `${orderToSales.toFixed(1)}%`}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">Planning indicator, not profit margin</p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => goTo("tasks")} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">Open Work</button>
+          <button type="button" onClick={() => goTo("performance")} className="rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green">Open Performance</button>
         </div>
       </div>
 
-      <div className="p-4 sm:p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-sm font-black text-fuel-ink">Daily comparison</p>
+      <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <OverviewCard icon={Users} label="Working now" value={workingNames || "No one working"} detail={workingDetail} />
+        <OverviewCard icon={Clock} label="Next shift" value={nextShiftValue} detail={nextShiftDetail} />
+        <OverviewCard icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} detail={`Last week ${formatMoney(previousSales)}`} change={percentageChange(currentSales, previousSales)} />
+        <OverviewCard icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
+      </div>
+
+      <div className="border-t border-fuel-line px-4 py-3 sm:px-5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">Sales &amp; orders by day</p>
           <div className="flex gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> Sales</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
         </div>
-        <div className="mt-5 grid h-52 grid-cols-7 items-end gap-2 sm:gap-3">
+        <div className="mt-3 grid h-32 grid-cols-7 items-end gap-2 sm:gap-3">
           {rows.map((row) => (
             <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
               <div className="flex flex-1 items-end justify-center gap-1 sm:gap-1.5">
                 <div title={`Sales ${formatMoney(row.sales)}`} className="w-2.5 rounded-t bg-fuel-green sm:w-4" style={{ height: barHeight(row.sales, maxValue) }} />
                 <div title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
               </div>
-              <p className="mt-2 truncate text-center text-[11px] font-black text-slate-500 sm:text-xs">{row.label}</p>
+              <p className="mt-1.5 truncate text-center text-[11px] font-black text-slate-500">{row.label}</p>
             </div>
           ))}
         </div>
-        {currentSales === 0 && currentOrderValue === 0 && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-center text-sm font-semibold text-slate-500">Enter sales in Performance and submit orders in Work to populate this chart.</p>}
+        {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Work to populate this chart.</p>}
       </div>
     </Card>
   );
 }
 
-function PerformanceKpi({ current, icon: Icon, label, previous, tone = "blue", value }) {
-  const change = percentageChange(current, previous);
+function OverviewCard({ change = null, detail, icon: Icon, label, tone = "blue", value }) {
   const improved = change !== null && change >= 0;
   return (
     <div className="rounded-xl border border-fuel-line bg-white p-3.5 shadow-sm">
       <div className="flex items-center justify-between gap-2">
         <span className={`grid h-9 w-9 place-items-center rounded-lg ${tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-fuel-mist text-fuel-green"}`}><Icon size={18} /></span>
-        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-black ${change === null ? "bg-slate-100 text-slate-500" : tone === "amber" ? "bg-amber-50 text-amber-700" : improved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-          {change === null ? "No comparison" : <>{improved ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(change).toFixed(1)}%</>}
-        </span>
+        {change !== null && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-black ${tone === "amber" ? "bg-amber-50 text-amber-700" : improved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{improved ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(change).toFixed(1)}%</span>}
       </div>
       <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-black text-fuel-ink">{value}</p>
-      <p className="mt-1 text-xs font-semibold text-slate-500">Last week {formatMoney(previous)}</p>
+      <p className="mt-1 truncate text-xl font-black text-fuel-ink" title={String(value)}>{value}</p>
+      <p className="mt-1 truncate text-xs font-semibold text-slate-500" title={detail}>{detail}</p>
     </div>
   );
 }
