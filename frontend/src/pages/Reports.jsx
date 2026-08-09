@@ -1,5 +1,5 @@
 import React from "react";
-import { Activity, Archive, ArrowDownRight, ArrowUpRight, CalendarDays, CheckCircle2, ClipboardCheck, Clock, FileText, Minus, PoundSterling, RotateCcw, Save, Trash2, TrendingUp, Users } from "lucide-react";
+import { Activity, Archive, ArrowDownRight, ArrowUpRight, BarChart3, CalendarDays, CheckCircle2, ClipboardCheck, Clock, FileText, Minus, PackageCheck, Percent, PoundSterling, RotateCcw, Save, ShoppingCart, Trash2, TrendingUp, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -7,7 +7,7 @@ import { addDays, formatDateLabel, formatDayLabel, getMonday, toDateInputValue }
 
 export function Reports({ goTo }) {
   const [period, setPeriod] = React.useState("this-week");
-  const [data, setData] = React.useState({ staff: [], shifts: [], timeOff: [], tasks: [], completedTasks: [], audit: [] });
+  const [data, setData] = React.useState({ staff: [], shifts: [], timeOff: [], tasks: [], completedTasks: [], audit: [], sales: [], orders: [] });
   const [loading, setLoading] = React.useState(true);
   const [workingTaskId, setWorkingTaskId] = React.useState(null);
   const [error, setError] = React.useState("");
@@ -18,24 +18,33 @@ export function Reports({ goTo }) {
     setLoading(true);
     setError("");
     const shiftRanges = getRangeChunks(range.start, range.end);
+    const previousRange = getPreviousRange(range);
+    const orderWeeks = [...new Set([
+      ...getRangeChunks(previousRange.start, previousRange.end),
+      ...shiftRanges
+    ])];
     Promise.allSettled([
       api.staff(),
       Promise.all(shiftRanges.map((start) => api.week(start))),
       api.timeOff(),
       api.tasks(),
       api.completedTasks(),
-      api.audit()
+      api.audit(),
+      api.sales(previousRange.start, range.end),
+      Promise.all(orderWeeks.map((weekStart) => api.workOrderSummary(weekStart)))
     ])
-      .then(([staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult]) => {
+      .then(([staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult, salesResult, orderResult]) => {
         setData({
           staff: staffResult.status === "fulfilled" ? staffResult.value : [],
           shifts: shiftResult.status === "fulfilled" ? uniqueRows(shiftResult.value.flat()) : [],
           timeOff: timeOffResult.status === "fulfilled" ? timeOffResult.value : [],
           tasks: taskResult.status === "fulfilled" ? taskResult.value : [],
           completedTasks: completedTaskResult.status === "fulfilled" ? completedTaskResult.value : [],
-          audit: auditResult.status === "fulfilled" ? auditResult.value : []
+          audit: auditResult.status === "fulfilled" ? auditResult.value : [],
+          sales: salesResult.status === "fulfilled" ? salesResult.value : [],
+          orders: orderResult.status === "fulfilled" ? uniqueRowsBy(orderResult.value.flat(), "taskId") : []
         });
-        const failed = [staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult]
+        const failed = [staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult, salesResult, orderResult]
           .find((result) => result.status === "rejected");
         if (failed) setError(failed.reason.message);
       })
@@ -51,7 +60,15 @@ export function Reports({ goTo }) {
     const completedDate = task.completedAt ? toDateInputValue(new Date(task.completedAt)) : "";
     return completedDate >= range.start && completedDate <= range.end;
   });
-  const recentAudit = data.audit.slice(0, 8);
+  const recentAudit = data.audit.filter((entry) => {
+    const entryDate = entry.createdAt ? toDateInputValue(new Date(entry.createdAt)) : "";
+    return entryDate >= range.start && entryDate <= range.end;
+  }).slice(0, 8);
+  const previousRange = getPreviousRange(range);
+  const periodSales = data.sales.filter((entry) => entry.saleDate >= range.start && entry.saleDate <= range.end);
+  const previousSales = data.sales.filter((entry) => entry.saleDate >= previousRange.start && entry.saleDate <= previousRange.end);
+  const periodOrders = data.orders.filter((order) => order.submissionStatus === "submitted" && order.dueDate >= range.start && order.dueDate <= range.end);
+  const previousOrders = data.orders.filter((order) => order.submissionStatus === "submitted" && order.dueDate >= previousRange.start && order.dueDate <= previousRange.end);
   const totalHours = sumHours(periodShifts);
   const scheduledStaff = staffHours.length;
   const taskTotal = periodCompletedTasks.length + openTasks.length;
@@ -99,8 +116,8 @@ export function Reports({ goTo }) {
         <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.18em] text-fuel-green">Admin reports</p>
-            <h1 className="mt-1 text-3xl font-black text-fuel-ink">Team overview</h1>
-            <p className="mt-1 text-sm font-medium text-slate-600">See staffing, hours, time off and task progress at a glance.</p>
+            <h1 className="mt-1 text-3xl font-black text-fuel-ink">Business report</h1>
+            <p className="mt-1 text-sm font-medium text-slate-600">Sales, order value and station operations for the selected period.</p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <p className="text-sm font-bold text-slate-500">{formatDateLabel(range.start)} – {formatDateLabel(range.end)}</p>
@@ -118,6 +135,16 @@ export function Reports({ goTo }) {
       </Card>
 
       <Status loading={loading} error={error}>
+        <BusinessPerformanceReport
+          goTo={goTo}
+          orders={periodOrders}
+          previousOrders={previousOrders}
+          previousRange={previousRange}
+          previousSales={previousSales}
+          range={range}
+          sales={periodSales}
+        />
+
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <ReportKpi
             icon={CalendarDays}
@@ -154,9 +181,10 @@ export function Reports({ goTo }) {
           <StaffHoursDonut rows={staffHours} totalHours={totalHours} />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ReportCard icon={Clock} title="Time off" action="Manage" onAction={() => goTo("time-off")}>
-            {periodTimeOff.length ? periodTimeOff.slice(0, 5).map((request) => (
+        <div className={`grid gap-4 ${periodTimeOff.length ? "lg:grid-cols-2" : ""}`}>
+          {periodTimeOff.length > 0 && (
+            <ReportCard icon={Clock} title="Time off" action="Manage" onAction={() => goTo("time-off")}>
+              {periodTimeOff.slice(0, 5).map((request) => (
               <div key={request.id} className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black text-fuel-ink">{request.staffName}</p>
@@ -168,8 +196,9 @@ export function Reports({ goTo }) {
                   {request.status}
                 </span>
               </div>
-            )) : <EmptyLine />}
-          </ReportCard>
+              ))}
+            </ReportCard>
+          )}
 
           <ReportCard icon={ClipboardCheck} title="Task progress" action="Open tasks" onAction={() => goTo("tasks")}>
             <div className="rounded-xl bg-slate-50 p-4">
@@ -192,8 +221,9 @@ export function Reports({ goTo }) {
           </ReportCard>
         </div>
 
-        <ReportCard icon={Archive} title="Completed Task History">
-          {periodCompletedTasks.length ? periodCompletedTasks.map((task) => (
+        {periodCompletedTasks.length > 0 && (
+          <ReportCard icon={Archive} title="Completed Task History">
+            {periodCompletedTasks.map((task) => (
             <div
               key={task.id}
               className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 sm:flex-row sm:items-center"
@@ -232,8 +262,9 @@ export function Reports({ goTo }) {
                 </button>
               </div>
             </div>
-          )) : <EmptyLine />}
-        </ReportCard>
+            ))}
+          </ReportCard>
+        )}
 
         <ReportCard icon={FileText} title="Audit Log Report">
           {recentAudit.length ? recentAudit.map((entry) => (
@@ -242,6 +273,101 @@ export function Reports({ goTo }) {
         </ReportCard>
       </Status>
     </div>
+  );
+}
+
+function BusinessPerformanceReport({ goTo, orders, previousOrders, previousRange, previousSales, range, sales }) {
+  const salesTotal = sales.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const previousSalesTotal = previousSales.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const orderTotal = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const previousOrderTotal = previousOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const salesChange = percentageChange(salesTotal, previousSalesTotal);
+  const orderChange = percentageChange(orderTotal, previousOrderTotal);
+  const orderToSales = salesTotal > 0 ? (orderTotal / salesTotal) * 100 : null;
+  const trendRows = buildBusinessTrend(range, sales, orders);
+  const maxTrend = Math.max(1, ...trendRows.flatMap((row) => [row.sales, row.orders]));
+  const departmentTotals = new Map();
+  orders.forEach((order) => {
+    Object.entries(order.amounts || {}).forEach(([department, amount]) => {
+      departmentTotals.set(department, (departmentTotals.get(department) || 0) + Number(amount || 0));
+    });
+  });
+  const departments = [...departmentTotals.entries()].sort((left, right) => right[1] - left[1]);
+
+  return (
+    <section className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <BusinessKpi icon={PoundSterling} label="Sales" value={formatCurrency(salesTotal)} helper={`${sales.length} daily entries`} change={salesChange} />
+        <BusinessKpi icon={ShoppingCart} label="Submitted orders" value={formatCurrency(orderTotal)} helper={`${orders.length} order${orders.length === 1 ? "" : "s"}`} change={orderChange} tone="amber" />
+        <BusinessKpi icon={Percent} label="Order-to-sales" value={orderToSales === null ? "—" : `${orderToSales.toFixed(1)}%`} helper="Planning indicator, not margin" tone="indigo" />
+        <BusinessKpi icon={TrendingUp} label="Sales comparison" value={salesChange === null ? "—" : `${salesChange >= 0 ? "+" : ""}${salesChange.toFixed(1)}%`} helper={`Previous period ${formatCurrency(previousSalesTotal)}`} change={salesChange} tone="emerald" />
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
+        <Card className="overflow-hidden p-0">
+          <div className="flex flex-col gap-3 border-b border-fuel-line p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <span className="grid h-10 w-10 place-items-center rounded-lg bg-fuel-mist text-fuel-green"><BarChart3 size={20} /></span>
+              <div><h2 className="font-black text-fuel-ink">Sales and order trend</h2><p className="text-xs font-semibold text-slate-500">{formatDateLabel(range.start)} – {formatDateLabel(range.end)}</p></div>
+            </div>
+            <div className="flex gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> Sales</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
+          </div>
+          {trendRows.some((row) => row.sales || row.orders) ? (
+            <div className="grid h-64 items-end gap-2 p-4" style={{ gridTemplateColumns: `repeat(${trendRows.length}, minmax(0, 1fr))` }}>
+              {trendRows.map((row) => (
+                <div key={row.key} className="flex h-full min-w-0 flex-col justify-end">
+                  <div className="flex flex-1 items-end justify-center gap-1">
+                    <div title={`Sales ${formatCurrency(row.sales)}`} className="w-3 rounded-t bg-fuel-green sm:w-5" style={{ height: reportBarHeight(row.sales, maxTrend) }} />
+                    <div title={`Orders ${formatCurrency(row.orders)}`} className="w-3 rounded-t bg-amber-400 sm:w-5" style={{ height: reportBarHeight(row.orders, maxTrend) }} />
+                  </div>
+                  <p className="mt-2 truncate text-center text-[10px] font-black text-slate-500 sm:text-xs">{row.label}</p>
+                </div>
+              ))}
+            </div>
+          ) : <div className="p-5"><EmptyLine /></div>}
+        </Card>
+
+        <Card className="p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3"><span className="grid h-10 w-10 place-items-center rounded-lg bg-amber-50 text-amber-700"><PackageCheck size={20} /></span><div><h2 className="font-black text-fuel-ink">Order analysis</h2><p className="text-xs font-semibold text-slate-500">Submitted values by section</p></div></div>
+            <button type="button" onClick={() => goTo("tasks")} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">Open Work</button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {departments.length ? departments.map(([department, total]) => (
+              <div key={department} className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2.5"><span className="truncate text-sm font-bold text-slate-600">{department}</span><span className="font-black text-fuel-ink">{formatCurrency(total)}</span></div>
+            )) : <EmptyLine />}
+          </div>
+          {orders.length > 0 && (
+            <div className="mt-4 border-t border-fuel-line pt-3">
+              <p className="mb-2 text-xs font-black uppercase tracking-wide text-slate-400">Submitted orders</p>
+              <div className="space-y-2">{orders.slice(0, 4).map((order) => <MetricRow key={order.taskId} label={`${order.supplier ? `${order.supplier} · ` : ""}${order.orderName}`} value={formatCurrency(order.total)} />)}</div>
+            </div>
+          )}
+        </Card>
+      </div>
+      <p className="px-1 text-xs font-semibold text-slate-500">Previous comparison period: {formatDateLabel(previousRange.start)} – {formatDateLabel(previousRange.end)}. Order-to-sales is an operational indicator and is not a profit margin.</p>
+    </section>
+  );
+}
+
+function BusinessKpi({ change = null, helper, icon: Icon, label, tone = "blue", value }) {
+  const positive = change !== null && change >= 0;
+  const toneClasses = {
+    blue: "bg-fuel-mist text-fuel-green",
+    amber: "bg-amber-50 text-amber-700",
+    indigo: "bg-indigo-50 text-indigo-700",
+    emerald: "bg-emerald-50 text-emerald-700"
+  };
+  return (
+    <Card className="p-4">
+      <div className="flex items-start justify-between gap-2">
+        <span className={`grid h-10 w-10 place-items-center rounded-xl ${toneClasses[tone] || toneClasses.blue}`}><Icon size={19} /></span>
+        {change !== null && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-black ${positive ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{positive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(change).toFixed(1)}%</span>}
+      </div>
+      <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-black text-fuel-ink">{value}</p>
+      <p className="mt-1 truncate text-xs font-semibold text-slate-500" title={helper}>{helper}</p>
+    </Card>
   );
 }
 
@@ -674,6 +800,60 @@ function EmptyLine() {
   return <p className="rounded-lg bg-slate-50 px-3 py-4 text-sm font-semibold text-slate-500">No data available for this period.</p>;
 }
 
+function percentageChange(current, previous) {
+  if (!Number(previous)) return null;
+  return ((Number(current || 0) - Number(previous)) / Number(previous)) * 100;
+}
+
+function reportBarHeight(value, maxValue) {
+  if (!Number(value)) return "0%";
+  return `${Math.max(4, (Number(value) / maxValue) * 100)}%`;
+}
+
+function buildBusinessTrend(range, sales, orders) {
+  const start = new Date(`${range.start}T00:00:00`);
+  const end = new Date(`${range.end}T00:00:00`);
+  const dayCount = Math.round((end - start) / 86400000) + 1;
+  const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
+  const ordersByDate = new Map();
+  orders.forEach((order) => ordersByDate.set(order.dueDate, (ordersByDate.get(order.dueDate) || 0) + Number(order.total || 0)));
+
+  if (dayCount <= 14) {
+    return Array.from({ length: dayCount }, (_, index) => {
+      const date = toDateInputValue(addDays(start, index));
+      return {
+        key: date,
+        label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${date}T00:00:00`)),
+        sales: salesByDate.get(date) || 0,
+        orders: ordersByDate.get(date) || 0
+      };
+    });
+  }
+
+  const groups = new Map();
+  for (let index = 0; index < dayCount; index += 1) {
+    const dateObject = addDays(start, index);
+    const date = toDateInputValue(dateObject);
+    const weekStart = toDateInputValue(getMonday(dateObject));
+    const group = groups.get(weekStart) || { key: weekStart, label: `w/c ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${weekStart}T00:00:00`))}`, sales: 0, orders: 0 };
+    group.sales += salesByDate.get(date) || 0;
+    group.orders += ordersByDate.get(date) || 0;
+    groups.set(weekStart, group);
+  }
+  return [...groups.values()];
+}
+
+function getPreviousRange(range) {
+  const start = new Date(`${range.start}T00:00:00`);
+  const end = new Date(`${range.end}T00:00:00`);
+  const days = Math.round((end - start) / 86400000) + 1;
+  const previousEnd = addDays(start, -1);
+  return {
+    start: toDateInputValue(addDays(previousEnd, -(days - 1))),
+    end: toDateInputValue(previousEnd)
+  };
+}
+
 function getReportRange(period) {
   const now = new Date();
   if (period === "last-week") {
@@ -705,6 +885,16 @@ function uniqueRows(rows) {
   return rows.filter((row) => {
     const key = String(row.id ?? `${row.staffId}:${row.shiftDate}:${row.startTime}:${row.endTime}`);
     if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function uniqueRowsBy(rows, keyName) {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = String(row?.[keyName] ?? "");
+    if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
   });
