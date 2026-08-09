@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, Clock, ListChecks, PlusCircle, Printer, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, Clock, ListChecks, PlusCircle, PoundSterling, Printer, ShoppingCart, Sparkles, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -28,6 +28,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [timeOff, setTimeOff] = React.useState([]);
   const [tasks, setTasks] = React.useState([]);
   const [attendance, setAttendance] = React.useState([]);
+  const [performanceData, setPerformanceData] = React.useState({ sales: [], currentOrders: [], previousOrders: [] });
   const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
@@ -45,6 +46,8 @@ export function Dashboard({ goTo, currentUser, branding }) {
   React.useEffect(() => {
     setLoading(true);
     setError("");
+    const previousWeekStart = toDateInputValue(addDays(new Date(`${dashboardWeekStart}T00:00:00`), -7));
+    const currentWeekEnd = toDateInputValue(addDays(new Date(`${dashboardWeekStart}T00:00:00`), 6));
     Promise.allSettled([
       api.staff(),
       api.week(dashboardWeekStart),
@@ -52,9 +55,12 @@ export function Dashboard({ goTo, currentUser, branding }) {
       api.timeOff(),
       api.tasks(),
       api.ukRotaRules(),
-      isAdmin ? api.attendanceList() : Promise.resolve([])
+      isAdmin ? api.attendanceList() : Promise.resolve([]),
+      isAdmin ? api.sales(previousWeekStart, currentWeekEnd) : Promise.resolve([]),
+      isAdmin ? api.workOrderSummary(dashboardWeekStart) : Promise.resolve([]),
+      isAdmin ? api.workOrderSummary(previousWeekStart) : Promise.resolve([])
     ])
-      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
@@ -62,7 +68,12 @@ export function Dashboard({ goTo, currentUser, branding }) {
         if (taskResult.status === "fulfilled") setTasks(taskResult.value);
         if (ukRulesResult.status === "fulfilled") setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...ukRulesResult.value });
         if (attendanceResult.status === "fulfilled") setAttendance(attendanceResult.value);
-        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult].find((result) => result.status === "rejected");
+        setPerformanceData({
+          sales: salesResult.status === "fulfilled" ? salesResult.value : [],
+          currentOrders: currentOrdersResult.status === "fulfilled" ? currentOrdersResult.value : [],
+          previousOrders: previousOrdersResult.status === "fulfilled" ? previousOrdersResult.value : []
+        });
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult].find((result) => result.status === "rejected");
         if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
@@ -110,6 +121,16 @@ export function Dashboard({ goTo, currentUser, branding }) {
           onOpenWeek={() => goTo("rota")}
           onOpenNotifications={() => goTo("reminders")}
         />
+
+        {isAdmin && (
+          <OrderPerformanceChart
+            currentOrders={performanceData.currentOrders}
+            goTo={goTo}
+            previousOrders={performanceData.previousOrders}
+            sales={performanceData.sales}
+            weekDays={weekDays}
+          />
+        )}
 
         <QuickActions
           goTo={goTo}
@@ -406,6 +427,105 @@ function CompactDashboardSummary({
       </section>
     </div>
   );
+}
+
+function OrderPerformanceChart({ currentOrders, goTo, previousOrders, sales, weekDays }) {
+  const previousDays = weekDays.map((day) => toDateInputValue(addDays(new Date(`${day}T00:00:00`), -7)));
+  const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
+  const submittedCurrentOrders = currentOrders.filter((order) => order.submissionStatus === "submitted");
+  const submittedPreviousOrders = previousOrders.filter((order) => order.submissionStatus === "submitted");
+  const ordersByDate = new Map();
+  submittedCurrentOrders.forEach((order) => ordersByDate.set(order.dueDate, (ordersByDate.get(order.dueDate) || 0) + Number(order.total || 0)));
+
+  const rows = weekDays.map((date) => ({
+    date,
+    label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${date}T00:00:00`)),
+    sales: salesByDate.get(date) || 0,
+    orders: ordersByDate.get(date) || 0
+  }));
+  const currentSales = weekDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
+  const previousSales = previousDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
+  const currentOrderValue = submittedCurrentOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const previousOrderValue = submittedPreviousOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const orderToSales = currentSales > 0 ? (currentOrderValue / currentSales) * 100 : null;
+  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.sales, row.orders]));
+
+  return (
+    <Card className="overflow-hidden p-0 sm:p-0">
+      <div className="flex flex-col gap-3 border-b border-fuel-line p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+        <div className="flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-fuel-mist text-fuel-green"><BarChart3 size={22} /></span>
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Performance comparison</p>
+            <h2 className="mt-1 text-xl font-black text-fuel-ink">Sales &amp; order value</h2>
+            <p className="mt-1 text-sm font-semibold text-slate-500">This week compared with last week.</p>
+          </div>
+        </div>
+        <button type="button" onClick={() => goTo("performance")} className="rounded-lg bg-fuel-mist px-3 py-2 text-sm font-black text-fuel-green">Open Performance →</button>
+      </div>
+
+      <div className="grid gap-3 border-b border-fuel-line bg-slate-50/70 p-4 sm:grid-cols-3">
+        <PerformanceKpi icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} current={currentSales} previous={previousSales} />
+        <PerformanceKpi icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} current={currentOrderValue} previous={previousOrderValue} tone="amber" />
+        <div className="rounded-xl border border-fuel-line bg-white p-3.5 shadow-sm">
+          <p className="text-xs font-black uppercase tracking-wide text-slate-500">Order-to-sales</p>
+          <p className="mt-2 text-2xl font-black text-fuel-ink">{orderToSales === null ? "—" : `${orderToSales.toFixed(1)}%`}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">Planning indicator, not profit margin</p>
+        </div>
+      </div>
+
+      <div className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-black text-fuel-ink">Daily comparison</p>
+          <div className="flex gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> Sales</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
+        </div>
+        <div className="mt-5 grid h-52 grid-cols-7 items-end gap-2 sm:gap-3">
+          {rows.map((row) => (
+            <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
+              <div className="flex flex-1 items-end justify-center gap-1 sm:gap-1.5">
+                <div title={`Sales ${formatMoney(row.sales)}`} className="w-2.5 rounded-t bg-fuel-green sm:w-4" style={{ height: barHeight(row.sales, maxValue) }} />
+                <div title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
+              </div>
+              <p className="mt-2 truncate text-center text-[11px] font-black text-slate-500 sm:text-xs">{row.label}</p>
+            </div>
+          ))}
+        </div>
+        {currentSales === 0 && currentOrderValue === 0 && <p className="mt-3 rounded-lg bg-slate-50 p-3 text-center text-sm font-semibold text-slate-500">Enter sales in Performance and submit orders in Work to populate this chart.</p>}
+      </div>
+    </Card>
+  );
+}
+
+function PerformanceKpi({ current, icon: Icon, label, previous, tone = "blue", value }) {
+  const change = percentageChange(current, previous);
+  const improved = change !== null && change >= 0;
+  return (
+    <div className="rounded-xl border border-fuel-line bg-white p-3.5 shadow-sm">
+      <div className="flex items-center justify-between gap-2">
+        <span className={`grid h-9 w-9 place-items-center rounded-lg ${tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-fuel-mist text-fuel-green"}`}><Icon size={18} /></span>
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-black ${change === null ? "bg-slate-100 text-slate-500" : tone === "amber" ? "bg-amber-50 text-amber-700" : improved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+          {change === null ? "No comparison" : <>{improved ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(change).toFixed(1)}%</>}
+        </span>
+      </div>
+      <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-black text-fuel-ink">{value}</p>
+      <p className="mt-1 text-xs font-semibold text-slate-500">Last week {formatMoney(previous)}</p>
+    </div>
+  );
+}
+
+function percentageChange(current, previous) {
+  if (!previous) return null;
+  return ((Number(current || 0) - Number(previous)) / Number(previous)) * 100;
+}
+
+function barHeight(value, maxValue) {
+  if (!value) return "0%";
+  return `${Math.max(4, (Number(value) / maxValue) * 100)}%`;
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
 }
 
 function DashboardRotaSummary({ activeStaff, attendance, clockInEnabled, reminders, shifts, tasks, timeOff, ukRules, weekDays, onOpenWeek, onOpenNotifications }) {
