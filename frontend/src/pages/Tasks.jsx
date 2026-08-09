@@ -43,20 +43,16 @@ const SUGGESTED_ORDERS = [
   { name: "Medicine", supplier: "", departments: ["Total order"] },
   { name: "Sweets & confectionery", supplier: "", departments: ["Total order"] }
 ];
-const EMPTY_PLAN = { name: "", supplier: "", weekdays: [], departments: ["Total order"], notes: "", assignedStaffId: "", active: true };
+export const EMPTY_ORDER_PLAN = { name: "", supplier: "", weekdays: [], departments: ["Total order"], notes: "", assignedStaffId: "", active: true };
 
-export function Tasks({ currentUser, goTo, initialView = "week" }) {
+export function Tasks({ currentUser, goTo }) {
   const today = React.useMemo(() => toDateInputValue(new Date()), []);
   const weekStart = React.useMemo(() => mondayFor(today), [today]);
   const weekEnd = React.useMemo(() => addDays(weekStart, 6), [weekStart]);
-  const [view, setView] = React.useState(initialView);
+  const [view, setView] = React.useState("week");
   const [tasks, setTasks] = React.useState([]);
-  const [schedules, setSchedules] = React.useState([]);
   const [orderSummary, setOrderSummary] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
-  const [plan, setPlan] = React.useState(EMPTY_PLAN);
-  const [editingPlanId, setEditingPlanId] = React.useState(null);
-  const [showPlanForm, setShowPlanForm] = React.useState(false);
   const [selectedOrderTask, setSelectedOrderTask] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [deleting, setDeleting] = React.useState(false);
@@ -69,10 +65,9 @@ export function Tasks({ currentUser, goTo, initialView = "week" }) {
   const load = React.useCallback(() => {
     setLoading(true);
     setError("");
-    Promise.all([api.tasks(), api.workSchedules(), api.staff(), api.workOrderSummary(weekStart)])
-      .then(([taskRows, scheduleRows, staffRows, summaryRows]) => {
+    Promise.all([api.tasks(), api.staff(), api.workOrderSummary(weekStart)])
+      .then(([taskRows, staffRows, summaryRows]) => {
         setTasks(taskRows);
-        setSchedules(scheduleRows);
         setStaff(staffRows.filter((person) => person.active));
         setOrderSummary(summaryRows);
       })
@@ -107,39 +102,6 @@ export function Tasks({ currentUser, goTo, initialView = "week" }) {
       setError(err.message);
       load();
     }
-  };
-
-  const submitPlan = async (event) => {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const payload = { ...plan, assignedStaffId: plan.assignedStaffId || null };
-      if (editingPlanId) await api.updateWorkSchedule(editingPlanId, payload);
-      else await api.createWorkSchedule(payload);
-      setPlan(EMPTY_PLAN);
-      setEditingPlanId(null);
-      setShowPlanForm(false);
-      load();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const editPlan = (schedule) => {
-    setPlan({
-      name: schedule.name,
-      supplier: schedule.supplier || "",
-      weekdays: schedule.weekdays || [],
-      departments: schedule.departments || ["Total order"],
-      notes: schedule.notes || "",
-      assignedStaffId: schedule.assignedStaffId || "",
-      active: schedule.active
-    });
-    setEditingPlanId(schedule.id);
-    setShowPlanForm(true);
   };
 
   const createQuickTask = async (event) => {
@@ -195,24 +157,20 @@ export function Tasks({ currentUser, goTo, initialView = "week" }) {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow={view === "plans" ? "Task setup" : "Station operations"}
-        title={view === "plans" ? "Order Plans" : "Work"}
-        description={view === "plans" ? "Create recurring supplier orders once. Enabled plans generate the correct tasks every week." : "Complete this week's enabled gas, supplier order and shop tasks."}
-        meta={view === "plans" ? (
-          <button type="button" onClick={() => goTo?.("settings-tasks")} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-fuel-mist px-4 text-sm font-black text-fuel-green">
-            <ArrowLeft size={17} /> Back to Task Settings
-          </button>
-        ) : <Pill><CalendarCheck2 size={18} /> {formatWeek(weekStart, weekEnd)}</Pill>}
+        eyebrow="Station operations"
+        title="Work"
+        description="Complete this week's enabled gas, supplier order and shop tasks."
+        meta={<Pill><CalendarCheck2 size={18} /> {formatWeek(weekStart, weekEnd)}</Pill>}
       />
 
-      {view !== "plans" && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Due today" value={dueToday} tone={dueToday ? "blue" : "slate"} />
         <Metric label="Overdue" value={overdue} tone={overdue ? "red" : "slate"} />
         <Metric label="Weekly order value" value={formatCurrency(weeklyOrderTotal)} tone="amber" />
         <Metric label="Completed" value={doneThisWeek.length} tone="green" />
-      </div>}
+      </div>
 
-      {view !== "plans" && <div className="flex gap-1 overflow-x-auto rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm">
+      <div className="flex gap-1 overflow-x-auto rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm">
         <ViewButton active={view === "week"} icon={CalendarCheck2} label="This week" onClick={() => setView("week")} />
         <ViewButton active={view === "other"} icon={ClipboardList} label="Other tasks" onClick={() => setView("other")} />
         {isAdmin && (
@@ -220,7 +178,7 @@ export function Tasks({ currentUser, goTo, initialView = "week" }) {
             <SlidersHorizontal size={17} /> Task settings
           </button>
         )}
-      </div>}
+      </div>
 
       {error && <p className="rounded-lg border border-red-100 bg-red-50 p-3 font-bold text-red-700">{error}</p>}
 
@@ -235,29 +193,6 @@ export function Tasks({ currentUser, goTo, initialView = "week" }) {
             orderSummary={orderSummary}
             today={today}
             weekStart={weekStart}
-          />
-        )}
-
-        {view === "plans" && (
-          <OrderPlans
-            currentUser={currentUser}
-            editPlan={editPlan}
-            editingPlanId={editingPlanId}
-            isAdmin={isAdmin}
-            onCancel={() => { setPlan(EMPTY_PLAN); setEditingPlanId(null); setShowPlanForm(false); }}
-            onDelete={(schedule) => setDeleteTarget({ type: "schedule", item: schedule })}
-            onNew={(preset = null) => {
-              setPlan(preset ? { ...EMPTY_PLAN, ...preset, departments: [...preset.departments] } : EMPTY_PLAN);
-              setEditingPlanId(null);
-              setShowPlanForm(true);
-            }}
-            plan={plan}
-            saving={saving}
-            schedules={schedules}
-            setPlan={setPlan}
-            showPlanForm={showPlanForm}
-            staff={staff}
-            submitPlan={submitPlan}
           />
         )}
 
@@ -287,7 +222,7 @@ export function Tasks({ currentUser, goTo, initialView = "week" }) {
   );
 }
 
-function DeleteConfirmationModal({ deleting, onCancel, onConfirm, target }) {
+export function DeleteConfirmationModal({ deleting, onCancel, onConfirm, target }) {
   const cancelRef = React.useRef(null);
 
   React.useEffect(() => {
@@ -469,7 +404,7 @@ function WorkRow({ goTo, onOpenOrder, onUpdate, task }) {
   );
 }
 
-function OrderPlans(props) {
+export function OrderPlans(props) {
   const { editPlan, editingPlanId, isAdmin, onCancel, onDelete, onNew, plan, saving, schedules, setPlan, showPlanForm, staff, submitPlan } = props;
   return (
     <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
@@ -569,8 +504,8 @@ function OrderPlans(props) {
           </Card>
         ) : isAdmin ? (
           <Card>
-            <h3 className="font-black">Suggested categories</h3>
-            <p className="mt-1 text-sm font-semibold text-slate-500">Use only the ones your station needs.</p>
+            <h3 className="font-black">Default weekly plans</h3>
+            <p className="mt-1 text-sm font-semibold text-slate-500">Choose a template, select its ordering days and save it once.</p>
             <div className="mt-3 space-y-2">
               {SUGGESTED_ORDERS.filter((preset) => !schedules.some((schedule) => schedule.name.toLowerCase() === preset.name.toLowerCase() && (schedule.supplier || "").toLowerCase() === preset.supplier.toLowerCase())).map((preset) => (
                 <button key={`${preset.supplier}-${preset.name}`} onClick={() => onNew(preset)} className="flex w-full items-center justify-between rounded-lg border border-fuel-line px-3 py-2 text-left text-sm font-black hover:bg-fuel-mist"><span>{preset.supplier ? `${preset.supplier} — ` : ""}{preset.name}</span><Plus size={16} /></button>

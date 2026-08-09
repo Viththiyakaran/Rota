@@ -4,6 +4,7 @@ import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { PageHeader, Pill, darkButton, primaryButton, softButton } from "../components/PageHeader.jsx";
+import { DeleteConfirmationModal, EMPTY_ORDER_PLAN, OrderPlans } from "./Tasks.jsx";
 
 const TIMEZONE_OPTIONS = [
   { value: "Europe/London", label: "United Kingdom - Europe/London" },
@@ -39,6 +40,12 @@ const DEFAULT_SHIFT_RANGE_PRESETS = [
   { label: "Evening", startTime: "18:00", endTime: "22:00" }
 ];
 const UK_ROTA_RULES_CACHE_KEY = "localops.ukRotaRules";
+const newOrderPlan = (preset = {}) => ({
+  ...EMPTY_ORDER_PLAN,
+  ...preset,
+  weekdays: [...(preset.weekdays || [])],
+  departments: [...(preset.departments || EMPTY_ORDER_PLAN.departments)]
+});
 const SETTINGS_SECTIONS = [
   { id: "business", label: "Business", description: "Branding and optional features", icon: Building2 },
   { id: "rota", label: "Rota rules", description: "Hours, presets and planning rules", icon: SlidersHorizontal },
@@ -68,7 +75,7 @@ function cacheUkRules(rules) {
   }
 }
 
-export function Settings({ branding, goTo, initialSection = "business", onBrandingSaved }) {
+export function Settings({ branding, initialSection = "business", onBrandingSaved }) {
   const [activeSection, setActiveSection] = React.useState(initialSection);
   const [form, setForm] = React.useState(branding);
   const [users, setUsers] = React.useState([]);
@@ -85,6 +92,12 @@ export function Settings({ branding, goTo, initialSection = "business", onBrandi
   const [gasStockConfig, setGasStockConfig] = React.useState({ enabled: true, weekday: 6, assignedStaffId: null, products: [] });
   const [orderSchedules, setOrderSchedules] = React.useState([]);
   const [savingScheduleId, setSavingScheduleId] = React.useState(null);
+  const [orderPlan, setOrderPlan] = React.useState(newOrderPlan);
+  const [editingOrderPlanId, setEditingOrderPlanId] = React.useState(null);
+  const [showOrderPlanForm, setShowOrderPlanForm] = React.useState(false);
+  const [showOrderManager, setShowOrderManager] = React.useState(false);
+  const [deleteOrderTarget, setDeleteOrderTarget] = React.useState(null);
+  const [deletingOrderPlan, setDeletingOrderPlan] = React.useState(false);
   const [savedUkRules, setSavedUkRules] = React.useState(readCachedUkRules);
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "" });
   const [error, setError] = React.useState("");
@@ -216,6 +229,61 @@ export function Settings({ branding, goTo, initialSection = "business", onBrandi
       setError(err.message);
     } finally {
       setSavingScheduleId(null);
+    }
+  };
+
+  const saveOrderPlan = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const payload = { ...orderPlan, assignedStaffId: orderPlan.assignedStaffId || null };
+      if (editingOrderPlanId) await api.updateWorkSchedule(editingOrderPlanId, payload);
+      else await api.createWorkSchedule(payload);
+      setOrderPlan(newOrderPlan());
+      setEditingOrderPlanId(null);
+      setShowOrderPlanForm(false);
+      showSavedPopup(`Weekly order plan ${editingOrderPlanId ? "updated" : "created"}.`);
+      loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const editOrderPlan = (schedule) => {
+    setOrderPlan(newOrderPlan({
+      name: schedule.name,
+      supplier: schedule.supplier || "",
+      weekdays: schedule.weekdays || [],
+      departments: schedule.departments || ["Total order"],
+      notes: schedule.notes || "",
+      assignedStaffId: schedule.assignedStaffId || "",
+      active: schedule.active
+    }));
+    setEditingOrderPlanId(schedule.id);
+    setShowOrderPlanForm(true);
+  };
+
+  const confirmDeleteOrderPlan = async () => {
+    if (!deleteOrderTarget) return;
+    setDeletingOrderPlan(true);
+    setError("");
+    try {
+      await api.deleteWorkSchedule(deleteOrderTarget.item.id);
+      setDeleteOrderTarget(null);
+      setOrderPlan(newOrderPlan());
+      setEditingOrderPlanId(null);
+      setShowOrderPlanForm(false);
+      showSavedPopup("Weekly order plan deleted. Completed order history was kept.");
+      loadAdminData();
+    } catch (err) {
+      setError(err.message);
+      setDeleteOrderTarget(null);
+    } finally {
+      setDeletingOrderPlan(false);
     }
   };
 
@@ -834,9 +902,9 @@ export function Settings({ branding, goTo, initialSection = "business", onBrandi
           <SectionHeader
             icon={<ShoppingCart size={20} />}
             title="Order Tasks"
-            description="Enable or pause the weekly tasks created from your order plans."
+            description="Create each weekly order plan once, then enable, pause or update it here."
           />
-          <div className="space-y-3 px-5 pb-5">
+          {!showOrderManager ? <div className="space-y-3 px-5 pb-5">
             {orderSchedules.length ? orderSchedules.map((schedule) => (
               <div key={schedule.id} className="flex items-start justify-between gap-4 rounded-lg border border-fuel-line bg-white p-4">
                 <div className="min-w-0">
@@ -870,10 +938,44 @@ export function Settings({ branding, goTo, initialSection = "business", onBrandi
                 <p className="mt-1 text-sm font-semibold text-slate-500">Create an order plan once, then its enable switch will appear here.</p>
               </div>
             )}
-            <button type="button" className={softButton} onClick={() => goTo?.("tasks-plans")}>
-              <ShoppingCart size={18} /> Open Order Plans
+            <button type="button" className={primaryButton} onClick={() => setShowOrderManager(true)}>
+              <ShoppingCart size={18} /> Manage Weekly Order Plans
             </button>
-          </div>
+          </div> : (
+            <div className="space-y-4 px-5 pb-5">
+              <button type="button" className={softButton} onClick={() => {
+                setShowOrderManager(false);
+                setOrderPlan(newOrderPlan());
+                setEditingOrderPlanId(null);
+                setShowOrderPlanForm(false);
+              }}>
+                Back to task switches
+              </button>
+              <OrderPlans
+                editPlan={editOrderPlan}
+                editingPlanId={editingOrderPlanId}
+                isAdmin
+                onCancel={() => {
+                  setOrderPlan(newOrderPlan());
+                  setEditingOrderPlanId(null);
+                  setShowOrderPlanForm(false);
+                }}
+                onDelete={(schedule) => setDeleteOrderTarget({ type: "schedule", item: schedule })}
+                onNew={(preset = null) => {
+                  setOrderPlan(newOrderPlan(preset || {}));
+                  setEditingOrderPlanId(null);
+                  setShowOrderPlanForm(true);
+                }}
+                plan={orderPlan}
+                saving={saving}
+                schedules={orderSchedules}
+                setPlan={setOrderPlan}
+                showPlanForm={showOrderPlanForm}
+                staff={staff}
+                submitPlan={saveOrderPlan}
+              />
+            </div>
+          )}
         </Card>
         </div>
       ) : null}
@@ -935,6 +1037,12 @@ export function Settings({ branding, goTo, initialSection = "business", onBrandi
         </div>
       </Card>
       ) : null}
+      <DeleteConfirmationModal
+        deleting={deletingOrderPlan}
+        onCancel={() => setDeleteOrderTarget(null)}
+        onConfirm={confirmDeleteOrderPlan}
+        target={deleteOrderTarget}
+      />
     </div>
   );
 }
