@@ -14,7 +14,6 @@ import {
   Save,
   Send,
   ShoppingCart,
-  SlidersHorizontal,
   Trash2,
   UserRound,
   X
@@ -173,11 +172,6 @@ export function Tasks({ currentUser, goTo }) {
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm">
         <ViewButton active={view === "week"} icon={CalendarCheck2} label="This week" onClick={() => setView("week")} />
         <ViewButton active={view === "other"} icon={ClipboardList} label="Other tasks" onClick={() => setView("other")} />
-        {isAdmin && (
-          <button type="button" onClick={() => goTo?.("settings-tasks")} className="flex min-w-max flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-black text-fuel-green transition hover:bg-fuel-mist">
-            <SlidersHorizontal size={17} /> Task settings
-          </button>
-        )}
       </div>
 
       {error && <p className="rounded-lg border border-red-100 bg-red-50 p-3 font-bold text-red-700">{error}</p>}
