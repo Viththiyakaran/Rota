@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  ArrowLeft,
   CalendarCheck2,
   Check,
   CheckCircle2,
@@ -7,8 +8,11 @@ import {
   ClipboardList,
   PackageCheck,
   Pencil,
+  PoundSterling,
   Plus,
   RotateCw,
+  Save,
+  Send,
   ShoppingCart,
   Trash2,
   UserRound
@@ -29,8 +33,15 @@ const DAYS = [
   { value: 6, short: "Sat", label: "Saturday" },
   { value: 0, short: "Sun", label: "Sunday" }
 ];
-const SUGGESTED_ORDERS = ["Main supply", "Vape", "Medicine", "Sweets & confectionery"];
-const EMPTY_PLAN = { name: "", supplier: "", weekdays: [], notes: "", assignedStaffId: "", active: true };
+const MORRISONS_DEPARTMENTS = ["Ambient", "Tobacco", "Chilled", "Frozen"];
+const SUGGESTED_ORDERS = [
+  { name: "1st Order", supplier: "Morrisons", departments: MORRISONS_DEPARTMENTS },
+  { name: "2nd Order", supplier: "Morrisons", departments: MORRISONS_DEPARTMENTS },
+  { name: "Vape", supplier: "", departments: ["Total order"] },
+  { name: "Medicine", supplier: "", departments: ["Total order"] },
+  { name: "Sweets & confectionery", supplier: "", departments: ["Total order"] }
+];
+const EMPTY_PLAN = { name: "", supplier: "", weekdays: [], departments: ["Total order"], notes: "", assignedStaffId: "", active: true };
 
 export function Tasks({ currentUser, goTo }) {
   const today = React.useMemo(() => toDateInputValue(new Date()), []);
@@ -39,10 +50,12 @@ export function Tasks({ currentUser, goTo }) {
   const [view, setView] = React.useState("week");
   const [tasks, setTasks] = React.useState([]);
   const [schedules, setSchedules] = React.useState([]);
+  const [orderSummary, setOrderSummary] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
   const [plan, setPlan] = React.useState(EMPTY_PLAN);
   const [editingPlanId, setEditingPlanId] = React.useState(null);
   const [showPlanForm, setShowPlanForm] = React.useState(false);
+  const [selectedOrderTask, setSelectedOrderTask] = React.useState(null);
   const [quickTask, setQuickTask] = React.useState({ title: "", dueDate: today, assignedStaffId: "" });
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -52,15 +65,16 @@ export function Tasks({ currentUser, goTo }) {
   const load = React.useCallback(() => {
     setLoading(true);
     setError("");
-    Promise.all([api.tasks(), api.workSchedules(), api.staff()])
-      .then(([taskRows, scheduleRows, staffRows]) => {
+    Promise.all([api.tasks(), api.workSchedules(), api.staff(), api.workOrderSummary(weekStart)])
+      .then(([taskRows, scheduleRows, staffRows, summaryRows]) => {
         setTasks(taskRows);
         setSchedules(scheduleRows);
         setStaff(staffRows.filter((person) => person.active));
+        setOrderSummary(summaryRows);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [weekStart]);
 
   React.useEffect(() => load(), [load]);
 
@@ -73,11 +87,12 @@ export function Tasks({ currentUser, goTo }) {
   const doneThisWeek = tasks.filter((task) =>
     task.status === "done" && task.dueDate >= weekStart && task.dueDate <= weekEnd
   );
-  const orderTasks = activeWeekTasks.filter((task) => task.taskType === "recurring_order");
-  const gasTasks = activeWeekTasks.filter((task) => task.taskType === "gas_stock_count");
   const manualTasks = tasks.filter((task) => !task.taskType);
   const dueToday = activeWeekTasks.filter((task) => task.dueDate === today).length;
   const overdue = activeWeekTasks.filter((task) => task.dueDate < today).length;
+  const weeklyOrderTotal = orderSummary
+    .filter((order) => order.submissionStatus === "submitted")
+    .reduce((sum, order) => sum + Number(order.total || 0), 0);
 
   const updateTask = async (task, payload) => {
     setError("");
@@ -114,6 +129,7 @@ export function Tasks({ currentUser, goTo }) {
       name: schedule.name,
       supplier: schedule.supplier || "",
       weekdays: schedule.weekdays || [],
+      departments: schedule.departments || ["Total order"],
       notes: schedule.notes || "",
       assignedStaffId: schedule.assignedStaffId || "",
       active: schedule.active
@@ -137,6 +153,19 @@ export function Tasks({ currentUser, goTo }) {
     }
   };
 
+  if (selectedOrderTask) {
+    return (
+      <OrderEntry
+        onBack={() => setSelectedOrderTask(null)}
+        onSaved={(viewData) => {
+          setTasks((rows) => rows.map((row) => row.id === viewData.task.id ? viewData.task : row));
+          api.workOrderSummary(weekStart).then(setOrderSummary).catch(() => {});
+        }}
+        task={selectedOrderTask}
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -149,7 +178,7 @@ export function Tasks({ currentUser, goTo }) {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Due today" value={dueToday} tone={dueToday ? "blue" : "slate"} />
         <Metric label="Overdue" value={overdue} tone={overdue ? "red" : "slate"} />
-        <Metric label="Orders this week" value={orderTasks.length} tone="amber" />
+        <Metric label="Weekly order value" value={formatCurrency(weeklyOrderTotal)} tone="amber" />
         <Metric label="Completed" value={doneThisWeek.length} tone="green" />
       </div>
 
@@ -167,7 +196,9 @@ export function Tasks({ currentUser, goTo }) {
             activeTasks={activeWeekTasks}
             doneTasks={doneThisWeek}
             goTo={goTo}
+            onOpenOrder={setSelectedOrderTask}
             onUpdate={updateTask}
+            orderSummary={orderSummary}
             today={today}
             weekStart={weekStart}
           />
@@ -184,7 +215,11 @@ export function Tasks({ currentUser, goTo }) {
               if (!window.confirm(`Delete the ${schedule.name} order plan?`)) return;
               await api.deleteWorkSchedule(schedule.id).then(load).catch((err) => setError(err.message));
             }}
-            onNew={(name = "") => { setPlan({ ...EMPTY_PLAN, name }); setEditingPlanId(null); setShowPlanForm(true); }}
+            onNew={(preset = null) => {
+              setPlan(preset ? { ...EMPTY_PLAN, ...preset, departments: [...preset.departments] } : EMPTY_PLAN);
+              setEditingPlanId(null);
+              setShowPlanForm(true);
+            }}
             plan={plan}
             saving={saving}
             schedules={schedules}
@@ -217,7 +252,7 @@ export function Tasks({ currentUser, goTo }) {
   );
 }
 
-function ThisWeek({ activeTasks, doneTasks, goTo, onUpdate, today, weekStart }) {
+function ThisWeek({ activeTasks, doneTasks, goTo, onOpenOrder, onUpdate, orderSummary, today, weekStart }) {
   const overdue = activeTasks.filter((task) => task.dueDate < today);
   const groups = [
     ...(overdue.length ? [{ key: "overdue", label: "Overdue", date: "Needs attention", tasks: overdue }] : []),
@@ -232,7 +267,9 @@ function ThisWeek({ activeTasks, doneTasks, goTo, onUpdate, today, weekStart }) 
     }).filter((group) => group.tasks.length)
   ];
 
-  if (!groups.length && !doneTasks.length) {
+  const submittedOrders = orderSummary.filter((order) => order.submissionStatus === "submitted");
+
+  if (!groups.length && !doneTasks.length && !submittedOrders.length) {
     return (
       <Card className="text-center">
         <CheckCircle2 className="mx-auto text-emerald-600" size={38} />
@@ -244,6 +281,22 @@ function ThisWeek({ activeTasks, doneTasks, goTo, onUpdate, today, weekStart }) 
 
   return (
     <div className="space-y-4">
+      {submittedOrders.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-xs font-black uppercase tracking-wide text-amber-700">Order totals</p><h3 className="mt-1 text-lg font-black">This week</h3></div>
+            <p className="text-2xl font-black text-fuel-ink">{formatCurrency(submittedOrders.reduce((sum, order) => sum + Number(order.total || 0), 0))}</p>
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {submittedOrders.map((order) => (
+              <div key={order.taskId} className="rounded-lg border border-amber-100 bg-white px-3 py-2">
+                <p className="text-xs font-bold text-slate-500">{order.supplier ? `${order.supplier} · ` : ""}{order.orderName}</p>
+                <p className="mt-0.5 font-black text-fuel-ink">{formatCurrency(order.total)}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
       {groups.map((group) => (
         <section key={group.key} className={`overflow-hidden rounded-xl border bg-white shadow-sm ${group.key === "overdue" ? "border-red-200" : "border-fuel-line"}`}>
           <div className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${group.key === "overdue" ? "border-red-100 bg-red-50" : "border-fuel-line bg-slate-50/70"}`}>
@@ -251,7 +304,7 @@ function ThisWeek({ activeTasks, doneTasks, goTo, onUpdate, today, weekStart }) 
             <span className="text-xs font-bold text-slate-500">{group.date} · {group.tasks.length}</span>
           </div>
           <div className="divide-y divide-slate-100">
-            {group.tasks.map((task) => <WorkRow key={task.id} goTo={goTo} onUpdate={onUpdate} task={task} />)}
+            {group.tasks.map((task) => <WorkRow key={task.id} goTo={goTo} onOpenOrder={onOpenOrder} onUpdate={onUpdate} task={task} />)}
           </div>
         </section>
       ))}
@@ -261,7 +314,7 @@ function ThisWeek({ activeTasks, doneTasks, goTo, onUpdate, today, weekStart }) 
             <span className="inline-flex items-center gap-2"><CheckCircle2 size={18} /> Completed this week ({doneTasks.length})</span>
           </summary>
           <div className="divide-y divide-slate-100 border-t border-fuel-line">
-            {doneTasks.map((task) => <WorkRow key={task.id} goTo={goTo} onUpdate={onUpdate} task={task} />)}
+            {doneTasks.map((task) => <WorkRow key={task.id} goTo={goTo} onOpenOrder={onOpenOrder} onUpdate={onUpdate} task={task} />)}
           </div>
         </details>
       )}
@@ -269,7 +322,7 @@ function ThisWeek({ activeTasks, doneTasks, goTo, onUpdate, today, weekStart }) 
   );
 }
 
-function WorkRow({ goTo, onUpdate, task }) {
+function WorkRow({ goTo, onOpenOrder, onUpdate, task }) {
   const isGas = task.taskType === "gas_stock_count";
   const isOrder = task.taskType === "recurring_order";
   const Icon = isGas ? PackageCheck : isOrder ? ShoppingCart : ClipboardList;
@@ -291,6 +344,10 @@ function WorkRow({ goTo, onUpdate, task }) {
       {isGas && task.status !== "done" ? (
         <button type="button" onClick={() => goTo?.("gas-stock")} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 text-sm font-black text-white">
           Open count <ChevronRight size={17} />
+        </button>
+      ) : isOrder ? (
+        <button type="button" onClick={() => onOpenOrder?.(task)} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-black ${task.status === "done" ? "bg-slate-100 text-slate-700" : "bg-amber-500 text-white"}`}>
+          {task.status === "done" ? "View order" : "Open order"} <ChevronRight size={17} />
         </button>
       ) : (
         <button
@@ -337,6 +394,7 @@ function OrderPlans(props) {
                   {frequencyLabel(schedule.weekdays)} · {schedule.weekdays.map(dayShort).join(", ")}
                   {schedule.supplier ? ` · ${schedule.supplier}` : ""}
                 </p>
+                <p className="mt-1 text-xs font-bold text-slate-400">{schedule.departments.join(" · ")}</p>
                 {schedule.assignedStaffName && <p className="mt-2 text-xs font-bold text-slate-500">Owner: {schedule.assignedStaffName}</p>}
               </div>
               {isAdmin && (
@@ -370,6 +428,25 @@ function OrderPlans(props) {
                 </div>
                 <p className="mt-2 text-xs font-bold text-slate-500">{plan.weekdays.length ? frequencyLabel(plan.weekdays) : "Choose at least one day"}</p>
               </Field>
+              <Field label="Order value sections">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPlan({ ...plan, departments: ["Total order"] })}
+                    className={`rounded-lg border px-3 py-2 text-sm font-black ${plan.departments.length === 1 && plan.departments[0] === "Total order" ? "border-fuel-green bg-fuel-green text-white" : "border-fuel-line text-slate-600"}`}
+                  >
+                    Single total
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPlan({ ...plan, departments: MORRISONS_DEPARTMENTS })}
+                    className={`rounded-lg border px-3 py-2 text-sm font-black ${MORRISONS_DEPARTMENTS.every((name) => plan.departments.includes(name)) ? "border-fuel-green bg-fuel-green text-white" : "border-fuel-line text-slate-600"}`}
+                  >
+                    Morrisons 4 sections
+                  </button>
+                </div>
+                <p className="mt-2 text-xs font-bold text-slate-500">{plan.departments.join(" · ")}</p>
+              </Field>
               <Field label="Assign to (optional)">
                 <select className={inputClass} value={plan.assignedStaffId} onChange={(event) => setPlan({ ...plan, assignedStaffId: event.target.value })}>
                   <option value="">Anyone</option>
@@ -388,13 +465,135 @@ function OrderPlans(props) {
             <h3 className="font-black">Suggested categories</h3>
             <p className="mt-1 text-sm font-semibold text-slate-500">Use only the ones your station needs.</p>
             <div className="mt-3 space-y-2">
-              {SUGGESTED_ORDERS.filter((name) => !schedules.some((schedule) => schedule.name.toLowerCase() === name.toLowerCase())).map((name) => (
-                <button key={name} onClick={() => onNew(name)} className="flex w-full items-center justify-between rounded-lg border border-fuel-line px-3 py-2 text-left text-sm font-black hover:bg-fuel-mist">{name}<Plus size={16} /></button>
+              {SUGGESTED_ORDERS.filter((preset) => !schedules.some((schedule) => schedule.name.toLowerCase() === preset.name.toLowerCase() && (schedule.supplier || "").toLowerCase() === preset.supplier.toLowerCase())).map((preset) => (
+                <button key={`${preset.supplier}-${preset.name}`} onClick={() => onNew(preset)} className="flex w-full items-center justify-between rounded-lg border border-fuel-line px-3 py-2 text-left text-sm font-black hover:bg-fuel-mist"><span>{preset.supplier ? `${preset.supplier} — ` : ""}{preset.name}</span><Plus size={16} /></button>
               ))}
             </div>
           </Card>
         ) : null}
       </aside>
+    </div>
+  );
+}
+
+function OrderEntry({ onBack, onSaved, task }) {
+  const [viewData, setViewData] = React.useState(null);
+  const [form, setForm] = React.useState({ amounts: {}, reference: "", notes: "" });
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [message, setMessage] = React.useState("");
+
+  React.useEffect(() => {
+    setLoading(true);
+    api.workOrder(task.id)
+      .then((data) => {
+        setViewData(data);
+        setForm({
+          amounts: Object.fromEntries(data.schedule.departments.map((department) => [department, data.submission.amounts[department] || ""])),
+          reference: data.submission.reference || "",
+          notes: data.submission.notes || ""
+        });
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [task.id]);
+
+  const total = Object.values(form.amounts).reduce((sum, value) => {
+    const amount = Number(value);
+    return sum + (Number.isFinite(amount) ? amount : 0);
+  }, 0);
+
+  const save = async (submit) => {
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const saved = submit
+        ? await api.submitWorkOrder(task.id, form)
+        : await api.saveWorkOrderDraft(task.id, form);
+      setViewData(saved);
+      setForm({
+        amounts: Object.fromEntries(saved.schedule.departments.map((department) => [department, saved.submission.amounts[department] || ""])),
+        reference: saved.submission.reference || "",
+        notes: saved.submission.notes || ""
+      });
+      onSaved(saved);
+      setMessage(submit ? "Order submitted and task completed." : "Draft saved.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <button type="button" onClick={onBack} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-black text-fuel-green shadow-sm"><ArrowLeft size={17} /> Back to Work</button>
+      <PageHeader
+        eyebrow={viewData?.schedule?.supplier || "Supplier order"}
+        title={viewData?.schedule?.name || task.title.replace(/^Order\s+—\s+/, "")}
+        description="Enter the order value for each section. The total is calculated automatically."
+        meta={<Pill tone={viewData?.submission?.status === "submitted" ? "green" : "amber"}>{viewData?.submission?.status === "submitted" ? "Submitted" : viewData?.submission?.status === "draft" ? "Draft" : "Not started"}</Pill>}
+      />
+
+      <Status loading={loading} error={error} empty={false}>
+        {viewData && (
+          <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
+            <Card>
+              <div className="flex items-center gap-3 border-b border-fuel-line pb-4">
+                <span className="grid h-11 w-11 place-items-center rounded-xl bg-amber-50 text-amber-700"><PoundSterling size={22} /></span>
+                <div><h2 className="text-xl font-black">Order values</h2><p className="text-sm font-semibold text-slate-500">Due {formatDate(viewData.task.dueDate)}</p></div>
+              </div>
+              <div className="mt-4 space-y-3">
+                {viewData.schedule.departments.map((department) => (
+                  <label key={department} className="grid gap-2 rounded-xl border border-fuel-line bg-slate-50 p-3 sm:grid-cols-[1fr_190px] sm:items-center">
+                    <span className="font-black text-fuel-ink">{department}</span>
+                    <span className="flex min-h-12 items-center rounded-lg border border-fuel-line bg-white px-3 focus-within:border-fuel-green focus-within:ring-2 focus-within:ring-blue-100">
+                      <span className="font-black text-slate-400">£</span>
+                      <input
+                        aria-label={`${department} order value`}
+                        className="min-w-0 flex-1 border-0 bg-transparent px-2 text-right text-lg font-black outline-none"
+                        inputMode="decimal"
+                        min="0"
+                        step="0.01"
+                        type="number"
+                        value={form.amounts[department] ?? ""}
+                        onChange={(event) => setForm({ ...form, amounts: { ...form.amounts, [department]: event.target.value } })}
+                      />
+                    </span>
+                  </label>
+                ))}
+              </div>
+              <div className="mt-4 flex items-center justify-between rounded-xl bg-fuel-deep px-4 py-4 text-white">
+                <span className="text-sm font-black uppercase tracking-wide text-blue-100">Order total</span>
+                <span className="text-2xl font-black">{formatCurrency(total)}</span>
+              </div>
+            </Card>
+
+            <div className="space-y-4">
+              <Card>
+                <h3 className="font-black">Order details</h3>
+                <div className="mt-4 space-y-4">
+                  <Field label="Order/reference number"><input className={inputClass} placeholder="Optional" value={form.reference} onChange={(event) => setForm({ ...form, reference: event.target.value })} /></Field>
+                  <Field label="Notes"><textarea className={`${inputClass} min-h-24`} placeholder="Optional note" value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></Field>
+                </div>
+                {viewData.submission.submittedAt && (
+                  <div className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm font-bold text-emerald-800">
+                    Submitted by {viewData.submission.submittedByUsername || "staff"} on {formatDateTime(viewData.submission.submittedAt)}
+                  </div>
+                )}
+                {message && <p className="mt-4 rounded-lg bg-blue-50 p-3 text-sm font-bold text-blue-700">{message}</p>}
+                {!viewData.canEdit && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm font-bold text-amber-800">This order is assigned to {viewData.task.assignedStaffName}.</p>}
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+                  <button type="button" disabled={saving || !viewData.canEdit} onClick={() => save(false)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-fuel-mist px-4 font-black text-fuel-green disabled:opacity-50"><Save size={18} /> Save draft</button>
+                  <button type="button" disabled={saving || !viewData.canEdit} onClick={() => save(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 font-black text-white disabled:opacity-50"><Send size={18} /> {saving ? "Saving..." : "Submit order"}</button>
+                </div>
+              </Card>
+            </div>
+          </div>
+        )}
+      </Status>
     </div>
   );
 }
@@ -466,4 +665,14 @@ function formatDate(value) {
 
 function formatWeek(start, end) {
   return `${formatDate(start)} – ${formatDate(end)}`;
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(Number(value) || 0);
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
 }

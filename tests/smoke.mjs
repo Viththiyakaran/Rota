@@ -47,6 +47,7 @@ async function runSmoke() {
   assert(routeList.endpoints?.includes("GET /api/staff"), "api route list works");
   assert(routeList.endpoints?.includes("PUT /api/sales"), "sales route is listed");
   assert(routeList.endpoints?.includes("GET /api/work-schedules"), "work schedules route is listed");
+  assert(routeList.endpoints?.includes("POST /api/work-orders/:taskId/submit"), "work order submission route is listed");
 
   const publicBranding = await request("/api/settings/branding");
   assert(publicBranding.businessName, "public branding works");
@@ -63,9 +64,10 @@ async function runSmoke() {
   const orderPlan = await request("/api/work-schedules", {
     cookie: admin.cookie,
     method: "POST",
-    body: { name: "Vape", supplier: "Test supplier", weekdays: [1, 5], notes: "Order before noon" }
+    body: { name: "1st Order", supplier: "Morrisons", weekdays: [1, 5], departments: ["Ambient", "Tobacco", "Chilled", "Frozen"], notes: "Order before noon" }
   });
-  assert(orderPlan.name === "Vape" && orderPlan.weekdays.length === 2, "recurring order plan saves selected weekdays");
+  assert(orderPlan.name === "1st Order" && orderPlan.weekdays.length === 2, "recurring order plan saves selected weekdays");
+  assert(orderPlan.departments.length === 4, "Morrisons order plan saves four value sections");
   const orderPlans = await request("/api/work-schedules", { cookie: admin.cookie });
   assert(orderPlans.some((plan) => plan.id === orderPlan.id), "recurring order plan reloads");
   const tasksWithOrders = await request("/api/tasks", { cookie: admin.cookie });
@@ -78,6 +80,23 @@ async function runSmoke() {
   assert(updatedOrderPlan.weekdays.length === 3, "order frequency can change to three times weekly");
   const tasksAfterPlanUpdate = await request("/api/tasks", { cookie: admin.cookie });
   assert(tasksAfterPlanUpdate.filter((task) => task.taskType === "recurring_order" && task.linkedRecordId === orderPlan.id).length === 3, "changing order days regenerates the current week");
+  const orderTask = tasksAfterPlanUpdate.find((task) => task.taskType === "recurring_order" && task.linkedRecordId === orderPlan.id);
+  const emptyOrder = await request(`/api/work-orders/${orderTask.id}`, { cookie: admin.cookie });
+  assert(emptyOrder.schedule.departments.length === 4 && emptyOrder.submission.status === "not_started", "new Morrisons order opens with four sections");
+  const draftOrder = await request(`/api/work-orders/${orderTask.id}/draft`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { amounts: { Ambient: 1069.96, Tobacco: 1464.21, Chilled: 115.21, Frozen: 64.42 }, reference: "MOR-001" }
+  });
+  assert(draftOrder.submission.status === "draft" && draftOrder.submission.total === 2713.8, "order draft saves values and calculates total");
+  const submittedOrder = await request(`/api/work-orders/${orderTask.id}/submit`, {
+    cookie: admin.cookie,
+    method: "POST",
+    body: { amounts: draftOrder.submission.amounts, reference: "MOR-001", notes: "Submitted in portal" }
+  });
+  assert(submittedOrder.submission.status === "submitted" && submittedOrder.task.status === "done", "submitting an order completes its weekly task");
+  const orderSummary = await request("/api/work-orders/summary", { cookie: admin.cookie });
+  assert(orderSummary.some((order) => order.taskId === orderTask.id && order.total === 2713.8), "weekly order summary includes the submitted total");
   await request(`/api/work-schedules/${orderPlan.id}`, { cookie: admin.cookie, method: "DELETE" });
 
   const savedUkRules = await request("/api/settings/uk-rules", {

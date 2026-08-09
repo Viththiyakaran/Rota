@@ -175,6 +175,10 @@ app.get("/api", (_req, res) => {
       "POST /api/work-schedules",
       "PUT /api/work-schedules/:id",
       "DELETE /api/work-schedules/:id",
+      "GET /api/work-orders/:taskId",
+      "GET /api/work-orders/summary?weekStart=yyyy-mm-dd",
+      "PUT /api/work-orders/:taskId/draft",
+      "POST /api/work-orders/:taskId/submit",
       "GET /api/gas-stock/current?weekStart=yyyy-mm-dd",
       "PUT /api/gas-stock/draft",
       "POST /api/gas-stock/submit",
@@ -871,13 +875,14 @@ app.post("/api/work-schedules", requireAdmin, async (req, res, next) => {
   try {
     const schedule = await validateWorkSchedule(req.body);
     const result = await run(
-      `INSERT INTO workSchedules (name, category, supplier, weekdays, notes, active, assignedStaffId, createdBy)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO workSchedules (name, category, supplier, weekdays, departments, notes, active, assignedStaffId, createdBy)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         schedule.name,
         schedule.category,
         schedule.supplier,
         JSON.stringify(schedule.weekdays),
+        JSON.stringify(schedule.departments),
         schedule.notes,
         schedule.active ? 1 : 0,
         schedule.assignedStaffId,
@@ -899,13 +904,14 @@ app.put("/api/work-schedules/:id", requireAdmin, async (req, res, next) => {
     const schedule = await validateWorkSchedule({ ...normaliseWorkSchedule(current), ...req.body });
     await run(
       `UPDATE workSchedules
-       SET name = ?, category = ?, supplier = ?, weekdays = ?, notes = ?, active = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP
+       SET name = ?, category = ?, supplier = ?, weekdays = ?, departments = ?, notes = ?, active = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         schedule.name,
         schedule.category,
         schedule.supplier,
         JSON.stringify(schedule.weekdays),
+        JSON.stringify(schedule.departments),
         schedule.notes,
         schedule.active ? 1 : 0,
         schedule.assignedStaffId,
@@ -913,6 +919,14 @@ app.put("/api/work-schedules/:id", requireAdmin, async (req, res, next) => {
       ]
     );
     const today = datePartsInBusinessTimeZone().date;
+    await run(
+      `DELETE FROM workOrderSubmissions
+       WHERE taskId IN (
+         SELECT id FROM tasks
+         WHERE taskType = 'recurring_order' AND linkedRecordId = ? AND status != 'done' AND dueDate >= ?
+       )`,
+      [req.params.id, mondayForDate(today)]
+    );
     await run(
       `DELETE FROM tasks
        WHERE taskType = 'recurring_order' AND linkedRecordId = ? AND status != 'done' AND dueDate >= ?`,
@@ -930,10 +944,97 @@ app.delete("/api/work-schedules/:id", requireAdmin, async (req, res, next) => {
   try {
     const current = await getWorkSchedule(req.params.id);
     if (!current) return res.status(404).json({ error: "Order plan not found." });
+    await run(
+      `DELETE FROM workOrderSubmissions
+       WHERE taskId IN (SELECT id FROM tasks WHERE taskType = 'recurring_order' AND linkedRecordId = ? AND status != 'done')`,
+      [req.params.id]
+    );
     await run("DELETE FROM tasks WHERE taskType = 'recurring_order' AND linkedRecordId = ? AND status != 'done'", [req.params.id]);
     await run("DELETE FROM workSchedules WHERE id = ?", [req.params.id]);
     await addAudit(req.user.id, "delete_work_schedule", `Deleted ${current.name} order plan`);
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/work-orders/summary", async (req, res, next) => {
+  try {
+    const requestedWeek = req.query.weekStart || mondayForDate(datePartsInBusinessTimeZone().date);
+    if (!isDate(requestedWeek)) return res.status(400).json({ error: "Order summary week is invalid." });
+    const weekStart = mondayForDate(requestedWeek);
+    const rows = await all(
+      `SELECT tasks.id AS taskId, tasks.title, tasks.dueDate, tasks.status, tasks.completedAt,
+              workSchedules.name AS orderName, workSchedules.supplier,
+              workOrderSubmissions.amounts, workOrderSubmissions.status AS submissionStatus,
+              workOrderSubmissions.submittedAt, users.username AS submittedByUsername
+       FROM tasks
+       JOIN workOrderSubmissions ON workOrderSubmissions.taskId = tasks.id
+       LEFT JOIN workSchedules ON workSchedules.id = tasks.linkedRecordId
+       LEFT JOIN users ON users.id = workOrderSubmissions.submittedBy
+       WHERE tasks.taskType = 'recurring_order' AND tasks.dueDate >= ? AND tasks.dueDate <= ?
+       ORDER BY tasks.dueDate ASC, tasks.id ASC`,
+      [weekStart, addDays(weekStart, 6)]
+    );
+    res.json(rows.map((row) => {
+      let amounts = {};
+      try {
+        amounts = typeof row.amounts === "object" ? row.amounts : JSON.parse(row.amounts || "{}");
+      } catch (_error) {
+        amounts = {};
+      }
+      return {
+        ...row,
+        orderName: row.orderName || String(row.title || "").replace(/^Order\s+—\s+/, ""),
+        amounts,
+        total: Object.values(amounts).reduce((sum, amount) => sum + (Number(amount) || 0), 0),
+        submittedAt: normaliseStoredTimestamp(row.submittedAt),
+        completedAt: normaliseStoredTimestamp(row.completedAt)
+      };
+    }));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/work-orders/:taskId", async (req, res, next) => {
+  try {
+    const view = await buildWorkOrderView(req.params.taskId, req.user);
+    res.json(view);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/work-orders/:taskId/draft", async (req, res, next) => {
+  try {
+    const view = await buildWorkOrderView(req.params.taskId, req.user);
+    if (!view.canEdit) throw requestError("This order is assigned to another staff member.", 403);
+    const entry = normaliseWorkOrderPayload(req.body, view.schedule.departments);
+    await saveWorkOrderSubmission(view.task.id, entry, "draft", req.user.id);
+    if (view.task.status === "done") {
+      await run("UPDATE tasks SET status = 'todo', completedAt = NULL, updatedAt = CURRENT_TIMESTAMP WHERE id = ?", [view.task.id]);
+    }
+    await addAudit(req.user.id, "save_work_order_draft", `Saved draft for ${view.task.title}`);
+    res.json(await buildWorkOrderView(view.task.id, req.user));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/work-orders/:taskId/submit", async (req, res, next) => {
+  try {
+    const view = await buildWorkOrderView(req.params.taskId, req.user);
+    if (!view.canEdit) throw requestError("This order is assigned to another staff member.", 403);
+    const entry = normaliseWorkOrderPayload(req.body, view.schedule.departments);
+    await saveWorkOrderSubmission(view.task.id, entry, "submitted", req.user.id);
+    const completedAt = new Date().toISOString();
+    await run(
+      "UPDATE tasks SET status = 'done', completedAt = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [completedAt, view.task.id]
+    );
+    await addAudit(req.user.id, "submit_work_order", `Submitted ${view.task.title} (£${entry.total.toFixed(2)})`);
+    res.json(await buildWorkOrderView(view.task.id, req.user));
   } catch (error) {
     next(error);
   }
@@ -1105,6 +1206,7 @@ app.delete("/api/tasks/:id", requireAdmin, async (req, res, next) => {
   try {
     const current = await getTask(req.params.id);
     if (!current) return res.status(404).json({ error: "Task not found." });
+    await run("DELETE FROM workOrderSubmissions WHERE taskId = ?", [req.params.id]);
     await run("DELETE FROM tasks WHERE id = ?", [req.params.id]);
     await addAudit(req.user.id, "delete_task", `Deleted task #${req.params.id}`);
     res.status(204).send();
@@ -2383,11 +2485,19 @@ function normaliseWorkSchedule(row) {
   } catch (_error) {
     weekdays = [];
   }
+  let departments = [];
+  try {
+    const parsed = Array.isArray(row.departments) ? row.departments : JSON.parse(row.departments || "[]");
+    departments = [...new Set(parsed.map((value) => String(value || "").trim()).filter(Boolean))].slice(0, 12);
+  } catch (_error) {
+    departments = [];
+  }
   return {
     ...row,
     active: Boolean(row.active),
     assignedStaffId: row.assignedStaffId || null,
-    weekdays
+    weekdays,
+    departments: departments.length ? departments : ["Total order"]
   };
 }
 
@@ -2403,15 +2513,110 @@ async function validateWorkSchedule(value = {}) {
   if (assignedStaffId && !(await activeStaffExists(assignedStaffId))) {
     throw requestError("Order plan assignee is not an active staff member.");
   }
+  const departments = [...new Set((Array.isArray(value.departments) ? value.departments : [])
+    .map((department) => String(department || "").trim())
+    .filter(Boolean))].slice(0, 12);
   return {
     name,
     category: String(value.category || "Ordering").trim() || "Ordering",
     supplier: String(value.supplier || "").trim(),
     weekdays,
+    departments: departments.length ? departments : ["Total order"],
     notes: String(value.notes || "").trim(),
     active: value.active !== false,
     assignedStaffId
   };
+}
+
+async function buildWorkOrderView(taskId, user) {
+  const task = await getTask(taskId);
+  if (!task || task.taskType !== "recurring_order") throw requestError("Order task not found.", 404);
+  const scheduleRow = await getWorkSchedule(task.linkedRecordId);
+  let schedule = scheduleRow
+    ? normaliseWorkSchedule(scheduleRow)
+    : { id: task.linkedRecordId, name: task.title.replace(/^Order\s+—\s+/, ""), supplier: "", departments: ["Total order"], notes: "" };
+  const submissionRow = await get(
+    `SELECT workOrderSubmissions.*, users.username AS submittedByUsername
+     FROM workOrderSubmissions
+     LEFT JOIN users ON users.id = workOrderSubmissions.submittedBy
+     WHERE workOrderSubmissions.taskId = ?`,
+    [task.id]
+  );
+  if (submissionRow?.amounts) {
+    try {
+      const savedDepartments = Object.keys(typeof submissionRow.amounts === "object" ? submissionRow.amounts : JSON.parse(submissionRow.amounts));
+      if (savedDepartments.length) schedule = { ...schedule, departments: savedDepartments };
+    } catch (_error) {
+      // Keep the current order-plan sections if an old draft cannot be parsed.
+    }
+  }
+  const ownAssignment = task.assignedStaffId && String(task.assignedStaffId) === String(user?.staffId);
+  return {
+    task: normaliseTask(task),
+    schedule,
+    submission: normaliseWorkOrderSubmission(submissionRow, schedule.departments),
+    canEdit: user?.role === "admin" || !task.assignedStaffId || ownAssignment
+  };
+}
+
+function normaliseWorkOrderPayload(value = {}, departments = []) {
+  const source = value.amounts && typeof value.amounts === "object" ? value.amounts : {};
+  const amounts = {};
+  departments.forEach((department) => {
+    const raw = source[department];
+    const amount = raw === "" || raw === null || raw === undefined ? 0 : Number(raw);
+    if (!Number.isFinite(amount) || amount < 0) throw requestError(`${department} value must be zero or more.`);
+    amounts[department] = Math.round(amount * 100) / 100;
+  });
+  return {
+    amounts,
+    total: Object.values(amounts).reduce((sum, amount) => sum + amount, 0),
+    reference: String(value.reference || "").trim(),
+    notes: String(value.notes || "").trim()
+  };
+}
+
+function normaliseWorkOrderSubmission(row, departments = []) {
+  let amounts = {};
+  try {
+    amounts = row?.amounts && typeof row.amounts === "object" ? row.amounts : JSON.parse(row?.amounts || "{}");
+  } catch (_error) {
+    amounts = {};
+  }
+  const cleanAmounts = Object.fromEntries(departments.map((department) => {
+    const amount = Number(amounts[department] || 0);
+    return [department, Number.isFinite(amount) ? amount : 0];
+  }));
+  return {
+    id: row?.id || null,
+    taskId: row?.taskId || null,
+    amounts: cleanAmounts,
+    total: Object.values(cleanAmounts).reduce((sum, amount) => sum + amount, 0),
+    reference: row?.reference || "",
+    notes: row?.notes || "",
+    status: row?.status || "not_started",
+    submittedBy: row?.submittedBy || null,
+    submittedByUsername: row?.submittedByUsername || "",
+    submittedAt: normaliseStoredTimestamp(row?.submittedAt)
+  };
+}
+
+async function saveWorkOrderSubmission(taskId, entry, status, userId) {
+  const submittedAt = status === "submitted" ? new Date().toISOString() : null;
+  const submittedBy = status === "submitted" ? userId : null;
+  await run(
+    `INSERT INTO workOrderSubmissions (taskId, amounts, reference, notes, status, submittedBy, submittedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(taskId) DO UPDATE SET
+       amounts = excluded.amounts,
+       reference = excluded.reference,
+       notes = excluded.notes,
+       status = excluded.status,
+       submittedBy = excluded.submittedBy,
+       submittedAt = excluded.submittedAt,
+       updatedAt = CURRENT_TIMESTAMP`,
+    [taskId, JSON.stringify(entry.amounts), entry.reference, entry.notes, status, submittedBy, submittedAt]
+  );
 }
 
 function normaliseTask(row) {

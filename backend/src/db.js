@@ -110,7 +110,7 @@ function preparePostgresSql(sql) {
     .replace(/\?/g, () => `$${++index}`)
     .replace(/\bCURRENT_TIMESTAMP\b/g, "(CURRENT_TIMESTAMP::text)");
 
-  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|workSchedules|attendance|gasStockCounts|gasStockEntries)\b/i.test(query)
+  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|workSchedules|workOrderSubmissions|attendance|gasStockCounts|gasStockEntries)\b/i.test(query)
     && !/\bRETURNING\b/i.test(query)
     && !/\bON\s+CONFLICT\b/i.test(query)) {
     query = `${query.trim()} RETURNING id`;
@@ -181,6 +181,10 @@ const pgKeyMap = new Map(Object.entries({
   linkedrecordid: "linkedRecordId",
   taskid: "taskId",
   scheduleid: "scheduleId",
+  ordername: "orderName",
+  submissionstatus: "submissionStatus",
+  submittedby: "submittedBy",
+  submittedbyusername: "submittedByUsername",
   countedby: "countedBy",
   submittedat: "submittedAt",
   countid: "countId",
@@ -387,6 +391,7 @@ export async function initDb() {
       category TEXT NOT NULL DEFAULT 'Ordering',
       supplier TEXT,
       weekdays TEXT NOT NULL DEFAULT '[]',
+      departments TEXT NOT NULL DEFAULT '[]',
       notes TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       assignedStaffId INTEGER,
@@ -395,6 +400,23 @@ export async function initDb() {
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (assignedStaffId) REFERENCES staff(id),
       FOREIGN KEY (createdBy) REFERENCES users(id)
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS workOrderSubmissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      taskId INTEGER NOT NULL UNIQUE,
+      amounts TEXT NOT NULL DEFAULT '{}',
+      reference TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      submittedBy INTEGER,
+      submittedAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (taskId) REFERENCES tasks(id),
+      FOREIGN KEY (submittedBy) REFERENCES users(id)
       )
     `);
 
@@ -509,6 +531,7 @@ export async function initDb() {
   await ensureTableColumn("tasks", "completedAt", "TEXT");
   await ensureTableColumn("tasks", "taskType", "TEXT");
   await ensureTableColumn("tasks", "linkedRecordId", "INTEGER");
+  await ensureTableColumn("workSchedules", "departments", "TEXT NOT NULL DEFAULT '[]'");
   await run("UPDATE tasks SET completedAt = updatedAt WHERE status = 'done' AND completedAt IS NULL");
   await ensureTableColumn("attendance", "shiftId", "INTEGER");
   await ensureTableColumn("attendance", "clockOutAt", "TEXT");
@@ -716,10 +739,26 @@ async function createPostgresSchema() {
       category TEXT NOT NULL DEFAULT 'Ordering',
       supplier TEXT,
       weekdays TEXT NOT NULL DEFAULT '[]',
+      departments TEXT NOT NULL DEFAULT '[]',
       notes TEXT,
       active INTEGER NOT NULL DEFAULT 1,
       assignedStaffId INTEGER REFERENCES staff(id),
       createdBy INTEGER REFERENCES users(id),
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS workOrderSubmissions (
+      id SERIAL PRIMARY KEY,
+      taskId INTEGER NOT NULL UNIQUE REFERENCES tasks(id),
+      amounts TEXT NOT NULL DEFAULT '{}',
+      reference TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      submittedBy INTEGER REFERENCES users(id),
+      submittedAt TEXT,
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
