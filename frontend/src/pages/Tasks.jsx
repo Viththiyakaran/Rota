@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  AlertTriangle,
   ArrowLeft,
   CalendarCheck2,
   Check,
@@ -15,7 +16,8 @@ import {
   Send,
   ShoppingCart,
   Trash2,
-  UserRound
+  UserRound,
+  X
 } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
@@ -56,6 +58,8 @@ export function Tasks({ currentUser, goTo }) {
   const [editingPlanId, setEditingPlanId] = React.useState(null);
   const [showPlanForm, setShowPlanForm] = React.useState(false);
   const [selectedOrderTask, setSelectedOrderTask] = React.useState(null);
+  const [deleteTarget, setDeleteTarget] = React.useState(null);
+  const [deleting, setDeleting] = React.useState(false);
   const [quickTask, setQuickTask] = React.useState({ title: "", dueDate: today, assignedStaffId: "" });
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -153,6 +157,28 @@ export function Tasks({ currentUser, goTo }) {
     }
   };
 
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    setError("");
+    try {
+      if (deleteTarget.type === "schedule") {
+        await api.deleteWorkSchedule(deleteTarget.item.id);
+        setDeleteTarget(null);
+        load();
+      } else {
+        await api.deleteTask(deleteTarget.item.id);
+        setTasks((rows) => rows.filter((row) => row.id !== deleteTarget.item.id));
+        setDeleteTarget(null);
+      }
+    } catch (err) {
+      setError(err.message);
+      setDeleteTarget(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   if (selectedOrderTask) {
     return (
       <OrderEntry
@@ -211,10 +237,7 @@ export function Tasks({ currentUser, goTo }) {
             editingPlanId={editingPlanId}
             isAdmin={isAdmin}
             onCancel={() => { setPlan(EMPTY_PLAN); setEditingPlanId(null); setShowPlanForm(false); }}
-            onDelete={async (schedule) => {
-              if (!window.confirm(`Delete the ${schedule.name} order plan?`)) return;
-              await api.deleteWorkSchedule(schedule.id).then(load).catch((err) => setError(err.message));
-            }}
+            onDelete={(schedule) => setDeleteTarget({ type: "schedule", item: schedule })}
             onNew={(preset = null) => {
               setPlan(preset ? { ...EMPTY_PLAN, ...preset, departments: [...preset.departments] } : EMPTY_PLAN);
               setEditingPlanId(null);
@@ -236,10 +259,7 @@ export function Tasks({ currentUser, goTo }) {
             form={quickTask}
             isAdmin={isAdmin}
             onCreate={createQuickTask}
-            onDelete={async (task) => {
-              if (!window.confirm(`Delete "${task.title}"?`)) return;
-              await api.deleteTask(task.id).then(() => setTasks((rows) => rows.filter((row) => row.id !== task.id))).catch((err) => setError(err.message));
-            }}
+            onDelete={(task) => setDeleteTarget({ type: "task", item: task })}
             onUpdate={updateTask}
             saving={saving}
             setForm={setQuickTask}
@@ -248,6 +268,85 @@ export function Tasks({ currentUser, goTo }) {
           />
         )}
       </Status>
+
+      <DeleteConfirmationModal
+        deleting={deleting}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        target={deleteTarget}
+      />
+    </div>
+  );
+}
+
+function DeleteConfirmationModal({ deleting, onCancel, onConfirm, target }) {
+  const cancelRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!target) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusTimer = window.setTimeout(() => cancelRef.current?.focus(), 0);
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape" && !deleting) onCancel();
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [deleting, onCancel, target]);
+
+  if (!target) return null;
+  const isSchedule = target.type === "schedule";
+  const itemName = isSchedule
+    ? `${target.item.supplier ? `${target.item.supplier} — ` : ""}${target.item.name}`
+    : target.item.title;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm" onMouseDown={() => { if (!deleting) onCancel(); }}>
+      <section
+        aria-describedby="delete-confirmation-description"
+        aria-labelledby="delete-confirmation-title"
+        aria-modal="true"
+        className="w-full max-w-md overflow-hidden rounded-2xl border border-white/20 bg-white shadow-2xl"
+        onMouseDown={(event) => event.stopPropagation()}
+        role="alertdialog"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-5">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-red-50 text-red-700 ring-1 ring-red-100"><AlertTriangle size={22} /></span>
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-red-600">Confirm deletion</p>
+              <h2 id="delete-confirmation-title" className="mt-1 text-xl font-black text-fuel-ink">{isSchedule ? "Delete order plan?" : "Delete task?"}</h2>
+            </div>
+          </div>
+          <button type="button" aria-label="Close confirmation" disabled={deleting} onClick={onCancel} className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 transition hover:bg-slate-200 disabled:opacity-50"><X size={18} /></button>
+        </div>
+
+        <div className="p-5">
+          <p id="delete-confirmation-description" className="text-sm font-semibold leading-6 text-slate-600">
+            You are about to delete:
+          </p>
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+            <p className="font-black text-fuel-ink">{itemName}</p>
+            {isSchedule && <p className="mt-1 text-xs font-bold text-slate-500">{frequencyLabel(target.item.weekdays)} · {target.item.weekdays.map(dayShort).join(", ")}</p>}
+          </div>
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="text-sm font-bold leading-5 text-amber-900">
+              {isSchedule
+                ? "Future uncompleted tasks created by this plan will be removed. Completed order history will be kept."
+                : "This task will be permanently removed and cannot be restored."}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 border-t border-slate-100 bg-slate-50 p-4">
+          <button ref={cancelRef} type="button" disabled={deleting} onClick={onCancel} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 shadow-sm transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-50">Cancel</button>
+          <button type="button" disabled={deleting} onClick={onConfirm} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300 disabled:cursor-wait disabled:opacity-60"><Trash2 size={17} /> {deleting ? "Deleting..." : isSchedule ? "Delete plan" : "Delete task"}</button>
+        </div>
+      </section>
     </div>
   );
 }
