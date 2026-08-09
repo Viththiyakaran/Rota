@@ -588,7 +588,7 @@ app.get("/api/sales", async (req, res, next) => {
   }
 });
 
-app.put("/api/sales", requireAdmin, async (req, res, next) => {
+app.put("/api/sales", async (req, res, next) => {
   try {
     const entries = Array.isArray(req.body.entries) ? req.body.entries : [];
     if (entries.length === 0 || entries.length > 31) {

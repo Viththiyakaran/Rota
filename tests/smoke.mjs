@@ -264,11 +264,12 @@ async function runSmoke() {
   assert(staffSales[0].amount === 8200.5 && staffSales[1].amount === 9100.75, "staff can view performance sales");
   const staffSalesCommunication = await request("/api/sales/communication?weekStart=2026-07-27", { cookie: staff.cookie });
   assert(staffSalesCommunication.communication === "Focus on weekend add-on sales.", "staff can view performance communication");
-  await expectStatus("/api/sales", 403, {
+  const staffSavedSales = await request("/api/sales", {
     cookie: staff.cookie,
     method: "PUT",
     body: { entries: [{ saleDate: "2026-07-27", amount: 1 }] }
   });
+  assert(staffSavedSales[0].amount === 1, "staff can add performance sales values");
   await expectStatus("/api/sales/communication", 403, {
     cookie: staff.cookie,
     method: "PUT",

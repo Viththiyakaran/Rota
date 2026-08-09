@@ -16,7 +16,8 @@ import { PageHeader, Pill, primaryButton, softButton } from "../components/PageH
 import { addDays, formatDateLabel, formatDayLabel, getMonday, toDateInputValue } from "../dateUtils.js";
 
 export function Performance({ branding, currentUser }) {
-  const canEdit = currentUser?.role === "admin";
+  const isAdmin = currentUser?.role === "admin";
+  const canEditSales = currentUser?.role === "admin" || currentUser?.role === "staff";
   const [weekStart, setWeekStart] = React.useState(() => getMonday(new Date()));
   const currentDates = React.useMemo(
     () => Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index))),
@@ -70,14 +71,13 @@ export function Performance({ branding, currentUser }) {
     setMessage("");
     try {
       const dates = [...previousDates, ...currentDates];
-      await Promise.all([
-        api.updateSales(dates.map((saleDate) => ({
-          saleDate,
-          amount: hasSalesValue(values[saleDate]) ? Number(values[saleDate]) : null
-        }))),
-        api.updateSalesCommunication({ weekStart: currentDates[0], communication })
-      ]);
-      setMessage("Performance tracker saved.");
+      const salesUpdate = api.updateSales(dates.map((saleDate) => ({
+        saleDate,
+        amount: hasSalesValue(values[saleDate]) ? Number(values[saleDate]) : null
+      })));
+      if (isAdmin) await Promise.all([salesUpdate, api.updateSalesCommunication({ weekStart: currentDates[0], communication })]);
+      else await salesUpdate;
+      setMessage(isAdmin ? "Performance tracker saved." : "Sales values saved.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -130,7 +130,7 @@ export function Performance({ branding, currentUser }) {
   return (
     <div className="space-y-5 pb-8">
       <PageHeader
-        eyebrow={canEdit ? "Admin performance" : "Team performance"}
+        eyebrow={isAdmin ? "Admin performance" : "Team performance"}
         title="Performance Tracker"
         description="Compare daily sales with last week and share the finished board with the team."
         meta={(
@@ -163,7 +163,7 @@ export function Performance({ branding, currentUser }) {
               Next
               <ArrowRight size={18} />
             </button>
-            {canEdit && (
+            {canEditSales && (
               <button
                 type="button"
                 className={primaryButton}
@@ -240,14 +240,14 @@ export function Performance({ branding, currentUser }) {
                     <p className="text-xs font-semibold text-slate-500">{formatDayLabel(currentDate)}</p>
                   </div>
                   <SalesInput
-                    canEdit={canEdit}
+                    canEdit={canEditSales}
                     date={currentDate}
                     value={values[currentDate] ?? ""}
                     onChange={(value) => updateValue(currentDate, value)}
                     loading={loading}
                   />
                   <SalesInput
-                    canEdit={canEdit}
+                    canEdit={canEditSales}
                     date={previousDates[index]}
                     value={values[previousDates[index]] ?? ""}
                     onChange={(value) => updateValue(previousDates[index], value)}
@@ -276,7 +276,7 @@ export function Performance({ branding, currentUser }) {
               rows="4"
               maxLength="2000"
               value={communication}
-              disabled={loading || !canEdit}
+              disabled={loading || !isAdmin}
               onChange={(event) => {
                 setCommunication(event.target.value);
                 setMessage("");
