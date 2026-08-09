@@ -1,5 +1,5 @@
 import React from "react";
-import { Bell, CalendarDays, Check, CheckCircle2, Clock3, LockKeyhole, UserRound, UsersRound } from "lucide-react";
+import { CalendarDays, CheckCircle2, ClipboardCheck, LockKeyhole, PackageCheck, ShoppingCart, TrendingUp, UserRound } from "lucide-react";
 import { api, setAuthToken } from "../api.js";
 import { Field, inputClass } from "../components/Field.jsx";
 import { primaryButton } from "../components/PageHeader.jsx";
@@ -36,14 +36,14 @@ export function Login({ branding, onLogin }) {
             </span>
             <div>
               <h1 className="text-2xl font-black">LocalPlanner</h1>
-              <p className="text-sm font-semibold text-blue-50">Rota, tasks, reminders and reports</p>
+              <p className="text-sm font-semibold text-blue-50">Rota, weekly tasks and performance</p>
             </div>
           </div>
           <div className="mt-8">
-            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100">Your week, organised</p>
-            <h2 className="mt-2 text-3xl font-black leading-tight">From an empty rota to a ready team.</h2>
+            <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100">Your station, organised</p>
+            <h2 className="mt-2 text-3xl font-black leading-tight">One weekly view for the whole station.</h2>
             <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-blue-100">
-              Plan shifts, assign work and keep everyone updated from one simple workspace.
+              Plan shifts, complete stock counts, manage orders and track sales from one simple workspace.
             </p>
           </div>
           <LocalPlannerStory />
@@ -56,7 +56,7 @@ export function Login({ branding, onLogin }) {
             </span>
             <div className="mt-3 min-w-0">
               <h1 className="text-2xl font-black leading-none text-fuel-ink">LocalPlanner</h1>
-              <p className="mt-2 text-sm font-semibold text-slate-500">Rota, tasks, reminders and reports</p>
+              <p className="mt-2 text-sm font-semibold text-slate-500">Rota, weekly tasks and performance</p>
             </div>
           </div>
 
@@ -70,7 +70,7 @@ export function Login({ branding, onLogin }) {
             </span>
             <div className="mt-3 min-w-0 sm:mt-0">
               <h2 className="break-words text-lg font-black leading-tight text-fuel-ink sm:text-xl">{branding.businessName || "Your Business"}</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Rota, tasks and staff planning</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Rota, orders and staff planning</p>
             </div>
           </div>
 
@@ -119,24 +119,25 @@ export function Login({ branding, onLogin }) {
 }
 
 function LocalPlannerStory() {
-  const days = [
-    { day: "Mon", name: "Veera", time: "05:30–14:00" },
-    { day: "Tue", name: "Viththi", time: "13:00–22:00" },
-    { day: "Wed", name: "Afridi", time: "06:00–14:00" },
+  const features = [
+    { key: "rota", icon: CalendarDays, label: "Weekly rota", title: "Team scheduled", detail: "3 staff · 7 shifts", metric: "Ready", tone: "blue" },
+    { key: "gas", icon: PackageCheck, label: "Gas stock", title: "Count due Saturday", detail: "8 products · assigned to Viththi", metric: "Due", tone: "emerald" },
+    { key: "orders", icon: ShoppingCart, label: "Supplier orders", title: "Weekly plans active", detail: "Morrisons · Vape · Medicine", metric: "3 plans", tone: "amber" },
+    { key: "sales", icon: TrendingUp, label: "Performance", title: "Sales updated", detail: "This week compared with last week", metric: "£6,215", tone: "indigo" }
   ];
 
   return (
-    <div className="login-story mt-6" aria-label="LocalPlanner organises shifts, tasks and reminders">
+    <div className="login-story mt-6" aria-label="LocalPlanner organises rota, stock, orders and sales">
       <div className="login-story-glow" aria-hidden="true" />
       <div className="login-story-board">
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-fuel-green">
-              <CalendarDays size={17} />
+              <ClipboardCheck size={17} />
             </span>
             <div>
-              <p className="text-xs font-black text-slate-900">Weekly rota</p>
-              <p className="text-[10px] font-bold text-slate-400">Monday – Sunday</p>
+              <p className="text-xs font-black text-slate-900">Live station overview</p>
+              <p className="text-[10px] font-bold text-slate-400">Today and this week</p>
             </div>
           </div>
           <span className="login-story-live">
@@ -145,50 +146,39 @@ function LocalPlannerStory() {
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 p-3">
-          {days.map((shift, index) => (
-            <div className="login-story-shift" style={{ "--shift-delay": `${index * 0.45}s` }} key={shift.day}>
-              <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{shift.day}</p>
-              <div className="mt-2 rounded-lg border-l-[3px] border-fuel-green bg-blue-50 px-2 py-2">
-                <p className="truncate text-[11px] font-black text-slate-900">{shift.name}</p>
-                <p className="mt-0.5 whitespace-nowrap text-[9px] font-bold text-fuel-green">{shift.time}</p>
+        <div className="login-feature-stage">
+          {features.map((feature, index) => {
+            const Icon = feature.icon;
+            return (
+              <div className={`login-feature-card login-feature-${feature.tone}`} style={{ "--feature-delay": `${index * 3}s` }} key={feature.key}>
+                <div className="flex items-center gap-3">
+                  <span className="login-feature-icon"><Icon size={22} /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-black uppercase tracking-[0.12em] text-slate-400">{feature.label}</p>
+                    <p className="mt-1 truncate text-base font-black text-slate-900">{feature.title}</p>
+                    <p className="mt-1 truncate text-[10px] font-bold text-slate-500">{feature.detail}</p>
+                  </div>
+                  <span className="login-feature-metric">{feature.metric}</span>
+                </div>
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  <span className="h-2 rounded-full bg-current opacity-20" />
+                  <span className="h-2 rounded-full bg-current opacity-35" />
+                  <span className="h-2 rounded-full bg-current opacity-60" />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        <div className="mx-3 mb-3 flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-          <div className="flex -space-x-1.5">
-            {["V", "V", "A"].map((initial, index) => (
-              <span className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-blue-100 text-[9px] font-black text-fuel-green" key={`${initial}-${index}`}>
-                {initial}
-              </span>
+        <div className="mx-3 mb-3 rounded-lg bg-slate-50 px-3 py-2.5">
+          <div className="grid grid-cols-4 gap-2" aria-hidden="true">
+            {features.map((feature, index) => (
+              <span className="login-feature-progress" style={{ "--feature-delay": `${index * 3}s` }} key={feature.key} />
             ))}
           </div>
-          <div className="flex items-center gap-1.5 text-[10px] font-black text-slate-600">
-            <Clock3 size={13} className="text-fuel-green" />
-            3 staff · 7 shifts
+          <div className="mt-2 flex items-center justify-between text-[9px] font-black uppercase tracking-wide text-slate-400">
+            <span>Rota</span><span>Gas</span><span>Orders</span><span>Sales</span>
           </div>
-        </div>
-      </div>
-
-      <div className="login-story-event login-story-event-task">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-          <Check size={16} strokeWidth={3} />
-        </span>
-        <div>
-          <p className="text-[11px] font-black text-slate-900">Task completed</p>
-          <p className="text-[9px] font-bold text-slate-400">Forecourt safety check</p>
-        </div>
-      </div>
-
-      <div className="login-story-event login-story-event-reminder">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-          <Bell size={15} />
-        </span>
-        <div>
-          <p className="text-[11px] font-black text-slate-900">Team notified</p>
-          <p className="text-[9px] font-bold text-slate-400">Rota reminder sent</p>
         </div>
       </div>
 
@@ -197,17 +187,13 @@ function LocalPlannerStory() {
           <CheckCircle2 size={16} />
         </span>
         <div>
-          <p className="text-[11px] font-black">Week ready</p>
-          <p className="text-[9px] font-semibold text-blue-100">Everyone knows what’s next</p>
+          <p className="text-[11px] font-black">Station under control</p>
+          <p className="text-[9px] font-semibold text-blue-100">Everyone sees what is next</p>
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-center gap-5 text-[10px] font-black uppercase tracking-[0.12em] text-blue-100">
-        <span className="flex items-center gap-1.5"><UsersRound size={13} /> Assign</span>
-        <span className="h-1 w-1 rounded-full bg-blue-200/70" />
-        <span className="flex items-center gap-1.5"><Bell size={13} /> Remind</span>
-        <span className="h-1 w-1 rounded-full bg-blue-200/70" />
-        <span className="flex items-center gap-1.5"><CheckCircle2 size={13} /> Done</span>
+      <div className="mt-4 flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-[0.12em] text-blue-100">
+        <span>Plan once</span><span className="h-1 w-1 rounded-full bg-blue-200/70" /><span>Complete weekly</span><span className="h-1 w-1 rounded-full bg-blue-200/70" /><span>Review results</span>
       </div>
     </div>
   );

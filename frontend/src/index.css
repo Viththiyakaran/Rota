@@ -107,46 +107,76 @@ textarea {
   animation: login-pulse 2s ease-out infinite;
 }
 
-.login-story-shift {
-  opacity: 0;
-  transform: translateY(9px);
-  animation: login-shift 7s ease-out infinite;
-  animation-delay: var(--shift-delay);
+.login-feature-stage {
+  position: relative;
+  height: 142px;
+  padding: 12px;
 }
 
-.login-story-event {
+.login-feature-card {
   position: absolute;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 154px;
-  border: 1px solid rgba(226, 232, 240, 0.95);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.98);
-  padding: 8px 10px;
-  box-shadow: 0 14px 30px rgba(6, 19, 55, 0.22);
-  color: #101735;
+  inset: 12px;
+  border: 1px solid currentColor;
+  border-radius: 14px;
+  padding: 16px;
   opacity: 0;
+  transform: translateY(12px) scale(0.97);
+  animation: login-feature-cycle 12s ease-in-out infinite;
+  animation-delay: var(--feature-delay);
 }
 
-.login-story-event-task {
-  right: -2px;
-  top: 118px;
-  animation: login-event-task 7s ease-in-out infinite;
+.login-feature-blue { background: #eff6ff; color: #176ef2; }
+.login-feature-emerald { background: #ecfdf5; color: #059669; }
+.login-feature-amber { background: #fffbeb; color: #d97706; }
+.login-feature-indigo { background: #eef2ff; color: #4f46e5; }
+
+.login-feature-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
 }
 
-.login-story-event-reminder {
-  left: -5px;
-  top: 205px;
-  animation: login-event-reminder 7s ease-in-out infinite;
+.login-feature-metric {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  padding: 6px 9px;
+  font-size: 10px;
+  font-weight: 900;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+}
+
+.login-feature-progress {
+  position: relative;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #dbe3ef;
+}
+
+.login-feature-progress::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: #176ef2;
+  content: "";
+  opacity: 0;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: login-feature-progress 12s linear infinite;
+  animation-delay: var(--feature-delay);
 }
 
 .login-story-ready {
   position: absolute;
   z-index: 4;
   right: 8px;
-  top: 234px;
+  top: 245px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -155,8 +185,8 @@ textarea {
   background: #176ef2;
   padding: 8px 11px;
   box-shadow: 0 16px 34px rgba(23, 110, 242, 0.35);
-  opacity: 0;
-  animation: login-ready 7s ease-in-out infinite;
+  opacity: 1;
+  animation: login-ready-float 4s ease-in-out infinite;
 }
 
 @keyframes login-board {
@@ -190,74 +220,49 @@ textarea {
   }
 }
 
-@keyframes login-shift {
-  0%,
-  8% {
+@keyframes login-feature-cycle {
+  0% {
     opacity: 0;
-    transform: translateY(9px);
+    transform: translateY(12px) scale(0.97);
   }
-  16%,
-  88% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  96%,
-  100% {
-    opacity: 0;
-    transform: translateY(-4px);
-  }
-}
-
-@keyframes login-event-task {
-  0%,
-  30% {
-    opacity: 0;
-    transform: translateX(18px) scale(0.94);
-  }
-  38%,
-  58% {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-  66%,
-  100% {
-    opacity: 0;
-    transform: translateX(8px) scale(0.97);
-  }
-}
-
-@keyframes login-event-reminder {
-  0%,
-  50% {
-    opacity: 0;
-    transform: translateX(-18px) scale(0.94);
-  }
-  58%,
-  76% {
-    opacity: 1;
-    transform: translateX(0) scale(1);
-  }
-  84%,
-  100% {
-    opacity: 0;
-    transform: translateX(-8px) scale(0.97);
-  }
-}
-
-@keyframes login-ready {
-  0%,
-  70% {
-    opacity: 0;
-    transform: translateY(12px) scale(0.92);
-  }
-  78%,
-  92% {
+  4%,
+  21% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+  25%,
   100% {
     opacity: 0;
-    transform: translateY(-4px) scale(0.98);
+    transform: translateY(-8px) scale(0.98);
+  }
+}
+
+@keyframes login-feature-progress {
+  0% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  4% {
+    opacity: 1;
+  }
+  21% {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes login-ready-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
   }
 }
 
@@ -265,20 +270,18 @@ textarea {
   .login-story-glow,
   .login-story-board,
   .login-story-live span,
-  .login-story-shift,
-  .login-story-event,
+  .login-feature-card,
+  .login-feature-progress::after,
   .login-story-ready {
     animation: none !important;
   }
 
-  .login-story-shift,
-  .login-story-event-task {
+  .login-feature-card:first-child {
     opacity: 1;
     transform: none;
   }
 
-  .login-story-event-reminder,
-  .login-story-ready {
+  .login-feature-card:not(:first-child) {
     display: none;
   }
 }
