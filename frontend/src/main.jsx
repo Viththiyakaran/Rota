@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PlusCircle, Settings as SettingsIcon, TrendingUp, UserRound, Users, X } from "lucide-react";
+import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PackageCheck, PlusCircle, Settings as SettingsIcon, TrendingUp, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { StaffAvatar } from "./components/StaffAvatar.jsx";
@@ -21,6 +21,7 @@ import { TimeOff } from "./pages/TimeOff.jsx";
 import { WeeklyRota } from "./pages/WeeklyRota.jsx";
 import { Reports } from "./pages/Reports.jsx";
 import { Performance } from "./pages/Performance.jsx";
+import { GasStock } from "./pages/GasStock.jsx";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home, roles: ["admin", "staff"] },
@@ -33,6 +34,7 @@ const navItems = [
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "edit-shift", label: "Edit Shift", icon: CalendarDays, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Tasks", icon: ListChecks, roles: ["admin", "staff"] },
+  { id: "gas-stock", label: "Gas Stock", icon: PackageCheck, roles: ["admin", "staff"] },
   { id: "performance", label: "Performance", icon: TrendingUp, roles: ["admin"] },
   { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
@@ -51,6 +53,7 @@ function App() {
   const [popupNotification, setPopupNotification] = React.useState(null);
   const [clockPrompt, setClockPrompt] = React.useState(null);
   const [dismissedClockPrompt, setDismissedClockPrompt] = React.useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const isAdmin = currentUser?.role === "admin";
   const performanceEnabled = branding.performanceTrackerEnabled !== false;
   const mobileNavIds = isAdmin
@@ -59,7 +62,7 @@ function App() {
   const mobileNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && mobileNavIds.includes(item.id));
   const desktopNav = navItems.filter((item) =>
     item.roles.includes(currentUser?.role) &&
-    ["dashboard", "my-shifts", "staff", "rota", "tasks", "time-off", "reminders", "performance", "reports", "settings"].includes(item.id) &&
+    ["dashboard", "my-shifts", "staff", "rota", "tasks", "gas-stock", "time-off", "reminders", "performance", "reports", "settings"].includes(item.id) &&
     (item.id !== "performance" || performanceEnabled)
   );
   const appTitle = buildRotaTitle(branding.businessName);
@@ -338,7 +341,7 @@ function App() {
       <header className="sticky top-0 z-20 border-b border-fuel-line bg-white/95 shadow-sm backdrop-blur-xl lg:ml-64">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <button className="flex h-10 w-10 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green lg:hidden">
+            <button aria-label="Open navigation" onClick={() => setMobileMenuOpen(true)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-fuel-mist text-fuel-green lg:hidden">
               <Menu size={20} />
             </button>
             <button className="flex min-w-0 items-center gap-3 text-left lg:hidden" onClick={() => setPage("dashboard")}>
@@ -396,6 +399,30 @@ function App() {
         </div>
       </header>
 
+      {mobileMenuOpen ? (
+        <div className="fixed inset-0 z-50 bg-slate-950/45 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <aside className="flex h-full w-[min(84vw,320px)] flex-col bg-fuel-deep p-4 text-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-white/10 font-black text-fuel-lime">{getBrandInitial(branding.businessName)}</span>
+                <div className="min-w-0"><p className="truncate font-black">{branding.businessName}</p><p className="text-xs font-semibold text-blue-100">LocalPlanner menu</p></div>
+              </div>
+              <button aria-label="Close navigation" className="grid h-10 w-10 place-items-center rounded-lg bg-white/10" onClick={() => setMobileMenuOpen(false)}><X size={20} /></button>
+            </div>
+            <nav className="space-y-1 overflow-y-auto">
+              {desktopNav.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <button key={item.id} className={`flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left font-bold ${page === item.id ? "bg-fuel-green text-white" : "text-blue-50 hover:bg-white/10"}`} onClick={() => { setPage(item.id); setMobileMenuOpen(false); }}>
+                    <Icon size={19} /> {item.label}
+                  </button>
+                );
+              })}
+            </nav>
+          </aside>
+        </div>
+      ) : null}
+
       <main className="mx-auto max-w-[1500px] px-4 pb-28 pt-4 sm:pt-5 lg:ml-64 lg:pb-8">
         {page === "dashboard" && <Dashboard {...pageProps} />}
         {page === "my-shifts" && <MyShifts branding={{ ...branding, appTitle }} />}
@@ -428,7 +455,8 @@ function App() {
             shiftId={editingShift.id}
           />
         )}
-        {page === "tasks" && <Tasks currentUser={currentUser} />}
+        {page === "tasks" && <Tasks currentUser={currentUser} goTo={setPage} />}
+        {page === "gas-stock" && <GasStock currentUser={currentUser} />}
         {page === "performance" && isAdmin && performanceEnabled && <Performance branding={branding} />}
         {page === "reports" && isAdmin && <Reports goTo={setPage} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}

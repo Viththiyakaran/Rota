@@ -1,5 +1,5 @@
 import React from "react";
-import { AtSign, CheckCircle2, ChevronDown, GripVertical, ListChecks, Plus, Trash2 } from "lucide-react";
+import { AtSign, CheckCircle2, ChevronDown, GripVertical, ListChecks, PackageCheck, Plus, Trash2 } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -14,7 +14,7 @@ const COLUMNS = [
   { id: "done", label: "Done", tone: "bg-emerald-50 text-emerald-700" }
 ];
 
-export function Tasks({ currentUser }) {
+export function Tasks({ currentUser, goTo }) {
   const today = React.useMemo(() => toDateInputValue(new Date()), []);
   const [tasks, setTasks] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
@@ -181,7 +181,8 @@ export function Tasks({ currentUser }) {
                   event.preventDefault();
                   const taskId = event.dataTransfer.getData("text/plain") || draggingId;
                   setDraggingId(null);
-                  if (taskId) moveTask(taskId, column.id);
+                  const droppedTask = tasks.find((task) => String(task.id) === String(taskId));
+                  if (taskId && droppedTask?.taskType !== "gas_stock_count") moveTask(taskId, column.id);
                 }}
               >
                 <div className="mb-3 flex items-center justify-between gap-2">
@@ -198,8 +199,9 @@ export function Tasks({ currentUser }) {
                   {columnTasks.map((task) => (
                     <article
                       key={task.id}
-                      draggable
+                      draggable={task.taskType !== "gas_stock_count"}
                       onDragStart={(event) => {
+                        if (task.taskType === "gas_stock_count") return;
                         setDraggingId(task.id);
                         event.dataTransfer.setData("text/plain", String(task.id));
                       }}
@@ -211,7 +213,7 @@ export function Tasks({ currentUser }) {
                           <p className="font-black">{task.title}</p>
                           {task.description && <p className="mt-1 text-sm font-bold text-slate-600">{task.description}</p>}
                         </div>
-                        <GripVertical className="shrink-0 text-slate-400" size={18} />
+                        {task.taskType === "gas_stock_count" ? <PackageCheck className="shrink-0 text-fuel-green" size={19} /> : <GripVertical className="shrink-0 text-slate-400" size={18} />}
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {task.dueDate && (
@@ -237,7 +239,14 @@ export function Tasks({ currentUser }) {
                         </span>
                       </div>
                       <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-                        <label className="flex items-center gap-2 text-xs font-black text-slate-500">
+                        {task.taskType === "gas_stock_count" ? (
+                          <>
+                            <button type="button" className="inline-flex min-h-9 items-center gap-2 rounded-md bg-fuel-green px-3 py-2 text-xs font-black text-white" onClick={() => goTo?.("gas-stock")}>
+                              <PackageCheck size={15} /> Open gas count
+                            </button>
+                            <span className="text-xs font-bold text-slate-500">Submit the count to complete this task.</span>
+                          </>
+                        ) : <label className="flex items-center gap-2 text-xs font-black text-slate-500">
                           <span>Move to</span>
                           <select
                             aria-label={`Move ${task.title}`}
@@ -249,14 +258,14 @@ export function Tasks({ currentUser }) {
                               <option key={item.id} value={item.id}>{item.label}</option>
                             ))}
                           </select>
-                        </label>
+                        </label>}
                         {task.status === "done" && (
                           <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-xs font-black text-emerald-700">
                             <CheckCircle2 size={14} />
                             Complete
                           </span>
                         )}
-                        {isAdmin ? (
+                        {isAdmin && task.taskType !== "gas_stock_count" ? (
                           <button
                             type="button"
                             className="ml-auto inline-flex items-center gap-1 rounded-md bg-red-50 px-2 py-1 text-xs font-black text-red-700"

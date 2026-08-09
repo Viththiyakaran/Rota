@@ -159,6 +159,46 @@ async function runSmoke() {
   const hours = await request("/api/settings/opening-hours", { cookie: admin.cookie });
   assert(hours.openingStart === "06:00", "opening hours save");
 
+  const gasCountStaff = staffRows.find((person) => person.name === "Afridi");
+  const gasSettings = await request("/api/settings/gas-stock", { cookie: admin.cookie });
+  assert(gasSettings.products.length === 14, "default gas stock products exist");
+  const savedGasSettings = await request("/api/settings/gas-stock", {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: {
+      ...gasSettings,
+      assignedStaffId: gasCountStaff.id,
+      weekday: 6,
+      products: gasSettings.products.map((product, index) => ({ ...product, reorderLevel: index === 0 ? 2 : 0 }))
+    }
+  });
+  assert(savedGasSettings.assignedStaffId === gasCountStaff.id, "weekly gas task assignee saves");
+  const gasStock = await request("/api/gas-stock/current", { cookie: staff.cookie });
+  assert(gasStock.canEdit === true && gasStock.task?.taskType === "gas_stock_count", "assigned staff can open automatic weekly gas task");
+  await expectStatus(`/api/tasks/${gasStock.task.id}`, 400, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { status: "done" }
+  });
+  const gasQuantities = Object.fromEntries(gasStock.products.map((product, index) => [product.id, index + 1]));
+  const gasDraft = await request("/api/gas-stock/draft", {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { weekStart: gasStock.weekStart, quantities: { [gasStock.products[0].id]: 1 }, notes: "Count started" }
+  });
+  assert(gasDraft.count.status === "draft" && gasDraft.task.status === "process", "gas stock draft moves task to doing");
+  const gasSubmitted = await request("/api/gas-stock/submit", {
+    cookie: staff.cookie,
+    method: "POST",
+    body: { weekStart: gasStock.weekStart, quantities: gasQuantities, notes: "Weekly count complete" }
+  });
+  assert(gasSubmitted.count.status === "submitted" && gasSubmitted.task.status === "done", "submitting gas count completes linked task");
+  await expectStatus("/api/gas-stock/draft", 403, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { weekStart: gasStock.weekStart, quantities: gasQuantities }
+  });
+
   const savedSales = await request("/api/sales", {
     cookie: admin.cookie,
     method: "PUT",
@@ -443,7 +483,7 @@ function getResponseCookie(response) {
 }
 
 async function waitForServer() {
-  const deadline = Date.now() + 10000;
+  const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
     try {
       const response = await fetch(`${base}/api/health`);

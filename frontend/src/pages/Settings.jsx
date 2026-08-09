@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Building2, Clock, History, ImagePlus, KeyRound, MapPin, Plus, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, Building2, Clock, History, ImagePlus, KeyRound, MapPin, PackageCheck, Plus, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -42,6 +42,7 @@ const UK_ROTA_RULES_CACHE_KEY = "localops.ukRotaRules";
 const SETTINGS_SECTIONS = [
   { id: "business", label: "Business", description: "Branding and optional features", icon: Building2 },
   { id: "rota", label: "Rota rules", description: "Hours, presets and planning rules", icon: SlidersHorizontal },
+  { id: "stock", label: "Gas stock", description: "Weekly count and low-stock levels", icon: PackageCheck },
   { id: "access", label: "Login access", description: "Admin and staff accounts", icon: KeyRound },
   { id: "activity", label: "Activity", description: "Recent admin changes", icon: History }
 ];
@@ -71,6 +72,7 @@ export function Settings({ branding, onBrandingSaved }) {
   const [activeSection, setActiveSection] = React.useState("business");
   const [form, setForm] = React.useState(branding);
   const [users, setUsers] = React.useState([]);
+  const [staff, setStaff] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
   const [openingHours, setOpeningHours] = React.useState({
     openingStart: "05:30",
@@ -80,6 +82,7 @@ export function Settings({ branding, onBrandingSaved }) {
   });
   const [newRange, setNewRange] = React.useState({ label: "", startTime: "09:00", endTime: "17:00" });
   const [ukRules, setUkRules] = React.useState(readCachedUkRules);
+  const [gasStockConfig, setGasStockConfig] = React.useState({ enabled: true, weekday: 6, assignedStaffId: null, products: [] });
   const [savedUkRules, setSavedUkRules] = React.useState(readCachedUkRules);
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "" });
   const [error, setError] = React.useState("");
@@ -111,8 +114,8 @@ export function Settings({ branding, onBrandingSaved }) {
   };
 
   const loadAdminData = React.useCallback(() => {
-    Promise.all([api.users(), api.openingHours(), api.ukRotaRules(), api.audit()])
-      .then(([userRows, hours, rules, auditRows]) => {
+    Promise.all([api.users(), api.openingHours(), api.ukRotaRules(), api.audit(), api.gasStockSettings(), api.staff()])
+      .then(([userRows, hours, rules, auditRows, stockConfig, staffRows]) => {
         setUsers(userRows);
         setOpeningHours(hours);
         const loadedRules = normaliseUkRules(rules);
@@ -120,6 +123,8 @@ export function Settings({ branding, onBrandingSaved }) {
         setSavedUkRules(loadedRules);
         cacheUkRules(loadedRules);
         setAudit(auditRows);
+        setGasStockConfig(stockConfig);
+        setStaff(staffRows.filter((person) => person.active));
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -177,6 +182,22 @@ export function Settings({ branding, onBrandingSaved }) {
       loadAdminData();
     } catch (err) {
       setError(err.message);
+    }
+  };
+
+  const saveGasStockSettings = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setMessage("");
+    try {
+      const saved = await api.updateGasStockSettings(gasStockConfig);
+      setGasStockConfig(saved);
+      showSavedPopup("Gas stock settings updated. This week’s task is ready.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -366,7 +387,7 @@ export function Settings({ branding, onBrandingSaved }) {
       />
 
       <Card className="p-2">
-        <nav className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Settings sections">
+        <nav className="grid grid-cols-2 gap-2 lg:grid-cols-5" aria-label="Settings sections">
           {SETTINGS_SECTIONS.map((section) => {
             const Icon = section.icon;
             const active = activeSection === section.id;
@@ -713,6 +734,82 @@ export function Settings({ branding, onBrandingSaved }) {
       </Card>
 
       </div>
+      ) : null}
+
+      {activeSection === "stock" ? (
+        <Card className="p-0">
+          <SectionHeader
+            icon={<PackageCheck size={20} />}
+            title="Weekly Gas Stock Count"
+            description="Create one recurring task each week and define when a product should be highlighted as low stock."
+          />
+          <form className="space-y-5 px-5 pb-5" onSubmit={saveGasStockSettings}>
+            <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-fuel-line bg-white p-4">
+              <span>
+                <span className="block font-black text-fuel-ink">Enable weekly gas stock task</span>
+                <span className="mt-1 block text-sm font-semibold text-slate-600">LocalPlanner creates the task automatically. Submitting the count marks it complete.</span>
+              </span>
+              <span className="relative mt-1 inline-flex shrink-0 items-center">
+                <input type="checkbox" className="peer sr-only" checked={gasStockConfig.enabled !== false} onChange={(event) => setGasStockConfig({ ...gasStockConfig, enabled: event.target.checked })} />
+                <span className="h-7 w-12 rounded-full bg-slate-300 transition peer-checked:bg-fuel-green" />
+                <span className="absolute left-1 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+              </span>
+            </label>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label="Task due day">
+                <select className={inputClass} value={gasStockConfig.weekday ?? 6} onChange={(event) => setGasStockConfig({ ...gasStockConfig, weekday: Number(event.target.value) })}>
+                  {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].map((day, index) => <option key={day} value={index}>{day}</option>)}
+                </select>
+              </Field>
+              <Field label="Assign weekly count to">
+                <select className={inputClass} value={gasStockConfig.assignedStaffId || ""} onChange={(event) => setGasStockConfig({ ...gasStockConfig, assignedStaffId: event.target.value ? Number(event.target.value) : null })}>
+                  <option value="">Anyone</option>
+                  {staff.map((person) => <option key={person.id} value={person.id}>{person.name} · {person.role}</option>)}
+                </select>
+              </Field>
+            </div>
+
+            <div className="overflow-hidden rounded-lg border border-fuel-line">
+              <div className="grid grid-cols-[minmax(0,1fr)_96px_52px] gap-2 bg-slate-50 px-3 py-3 text-xs font-black uppercase tracking-wide text-slate-500 sm:grid-cols-[minmax(0,1fr)_120px_76px] sm:gap-3 sm:px-4">
+                <span>Product</span><span>Low at or below</span><span>Use</span>
+              </div>
+              <div className="divide-y divide-fuel-line">
+                {(gasStockConfig.products || []).map((product, index) => (
+                  <div key={product.id} className="grid grid-cols-[minmax(0,1fr)_96px_52px] items-center gap-2 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_120px_76px] sm:gap-3 sm:px-4">
+                    <span className="min-w-0 truncate font-black text-slate-800" title={product.name}>{product.name}</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className="h-10 w-full rounded-md border border-fuel-line px-3 text-center font-black outline-none focus:border-fuel-green"
+                      value={product.reorderLevel ?? 0}
+                      onChange={(event) => setGasStockConfig({
+                        ...gasStockConfig,
+                        products: gasStockConfig.products.map((item, itemIndex) => itemIndex === index ? { ...item, reorderLevel: Math.max(0, Number(event.target.value || 0)) } : item)
+                      })}
+                    />
+                    <input
+                      type="checkbox"
+                      className="h-5 w-5 accent-fuel-green"
+                      checked={product.active !== false}
+                      aria-label={`Use ${product.name}`}
+                      onChange={(event) => setGasStockConfig({
+                        ...gasStockConfig,
+                        products: gasStockConfig.products.map((item, itemIndex) => itemIndex === index ? { ...item, active: event.target.checked } : item)
+                      })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-blue-50 p-4 text-sm font-semibold text-blue-900">
+              Staff can save a partial draft. The linked task moves to Doing, and it moves to Done only after every active product has been entered and submitted.
+            </div>
+            <button className={primaryButton} disabled={saving}><Save size={18} /> {saving ? "Saving..." : "Save Gas Stock Settings"}</button>
+          </form>
+        </Card>
       ) : null}
 
       {activeSection === "access" ? (

@@ -34,6 +34,15 @@ export const DEFAULT_SHIFT_RANGE_PRESETS = [
   { label: "Late", startTime: "14:00", endTime: "22:00" },
   { label: "Evening", startTime: "18:00", endTime: "22:00" }
 ];
+export const DEFAULT_GAS_STOCK_CONFIG = {
+  enabled: true,
+  weekday: 6,
+  assignedStaffId: null,
+  products: [
+    "Butane 15kg", "Butane 7kg", "Butane 4.5kg", "Propane 19kg", "Propane 13kg", "Propane 6kg", "Propane 3.9kg",
+    "Patio 13kg", "Patio 5kg", "Campingaz 904", "Campingaz 907", "Patio Regulators", "Butane Regulators", "Propane Regulators"
+  ].map((name, index) => ({ id: `gas-${index + 1}`, name, reorderLevel: 0, active: true }))
+};
 export const db = isPostgres
   ? new pg.Pool({
       connectionString: databaseUrl,
@@ -101,7 +110,7 @@ function preparePostgresSql(sql) {
     .replace(/\?/g, () => `$${++index}`)
     .replace(/\bCURRENT_TIMESTAMP\b/g, "(CURRENT_TIMESTAMP::text)");
 
-  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|attendance)\b/i.test(query)
+  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|attendance|gasStockCounts|gasStockEntries)\b/i.test(query)
     && !/\bRETURNING\b/i.test(query)
     && !/\bON\s+CONFLICT\b/i.test(query)) {
     query = `${query.trim()} RETURNING id`;
@@ -167,7 +176,16 @@ const pgKeyMap = new Map(Object.entries({
   saledate: "saleDate",
   weekstart: "weekStart",
   publishedat: "publishedAt",
-  publishedby: "publishedBy"
+  publishedby: "publishedBy",
+  tasktype: "taskType",
+  linkedrecordid: "linkedRecordId",
+  taskid: "taskId",
+  countedby: "countedBy",
+  submittedat: "submittedAt",
+  countid: "countId",
+  productid: "productId",
+  productname: "productName",
+  reorderlevel: "reorderLevel"
 }));
 
 function cameliseRow(row) {
@@ -414,6 +432,35 @@ export async function initDb() {
       FOREIGN KEY (createdBy) REFERENCES users(id)
       )
     `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS gasStockCounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      weekStart TEXT NOT NULL UNIQUE,
+      taskId INTEGER,
+      status TEXT NOT NULL DEFAULT 'draft',
+      notes TEXT,
+      countedBy INTEGER,
+      submittedAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (taskId) REFERENCES tasks(id),
+      FOREIGN KEY (countedBy) REFERENCES users(id)
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS gasStockEntries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      countId INTEGER NOT NULL,
+      productId TEXT NOT NULL,
+      productName TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      reorderLevel INTEGER NOT NULL DEFAULT 0,
+      FOREIGN KEY (countId) REFERENCES gasStockCounts(id),
+      UNIQUE(countId, productId)
+      )
+    `);
   }
 
   await ensureShiftColumn("isExtra", "INTEGER NOT NULL DEFAULT 0");
@@ -441,6 +488,8 @@ export async function initDb() {
   await ensureTableColumn("sessions", "createdAt", "TEXT");
   await ensureTableColumn("tasks", "dueDate", "TEXT");
   await ensureTableColumn("tasks", "completedAt", "TEXT");
+  await ensureTableColumn("tasks", "taskType", "TEXT");
+  await ensureTableColumn("tasks", "linkedRecordId", "INTEGER");
   await run("UPDATE tasks SET completedAt = updatedAt WHERE status = 'done' AND completedAt IS NULL");
   await ensureTableColumn("attendance", "shiftId", "INTEGER");
   await ensureTableColumn("attendance", "clockOutAt", "TEXT");
@@ -458,6 +507,7 @@ export async function initDb() {
   await ensureDefaultSetting("businessTimezone", DEFAULT_TIME_ZONE);
   await ensureDefaultSetting("shiftRangePresets", JSON.stringify(DEFAULT_SHIFT_RANGE_PRESETS));
   await ensureDefaultSetting("ukRotaRules", JSON.stringify(DEFAULT_UK_ROTA_RULES));
+  await ensureDefaultSetting("gasStockConfig", JSON.stringify(DEFAULT_GAS_STOCK_CONFIG));
   await replaceLegacySeedEmails();
 
   const staffCount = await get("SELECT COUNT(*) AS count FROM staff");
@@ -689,6 +739,32 @@ async function createPostgresSchema() {
       createdBy INTEGER REFERENCES users(id),
       createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS gasStockCounts (
+      id SERIAL PRIMARY KEY,
+      weekStart TEXT NOT NULL UNIQUE,
+      taskId INTEGER REFERENCES tasks(id),
+      status TEXT NOT NULL DEFAULT 'draft',
+      notes TEXT,
+      countedBy INTEGER REFERENCES users(id),
+      submittedAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS gasStockEntries (
+      id SERIAL PRIMARY KEY,
+      countId INTEGER NOT NULL REFERENCES gasStockCounts(id),
+      productId TEXT NOT NULL,
+      productName TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 0,
+      reorderLevel INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(countId, productId)
     )
   `);
 }
@@ -1090,6 +1166,22 @@ export function getBusinessTimezone() {
   return businessTimezoneCache;
 }
 
+export async function getGasStockConfig() {
+  const row = await get("SELECT value FROM settings WHERE key = ?", ["gasStockConfig"]);
+  return normaliseGasStockConfig(row?.value);
+}
+
+export async function updateGasStockConfig(config = {}) {
+  const saved = normaliseGasStockConfig(config);
+  await run(
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ["gasStockConfig", JSON.stringify(saved)]
+  );
+  return saved;
+}
+
 export async function updateOpeningHours({ openingStart, openingEnd, businessTimezone, shiftRangePresets }) {
   await run(
     `INSERT INTO settings (key, value)
@@ -1238,6 +1330,34 @@ export async function updateBranding({ businessName, logoDataUrl, performanceTra
   }
 
   return getBranding();
+}
+
+function normaliseGasStockConfig(value) {
+  const parsed = typeof value === "string" ? parseJsonSetting(value) : value;
+  const source = parsed && typeof parsed === "object" ? parsed : {};
+  const products = Array.isArray(source.products) ? source.products : DEFAULT_GAS_STOCK_CONFIG.products;
+  const requestedWeekday = Number(source.weekday ?? DEFAULT_GAS_STOCK_CONFIG.weekday);
+  const seen = new Set();
+  const cleanProducts = [];
+  products.forEach((product, index) => {
+    const id = String(product.id || `gas-${index + 1}`).trim();
+    const name = String(product.name || "").trim();
+    if (!id || !name || seen.has(id)) return;
+    seen.add(id);
+    const requestedReorderLevel = Number(product.reorderLevel || 0);
+    cleanProducts.push({
+      id,
+      name,
+      reorderLevel: Number.isFinite(requestedReorderLevel) ? Math.max(0, requestedReorderLevel) : 0,
+      active: product.active !== false
+    });
+  });
+  return {
+    enabled: source.enabled !== false,
+    weekday: Number.isFinite(requestedWeekday) ? Math.min(6, Math.max(0, requestedWeekday)) : DEFAULT_GAS_STOCK_CONFIG.weekday,
+    assignedStaffId: source.assignedStaffId ? Number(source.assignedStaffId) : null,
+    products: cleanProducts
+  };
 }
 
 export async function createStaffUser(staffId, name) {

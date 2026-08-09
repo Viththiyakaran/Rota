@@ -20,6 +20,7 @@ import {
   get,
   getBusinessTimezone,
   getBranding,
+  getGasStockConfig,
   getOpeningHours,
   getSessionUser,
   getUkRotaRules,
@@ -32,6 +33,7 @@ import {
   resetUserPassword,
   shiftStartInstant,
   updateOpeningHours,
+  updateGasStockConfig,
   updateUkRotaRules,
   updateUser,
   updateBranding,
@@ -125,6 +127,8 @@ app.get("/api", (_req, res) => {
       "GET /api/settings/branding",
       "GET /api/settings/uk-rules",
       "PUT /api/settings/uk-rules",
+      "GET /api/settings/gas-stock",
+      "PUT /api/settings/gas-stock",
       "POST /api/auth/login",
       "POST /api/auth/recover-admin",
       "GET /api/auth/me",
@@ -167,6 +171,9 @@ app.get("/api", (_req, res) => {
       "POST /api/tasks",
       "PUT /api/tasks/:id",
       "DELETE /api/tasks/:id",
+      "GET /api/gas-stock/current?weekStart=yyyy-mm-dd",
+      "PUT /api/gas-stock/draft",
+      "POST /api/gas-stock/submit",
       "GET /api/sales?startDate=yyyy-mm-dd&endDate=yyyy-mm-dd",
       "PUT /api/sales",
       "GET /api/sales/communication?weekStart=yyyy-mm-dd",
@@ -530,6 +537,30 @@ app.get("/api/audit", requireAdmin, async (_req, res, next) => {
   }
 });
 
+app.get("/api/settings/gas-stock", requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await getGasStockConfig());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/settings/gas-stock", requireAdmin, async (req, res, next) => {
+  try {
+    const assigneeId = normaliseTaskAssigneeId(req.body.assignedStaffId);
+    if (Number.isNaN(assigneeId)) return res.status(400).json({ error: "Gas stock assignee is invalid." });
+    if (assigneeId && !(await activeStaffExists(assigneeId))) {
+      return res.status(400).json({ error: "Gas stock assignee is not an active staff member." });
+    }
+    const saved = await updateGasStockConfig({ ...req.body, assignedStaffId: assigneeId });
+    await ensureWeeklyGasStockTask(saved);
+    await addAudit(req.user.id, "update_gas_stock_settings", "Updated weekly gas stock settings");
+    res.json(saved);
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/sales", requireAdmin, async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query;
@@ -792,6 +823,7 @@ app.post("/api/attendance/clock-out", async (req, res, next) => {
 
 app.get("/api/tasks", async (_req, res, next) => {
   try {
+    await ensureWeeklyGasStockTask();
     const rows = await all(
       `SELECT tasks.*, staff.name AS assignedStaffName, users.username AS createdByUsername
        FROM tasks
@@ -810,6 +842,32 @@ app.get("/api/tasks", async (_req, res, next) => {
          tasks.id DESC`
     );
     res.json(rows.map(normaliseTask).filter((task) => !task.archived));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/gas-stock/current", async (req, res, next) => {
+  try {
+    const requestedWeek = req.query.weekStart || mondayForDate(datePartsInBusinessTimeZone().date);
+    if (!isDate(requestedWeek)) return res.status(400).json({ error: "Gas stock week is invalid." });
+    res.json(await buildGasStockView(mondayForDate(requestedWeek), req.user));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/gas-stock/draft", async (req, res, next) => {
+  try {
+    res.json(await saveGasStockCount(req, false));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/gas-stock/submit", async (req, res, next) => {
+  try {
+    res.json(await saveGasStockCount(req, true));
   } catch (error) {
     next(error);
   }
@@ -895,6 +953,9 @@ app.put("/api/tasks/:id", async (req, res, next) => {
 
     const nextStatus = req.body.status ?? current.status;
     if (!isTaskStatus(nextStatus)) return res.status(400).json({ error: "Task status is invalid." });
+    if (current.taskType === "gas_stock_count" && nextStatus === "done" && current.status !== "done") {
+      return res.status(400).json({ error: "Submit the linked gas stock count to complete this task." });
+    }
 
     const nextTitle = req.body.title === undefined ? current.title : String(req.body.title || "").trim();
     if (!nextTitle) return res.status(400).json({ error: "Task title is required." });
@@ -1965,6 +2026,207 @@ async function processDueStartPushes() {
 
 function shiftStartDate(shift) {
   return shiftStartInstant(shift.shiftDate, shift.startTime);
+}
+
+async function ensureWeeklyGasStockTask(configValue = null) {
+  const config = configValue || await getGasStockConfig();
+  if (!config.enabled) return null;
+  const weekStart = mondayForDate(datePartsInBusinessTimeZone().date);
+  const dueDate = addDays(weekStart, Number(config.weekday || 0));
+  let task = await get(
+    "SELECT * FROM tasks WHERE taskType = ? AND dueDate = ? ORDER BY id DESC LIMIT 1",
+    ["gas_stock_count", dueDate]
+  );
+
+  if (!task) {
+    const result = await run(
+      `INSERT INTO tasks (title, description, dueDate, status, assignedStaffId, createdBy, completedAt, taskType)
+       VALUES (?, ?, ?, 'todo', ?, NULL, NULL, ?)`,
+      [
+        "Count gas stock",
+        "Enter this week's full bottle quantities and submit the stock count.",
+        dueDate,
+        config.assignedStaffId || null,
+        "gas_stock_count"
+      ]
+    );
+    task = await getTask(result.id);
+    if (config.assignedStaffId) {
+      await notifyStaff(
+        config.assignedStaffId,
+        "Weekly gas stock count",
+        `Your gas stock count is due on ${dueDate}.`,
+        { type: "gas_stock_count" }
+      );
+    }
+  } else if (
+    task.status !== "done" &&
+    String(task.assignedStaffId || "") !== String(config.assignedStaffId || "")
+  ) {
+    await run(
+      "UPDATE tasks SET assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [config.assignedStaffId || null, task.id]
+    );
+    task = await getTask(task.id);
+  }
+
+  return normaliseTask(task);
+}
+
+async function buildGasStockView(weekStart, user) {
+  const config = await getGasStockConfig();
+  const currentWeekStart = mondayForDate(datePartsInBusinessTimeZone().date);
+  const dueDate = addDays(weekStart, Number(config.weekday || 0));
+  const task = weekStart === currentWeekStart
+    ? await ensureWeeklyGasStockTask(config)
+    : await getTaskByTypeAndDueDate("gas_stock_count", dueDate);
+  const count = await get("SELECT * FROM gasStockCounts WHERE weekStart = ?", [weekStart]);
+  const entries = count
+    ? await all("SELECT * FROM gasStockEntries WHERE countId = ? ORDER BY id ASC", [count.id])
+    : [];
+  const previousCount = await get(
+    `SELECT * FROM gasStockCounts
+     WHERE weekStart < ? AND status = 'submitted'
+     ORDER BY weekStart DESC LIMIT 1`,
+    [weekStart]
+  );
+  const previousEntries = previousCount
+    ? await all("SELECT * FROM gasStockEntries WHERE countId = ?", [previousCount.id])
+    : [];
+  const currentByProduct = new Map(entries.map((entry) => [entry.productId, Number(entry.quantity)]));
+  const previousByProduct = new Map(previousEntries.map((entry) => [entry.productId, Number(entry.quantity)]));
+  const canEdit = Boolean(
+    config.enabled &&
+    (user.role === "admin" || (
+      weekStart === currentWeekStart &&
+      (!config.assignedStaffId || Number(config.assignedStaffId) === Number(user.staffId))
+    ))
+  );
+
+  return {
+    weekStart,
+    weekEnd: addDays(weekStart, 6),
+    dueDate,
+    currentWeek: weekStart === currentWeekStart,
+    canEdit,
+    config,
+    task: task ? normaliseTask(task) : null,
+    count: count ? {
+      ...count,
+      taskId: count.taskId || null,
+      submittedAt: normaliseStoredTimestamp(count.submittedAt)
+    } : null,
+    previousWeekStart: previousCount?.weekStart || null,
+    notes: count?.notes || "",
+    products: config.products.filter((product) => product.active).map((product) => {
+      const quantity = currentByProduct.has(product.id) ? currentByProduct.get(product.id) : null;
+      const previousQuantity = previousByProduct.has(product.id) ? previousByProduct.get(product.id) : null;
+      return {
+        ...product,
+        quantity,
+        previousQuantity,
+        change: quantity !== null && previousQuantity !== null ? quantity - previousQuantity : null,
+        lowStock: quantity !== null && quantity <= Number(product.reorderLevel || 0)
+      };
+    })
+  };
+}
+
+async function saveGasStockCount(req, submit) {
+  const config = await getGasStockConfig();
+  if (!config.enabled) throw requestError("Gas stock counting is disabled in Business Settings.", 400);
+  const suppliedWeek = req.body.weekStart || mondayForDate(datePartsInBusinessTimeZone().date);
+  if (!isDate(suppliedWeek)) throw requestError("Gas stock week is invalid.", 400);
+  const weekStart = mondayForDate(suppliedWeek);
+  const currentWeekStart = mondayForDate(datePartsInBusinessTimeZone().date);
+  const assignedToUser = !config.assignedStaffId || Number(config.assignedStaffId) === Number(req.user.staffId);
+  if (req.user.role !== "admin" && (weekStart !== currentWeekStart || !assignedToUser)) {
+    throw requestError("This gas stock count is not assigned to you.", 403);
+  }
+
+  const activeProducts = config.products.filter((product) => product.active);
+  const quantities = req.body.quantities && typeof req.body.quantities === "object" ? req.body.quantities : {};
+  const cleaned = new Map();
+  for (const product of activeProducts) {
+    const raw = quantities[product.id];
+    if (raw === undefined || raw === null || raw === "") {
+      if (submit) throw requestError(`Enter the quantity for ${product.name}.`, 400);
+      continue;
+    }
+    const quantity = Number(raw);
+    if (!Number.isInteger(quantity) || quantity < 0) {
+      throw requestError(`${product.name} must be a whole number of zero or more.`, 400);
+    }
+    cleaned.set(product.id, quantity);
+  }
+
+  const dueDate = addDays(weekStart, Number(config.weekday || 0));
+  const task = weekStart === currentWeekStart
+    ? await ensureWeeklyGasStockTask(config)
+    : await getTaskByTypeAndDueDate("gas_stock_count", dueDate);
+  let count = await get("SELECT * FROM gasStockCounts WHERE weekStart = ?", [weekStart]);
+  if (count?.status === "submitted" && req.user.role !== "admin") {
+    throw requestError("This gas stock count has already been submitted. Ask an admin to correct it.", 403);
+  }
+  const submittedAt = submit ? new Date().toISOString() : null;
+  if (!count) {
+    const result = await run(
+      `INSERT INTO gasStockCounts (weekStart, taskId, status, notes, countedBy, submittedAt)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [weekStart, task?.id || null, submit ? "submitted" : "draft", String(req.body.notes || "").trim(), req.user.id, submittedAt]
+    );
+    count = await get("SELECT * FROM gasStockCounts WHERE id = ?", [result.id]);
+  } else {
+    await run(
+      `UPDATE gasStockCounts
+       SET taskId = ?, status = ?, notes = ?, countedBy = ?, submittedAt = ?, updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [task?.id || count.taskId || null, submit ? "submitted" : "draft", String(req.body.notes || "").trim(), req.user.id, submittedAt, count.id]
+    );
+  }
+
+  await run("DELETE FROM gasStockEntries WHERE countId = ?", [count.id]);
+  for (const product of activeProducts) {
+    if (!cleaned.has(product.id)) continue;
+    await run(
+      `INSERT INTO gasStockEntries (countId, productId, productName, quantity, reorderLevel)
+       VALUES (?, ?, ?, ?, ?)`,
+      [count.id, product.id, product.name, cleaned.get(product.id), Number(product.reorderLevel || 0)]
+    );
+  }
+
+  if (task?.id) {
+    await run(
+      `UPDATE tasks
+       SET status = ?, linkedRecordId = ?, completedAt = ?, updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [submit ? "done" : "process", count.id, submit ? submittedAt : null, task.id]
+    );
+  }
+  await addAudit(
+    req.user.id,
+    submit ? "submit_gas_stock" : "save_gas_stock_draft",
+    `${submit ? "Submitted" : "Saved"} gas stock count for ${weekStart}`
+  );
+  return buildGasStockView(weekStart, req.user);
+}
+
+function getTaskByTypeAndDueDate(taskType, dueDate) {
+  return get(
+    `SELECT tasks.*, staff.name AS assignedStaffName, users.username AS createdByUsername
+     FROM tasks
+     LEFT JOIN staff ON staff.id = tasks.assignedStaffId
+     LEFT JOIN users ON users.id = tasks.createdBy
+     WHERE tasks.taskType = ? AND tasks.dueDate = ?
+     ORDER BY tasks.id DESC LIMIT 1`,
+    [taskType, dueDate]
+  );
+}
+
+function requestError(message, statusCode = 400) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
 }
 
 async function getTask(id) {
