@@ -109,6 +109,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
             nextShift={nextShift}
             previousOrders={performanceData.previousOrders}
             sales={performanceData.sales}
+            tasks={tasks}
             weekDays={weekDays}
             weekRange={weekRange}
             workingNow={workingNow}
@@ -435,7 +436,7 @@ function CompactDashboardSummary({
   );
 }
 
-function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, previousOrders, sales, weekDays, weekRange, workingNow }) {
+function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, previousOrders, sales, tasks, weekDays, weekRange, workingNow }) {
   const previousDays = weekDays.map((day) => toDateInputValue(addDays(new Date(`${day}T00:00:00`), -7)));
   const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
   const submittedCurrentOrders = currentOrders.filter((order) => order.submissionStatus === "submitted");
@@ -463,6 +464,17 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
       ? workingRows.map((row) => formatShiftRange(row.startTime, row.endTime)).join(" · ")
       : "No one scheduled at this time";
   const nextShiftValue = nextShift ? nextShift.staffName : "No more shifts today";
+  const today = toDateInputValue(new Date());
+  const todaySalesEntered = salesByDate.has(today);
+  const todayOrderTasks = tasks.filter((task) => task.taskType === "recurring_order" && task.dueDate === today);
+  const submittedTodayOrders = submittedCurrentOrders.filter((order) => order.dueDate === today);
+  const pendingOrders = tasks
+    .filter((task) => task.taskType === "recurring_order" && task.status !== "done")
+    .sort((left, right) => String(left.dueDate || "").localeCompare(String(right.dueDate || "")));
+  const nextOrder = pendingOrders.find((task) => task.dueDate >= today) || pendingOrders[0];
+  const handoverRow = [...workingRows]
+    .filter((row) => row.endTime)
+    .sort((left, right) => timeToMinutes(left.endTime) - timeToMinutes(right.endTime))[0];
   const nextShiftDetail = nextShift ? `${formatTimeLabel(nextShift.startTime)} · ${formatShiftRange(nextShift.startTime, nextShift.endTime)}` : "All remaining staff are off";
 
   return (
@@ -486,23 +498,53 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
         <OverviewCard icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
       </div>
 
-      <div className="border-t border-fuel-line px-4 py-3 sm:px-5">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xs font-black uppercase tracking-wide text-slate-500">Sales &amp; orders by day</p>
-          <div className="flex gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> Sales</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
-        </div>
-        <div className="mt-3 grid h-32 grid-cols-7 items-end gap-2 sm:gap-3">
-          {rows.map((row) => (
-            <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
-              <div className="flex flex-1 items-end justify-center gap-1 sm:gap-1.5">
-                <div title={`Sales ${formatMoney(row.sales)}`} className="w-2.5 rounded-t bg-fuel-green sm:w-4" style={{ height: barHeight(row.sales, maxValue) }} />
-                <div title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
+      <div className="grid border-t border-fuel-line lg:grid-cols-[1.55fr_0.75fr]">
+        <div className="px-4 py-4 sm:px-5 lg:border-r lg:border-fuel-line">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Sales &amp; orders by day</p>
+            <div className="flex gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> Sales</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
+          </div>
+          <div className="mt-3 grid h-36 grid-cols-7 items-end gap-2 sm:gap-3">
+            {rows.map((row) => (
+              <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
+                <div className="flex flex-1 items-end justify-center gap-1 sm:gap-1.5">
+                  <div title={`Sales ${formatMoney(row.sales)}`} className="w-2.5 rounded-t bg-fuel-green sm:w-4" style={{ height: barHeight(row.sales, maxValue) }} />
+                  <div title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
+                </div>
+                <p className="mt-1.5 truncate text-center text-[11px] font-black text-slate-500">{row.label}</p>
               </div>
-              <p className="mt-1.5 truncate text-center text-[11px] font-black text-slate-500">{row.label}</p>
-            </div>
-          ))}
+            ))}
+          </div>
+          {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Work to populate this chart.</p>}
         </div>
-        {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Work to populate this chart.</p>}
+
+        <aside className="border-t border-fuel-line bg-slate-50/70 p-4 lg:border-t-0 sm:p-5">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Today&apos;s status</p>
+          <div className="mt-3 space-y-2.5">
+            <DashboardStatusLine
+              icon={todaySalesEntered ? CheckCircle2 : AlertTriangle}
+              label="Sales entry"
+              value={todaySalesEntered ? formatMoney(salesByDate.get(today)) : "Not entered today"}
+              warning={!todaySalesEntered}
+            />
+            <DashboardStatusLine
+              icon={todayOrderTasks.length && submittedTodayOrders.length < todayOrderTasks.length ? AlertTriangle : CheckCircle2}
+              label="Today&apos;s orders"
+              value={!todayOrderTasks.length ? "No order due today" : submittedTodayOrders.length === todayOrderTasks.length ? `${submittedTodayOrders.length} submitted` : `${todayOrderTasks.length - submittedTodayOrders.length} pending`}
+              warning={todayOrderTasks.length > submittedTodayOrders.length}
+            />
+            <DashboardStatusLine
+              icon={ShoppingCart}
+              label="Next order"
+              value={nextOrder ? `${String(nextOrder.title).replace(/^Order\s+—\s+/, "")} · ${formatDayLabel(nextOrder.dueDate)}` : "All planned orders complete"}
+            />
+            <DashboardStatusLine
+              icon={Clock}
+              label="Shift handover"
+              value={handoverRow ? `${handoverRow.staffName} ends ${formatTimeLabel(handoverRow.endTime)}` : "No active handover"}
+            />
+          </div>
+        </aside>
       </div>
     </Card>
   );
@@ -519,6 +561,18 @@ function OverviewCard({ change = null, detail, icon: Icon, label, tone = "blue",
       <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 truncate text-xl font-black text-fuel-ink" title={String(value)}>{value}</p>
       <p className="mt-1 truncate text-xs font-semibold text-slate-500" title={detail}>{detail}</p>
+    </div>
+  );
+}
+
+function DashboardStatusLine({ icon: Icon, label, value, warning = false }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-fuel-line bg-white p-3 shadow-sm">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${warning ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}><Icon size={17} /></span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">{label}</p>
+        <p className={`mt-0.5 truncate text-sm font-black ${warning ? "text-amber-800" : "text-fuel-ink"}`} title={value}>{value}</p>
+      </div>
     </div>
   );
 }
