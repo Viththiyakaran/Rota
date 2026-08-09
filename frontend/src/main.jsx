@@ -304,7 +304,7 @@ function App() {
         <nav className="space-y-1">
           {desktopNav.map((item) => {
             const Icon = item.icon;
-            const active = page === item.id;
+            const active = page === item.id || (item.id === "tasks" && page === "tasks-plans");
             return (
               <button
                 key={item.id}
@@ -378,7 +378,7 @@ function App() {
                 onClick={() => setPage("settings")}
                 title="Settings"
                 className={`flex h-11 w-11 items-center justify-center rounded-lg transition ${
-                  page === "settings" ? "bg-fuel-green text-white shadow-sm" : "bg-fuel-mist text-fuel-green hover:bg-fuel-line"
+                  page === "settings" || page === "settings-tasks" ? "bg-fuel-green text-white shadow-sm" : "bg-fuel-mist text-fuel-green hover:bg-fuel-line"
                 }`}
               >
                 <SettingsIcon size={20} />
@@ -413,7 +413,7 @@ function App() {
               {desktopNav.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <button key={item.id} className={`flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left font-bold ${page === item.id ? "bg-fuel-green text-white" : "text-blue-50 hover:bg-white/10"}`} onClick={() => { setPage(item.id); setMobileMenuOpen(false); }}>
+                  <button key={item.id} className={`flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left font-bold ${page === item.id || (item.id === "tasks" && page === "tasks-plans") ? "bg-fuel-green text-white" : "text-blue-50 hover:bg-white/10"}`} onClick={() => { setPage(item.id); setMobileMenuOpen(false); }}>
                     <Icon size={19} /> {item.label}
                   </button>
                 );
@@ -455,14 +455,14 @@ function App() {
             shiftId={editingShift.id}
           />
         )}
-        {page === "tasks" && <Tasks currentUser={currentUser} goTo={setPage} />}
+        {(page === "tasks" || page === "tasks-plans") && <Tasks key={page} currentUser={currentUser} goTo={setPage} initialView={page === "tasks-plans" ? "plans" : "week"} />}
         {page === "gas-stock" && <GasStock currentUser={currentUser} />}
         {page === "performance" && isAdmin && performanceEnabled && <Performance branding={branding} />}
         {page === "reports" && isAdmin && <Reports goTo={setPage} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}
         {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} onProfileUpdated={setCurrentUser} />}
-        {page === "settings" && isAdmin && <Settings branding={branding} goTo={setPage} onBrandingSaved={setBranding} />}
+        {(page === "settings" || page === "settings-tasks") && isAdmin && <Settings key={page} branding={branding} goTo={setPage} initialSection={page === "settings-tasks" ? "tasks" : "business"} onBrandingSaved={setBranding} />}
       </main>
 
       {popupNotification && (

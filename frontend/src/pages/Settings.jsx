@@ -68,8 +68,8 @@ function cacheUkRules(rules) {
   }
 }
 
-export function Settings({ branding, goTo, onBrandingSaved }) {
-  const [activeSection, setActiveSection] = React.useState("business");
+export function Settings({ branding, goTo, initialSection = "business", onBrandingSaved }) {
+  const [activeSection, setActiveSection] = React.useState(initialSection);
   const [form, setForm] = React.useState(branding);
   const [users, setUsers] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
@@ -870,7 +870,7 @@ export function Settings({ branding, goTo, onBrandingSaved }) {
                 <p className="mt-1 text-sm font-semibold text-slate-500">Create an order plan once, then its enable switch will appear here.</p>
               </div>
             )}
-            <button type="button" className={softButton} onClick={() => goTo?.("tasks")}>
+            <button type="button" className={softButton} onClick={() => goTo?.("tasks-plans")}>
               <ShoppingCart size={18} /> Open Order Plans
             </button>
           </div>

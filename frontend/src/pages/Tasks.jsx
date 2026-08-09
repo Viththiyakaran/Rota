@@ -11,10 +11,10 @@ import {
   Pencil,
   PoundSterling,
   Plus,
-  RotateCw,
   Save,
   Send,
   ShoppingCart,
+  SlidersHorizontal,
   Trash2,
   UserRound,
   X
@@ -45,11 +45,11 @@ const SUGGESTED_ORDERS = [
 ];
 const EMPTY_PLAN = { name: "", supplier: "", weekdays: [], departments: ["Total order"], notes: "", assignedStaffId: "", active: true };
 
-export function Tasks({ currentUser, goTo }) {
+export function Tasks({ currentUser, goTo, initialView = "week" }) {
   const today = React.useMemo(() => toDateInputValue(new Date()), []);
   const weekStart = React.useMemo(() => mondayFor(today), [today]);
   const weekEnd = React.useMemo(() => addDays(weekStart, 6), [weekStart]);
-  const [view, setView] = React.useState("week");
+  const [view, setView] = React.useState(initialView);
   const [tasks, setTasks] = React.useState([]);
   const [schedules, setSchedules] = React.useState([]);
   const [orderSummary, setOrderSummary] = React.useState([]);
@@ -195,24 +195,32 @@ export function Tasks({ currentUser, goTo }) {
   return (
     <div className="space-y-5">
       <PageHeader
-        eyebrow="Station operations"
-        title="Work"
-        description="One place for this week's gas count, supplier orders and other shop jobs."
-        meta={<Pill><CalendarCheck2 size={18} /> {formatWeek(weekStart, weekEnd)}</Pill>}
+        eyebrow={view === "plans" ? "Task setup" : "Station operations"}
+        title={view === "plans" ? "Order Plans" : "Work"}
+        description={view === "plans" ? "Create recurring supplier orders once. Enabled plans generate the correct tasks every week." : "Complete this week's enabled gas, supplier order and shop tasks."}
+        meta={view === "plans" ? (
+          <button type="button" onClick={() => goTo?.("settings-tasks")} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-fuel-mist px-4 text-sm font-black text-fuel-green">
+            <ArrowLeft size={17} /> Back to Task Settings
+          </button>
+        ) : <Pill><CalendarCheck2 size={18} /> {formatWeek(weekStart, weekEnd)}</Pill>}
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {view !== "plans" && <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Due today" value={dueToday} tone={dueToday ? "blue" : "slate"} />
         <Metric label="Overdue" value={overdue} tone={overdue ? "red" : "slate"} />
         <Metric label="Weekly order value" value={formatCurrency(weeklyOrderTotal)} tone="amber" />
         <Metric label="Completed" value={doneThisWeek.length} tone="green" />
-      </div>
+      </div>}
 
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm">
+      {view !== "plans" && <div className="flex gap-1 overflow-x-auto rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm">
         <ViewButton active={view === "week"} icon={CalendarCheck2} label="This week" onClick={() => setView("week")} />
-        <ViewButton active={view === "plans"} icon={RotateCw} label="Order plans" onClick={() => setView("plans")} />
         <ViewButton active={view === "other"} icon={ClipboardList} label="Other tasks" onClick={() => setView("other")} />
-      </div>
+        {isAdmin && (
+          <button type="button" onClick={() => goTo?.("settings-tasks")} className="flex min-w-max flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-black text-fuel-green transition hover:bg-fuel-mist">
+            <SlidersHorizontal size={17} /> Task settings
+          </button>
+        )}
+      </div>}
 
       {error && <p className="rounded-lg border border-red-100 bg-red-50 p-3 font-bold text-red-700">{error}</p>}
 
@@ -373,7 +381,7 @@ function ThisWeek({ activeTasks, doneTasks, goTo, onOpenOrder, onUpdate, orderSu
       <Card className="text-center">
         <CheckCircle2 className="mx-auto text-emerald-600" size={38} />
         <h3 className="mt-3 text-xl font-black">This week is clear</h3>
-        <p className="mt-1 font-semibold text-slate-500">Add ordering days in Order plans and they will appear here automatically.</p>
+        <p className="mt-1 font-semibold text-slate-500">Enabled gas and order plans will appear here automatically when they are due.</p>
       </Card>
     );
   }
