@@ -35,7 +35,7 @@ const navItems = [
   { id: "edit-shift", label: "Edit Shift", icon: CalendarDays, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Work", icon: ListChecks, roles: ["admin", "staff"] },
   { id: "gas-stock", label: "Gas Stock", icon: PackageCheck, roles: ["admin", "staff"] },
-  { id: "performance", label: "Performance", icon: TrendingUp, roles: ["admin"] },
+  { id: "performance", label: "Performance", icon: TrendingUp, roles: ["admin", "staff"] },
   { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
   { id: "reminders", label: "Reminders", icon: Bell, roles: ["admin", "staff"], hidden: true },
@@ -457,7 +457,7 @@ function App() {
         )}
         {page === "tasks" && <Tasks currentUser={currentUser} goTo={setPage} />}
         {page === "gas-stock" && <GasStock currentUser={currentUser} />}
-        {page === "performance" && isAdmin && performanceEnabled && <Performance branding={branding} />}
+        {page === "performance" && performanceEnabled && <Performance branding={branding} currentUser={currentUser} />}
         {page === "reports" && isAdmin && <Reports goTo={setPage} />}
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}

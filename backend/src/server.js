@@ -569,7 +569,7 @@ app.put("/api/settings/gas-stock", requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get("/api/sales", requireAdmin, async (req, res, next) => {
+app.get("/api/sales", async (req, res, next) => {
   try {
     const { startDate, endDate } = req.query;
     if (!isDate(startDate) || !isDate(endDate) || endDate < startDate) {
@@ -642,7 +642,7 @@ app.put("/api/sales", requireAdmin, async (req, res, next) => {
   }
 });
 
-app.get("/api/sales/communication", requireAdmin, async (req, res, next) => {
+app.get("/api/sales/communication", async (req, res, next) => {
   try {
     const weekStart = String(req.query.weekStart || "");
     if (!isDate(weekStart)) return res.status(400).json({ error: "A valid week start date is required." });

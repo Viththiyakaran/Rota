@@ -260,8 +260,20 @@ async function runSmoke() {
   assert(salesCommunication.communication === "Focus on weekend add-on sales.", "sales communication saves");
   const reloadedSalesCommunication = await request("/api/sales/communication?weekStart=2026-07-27", { cookie: admin.cookie });
   assert(reloadedSalesCommunication.communication === "Focus on weekend add-on sales.", "sales communication reloads");
-  await expectStatus("/api/sales?startDate=2026-07-20&endDate=2026-07-27", 403, { cookie: staff.cookie });
-  await expectStatus("/api/sales/communication?weekStart=2026-07-27", 403, { cookie: staff.cookie });
+  const staffSales = await request("/api/sales?startDate=2026-07-20&endDate=2026-07-27", { cookie: staff.cookie });
+  assert(staffSales[0].amount === 8200.5 && staffSales[1].amount === 9100.75, "staff can view performance sales");
+  const staffSalesCommunication = await request("/api/sales/communication?weekStart=2026-07-27", { cookie: staff.cookie });
+  assert(staffSalesCommunication.communication === "Focus on weekend add-on sales.", "staff can view performance communication");
+  await expectStatus("/api/sales", 403, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { entries: [{ saleDate: "2026-07-27", amount: 1 }] }
+  });
+  await expectStatus("/api/sales/communication", 403, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { weekStart: "2026-07-27", communication: "Staff cannot change this." }
+  });
 
   const createdStaff = await request("/api/staff", {
     cookie: admin.cookie,

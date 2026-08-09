@@ -15,7 +15,8 @@ import { Card } from "../components/Card.jsx";
 import { PageHeader, Pill, primaryButton, softButton } from "../components/PageHeader.jsx";
 import { addDays, formatDateLabel, formatDayLabel, getMonday, toDateInputValue } from "../dateUtils.js";
 
-export function Performance({ branding }) {
+export function Performance({ branding, currentUser }) {
+  const canEdit = currentUser?.role === "admin";
   const [weekStart, setWeekStart] = React.useState(() => getMonday(new Date()));
   const currentDates = React.useMemo(
     () => Array.from({ length: 7 }, (_, index) => toDateInputValue(addDays(weekStart, index))),
@@ -129,7 +130,7 @@ export function Performance({ branding }) {
   return (
     <div className="space-y-5 pb-8">
       <PageHeader
-        eyebrow="Admin performance"
+        eyebrow={canEdit ? "Admin performance" : "Team performance"}
         title="Performance Tracker"
         description="Compare daily sales with last week and share the finished board with the team."
         meta={(
@@ -162,15 +163,17 @@ export function Performance({ branding }) {
               Next
               <ArrowRight size={18} />
             </button>
-            <button
-              type="button"
-              className={primaryButton}
-              disabled={loading || saving}
-              onClick={savePerformance}
-            >
-              <Save size={18} />
-              {saving ? "Saving..." : "Save"}
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                className={primaryButton}
+                disabled={loading || saving}
+                onClick={savePerformance}
+              >
+                <Save size={18} />
+                {saving ? "Saving..." : "Save"}
+              </button>
+            )}
             <button
               type="button"
               className={primaryButton}
@@ -237,12 +240,14 @@ export function Performance({ branding }) {
                     <p className="text-xs font-semibold text-slate-500">{formatDayLabel(currentDate)}</p>
                   </div>
                   <SalesInput
+                    canEdit={canEdit}
                     date={currentDate}
                     value={values[currentDate] ?? ""}
                     onChange={(value) => updateValue(currentDate, value)}
                     loading={loading}
                   />
                   <SalesInput
+                    canEdit={canEdit}
                     date={previousDates[index]}
                     value={values[previousDates[index]] ?? ""}
                     onChange={(value) => updateValue(previousDates[index], value)}
@@ -271,7 +276,7 @@ export function Performance({ branding }) {
               rows="4"
               maxLength="2000"
               value={communication}
-              disabled={loading}
+              disabled={loading || !canEdit}
               onChange={(event) => {
                 setCommunication(event.target.value);
                 setMessage("");
@@ -286,7 +291,7 @@ export function Performance({ branding }) {
   );
 }
 
-function SalesInput({ date, loading, onChange, value }) {
+function SalesInput({ canEdit, date, loading, onChange, value }) {
   return (
     <label className="relative block">
       <span className="sr-only">Sales for {formatDayLabel(date)}</span>
@@ -297,7 +302,7 @@ function SalesInput({ date, loading, onChange, value }) {
         min="0"
         max="100000000"
         step="0.01"
-        disabled={loading}
+        disabled={loading || !canEdit}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={loading ? "Loading..." : "0.00"}
