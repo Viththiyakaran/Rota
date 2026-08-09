@@ -4,7 +4,7 @@ import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
 import { PageHeader, Pill, darkButton, primaryButton, softButton } from "../components/PageHeader.jsx";
-import { DeleteConfirmationModal, EMPTY_ORDER_PLAN, OrderPlans } from "./Tasks.jsx";
+import { DEFAULT_ORDER_PLANS, DeleteConfirmationModal, EMPTY_ORDER_PLAN, OrderPlans } from "./Tasks.jsx";
 
 const TIMEZONE_OPTIONS = [
   { value: "Europe/London", label: "United Kingdom - Europe/London" },
@@ -121,6 +121,10 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
     () => JSON.stringify(ukRules) !== JSON.stringify(savedUkRules),
     [savedUkRules, ukRules]
   );
+  const availableDefaultOrderPlans = DEFAULT_ORDER_PLANS.filter((preset) => !orderSchedules.some((schedule) =>
+    schedule.name.toLowerCase() === preset.name.toLowerCase() &&
+    (schedule.supplier || "").toLowerCase() === preset.supplier.toLowerCase()
+  ));
 
   const showSavedPopup = (text) => {
     setMessage(text);
@@ -230,6 +234,15 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
     } finally {
       setSavingScheduleId(null);
     }
+  };
+
+  const startOrderPlanSetup = (preset = {}) => {
+    setShowOrderManager(true);
+    setOrderPlan(newOrderPlan(preset));
+    setEditingOrderPlanId(null);
+    setShowOrderPlanForm(true);
+    setError("");
+    setMessage("");
   };
 
   const saveOrderPlan = async (event) => {
@@ -938,6 +951,30 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
                 <p className="mt-1 text-sm font-semibold text-slate-500">Create an order plan once, then its enable switch will appear here.</p>
               </div>
             )}
+            {availableDefaultOrderPlans.length > 0 && (
+              <div className="rounded-xl border border-blue-100 bg-blue-50/70 p-4">
+                <div className="mb-3">
+                  <p className="font-black text-fuel-ink">Quick setup</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-600">Select a default plan, choose its ordering days and save.</p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {availableDefaultOrderPlans.map((preset) => (
+                    <button
+                      key={`${preset.supplier}-${preset.name}`}
+                      type="button"
+                      onClick={() => startOrderPlanSetup(preset)}
+                      className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-blue-100 bg-white px-3 py-2 text-left transition hover:border-fuel-green hover:bg-fuel-mist"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-black text-fuel-ink">{preset.supplier ? `${preset.supplier} — ` : ""}{preset.name}</span>
+                        <span className="text-xs font-bold text-slate-500">Not set up</span>
+                      </span>
+                      <span className="shrink-0 rounded-md bg-fuel-green px-2.5 py-1.5 text-xs font-black text-white">Set up</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <button type="button" className={primaryButton} onClick={() => setShowOrderManager(true)}>
               <ShoppingCart size={18} /> Manage Weekly Order Plans
             </button>
@@ -961,11 +998,7 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
                   setShowOrderPlanForm(false);
                 }}
                 onDelete={(schedule) => setDeleteOrderTarget({ type: "schedule", item: schedule })}
-                onNew={(preset = null) => {
-                  setOrderPlan(newOrderPlan(preset || {}));
-                  setEditingOrderPlanId(null);
-                  setShowOrderPlanForm(true);
-                }}
+                onNew={(preset = null) => startOrderPlanSetup(preset || {})}
                 plan={orderPlan}
                 saving={saving}
                 schedules={orderSchedules}

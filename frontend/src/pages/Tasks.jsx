@@ -35,7 +35,7 @@ const DAYS = [
   { value: 0, short: "Sun", label: "Sunday" }
 ];
 const MORRISONS_DEPARTMENTS = ["Ambient", "Tobacco", "Chilled", "Frozen"];
-const SUGGESTED_ORDERS = [
+export const DEFAULT_ORDER_PLANS = [
   { name: "1st Order", supplier: "Morrisons", departments: MORRISONS_DEPARTMENTS },
   { name: "2nd Order", supplier: "Morrisons", departments: MORRISONS_DEPARTMENTS },
   { name: "Vape", supplier: "", departments: ["Total order"] },
@@ -493,7 +493,8 @@ export function OrderPlans(props) {
                 <textarea className={`${inputClass} min-h-20`} placeholder="Cut-off time, portal or checklist" value={plan.notes} onChange={(event) => setPlan({ ...plan, notes: event.target.value })} />
               </Field>
               <label className="flex items-center gap-2 text-sm font-bold text-slate-600"><input type="checkbox" checked={plan.active} onChange={(event) => setPlan({ ...plan, active: event.target.checked })} /> Active</label>
-              <div className="flex gap-2"><button disabled={saving} className={`${primaryButton} flex-1`}>{saving ? "Saving..." : editingPlanId ? "Save changes" : "Create plan"}</button><button type="button" onClick={onCancel} className="rounded-lg bg-slate-100 px-4 font-black text-slate-600">Cancel</button></div>
+              {!editingPlanId && <p className="rounded-lg bg-blue-50 p-3 text-xs font-bold leading-5 text-blue-800">Choose at least one ordering day. After saving, LocalPlanner creates this order task automatically every week.</p>}
+              <div className="flex gap-2"><button disabled={saving} className={`${primaryButton} flex-1`}>{saving ? "Saving..." : editingPlanId ? "Save changes" : "Create weekly plan"}</button><button type="button" onClick={onCancel} className="rounded-lg bg-slate-100 px-4 font-black text-slate-600">Cancel</button></div>
             </form>
           </Card>
         ) : isAdmin ? (
@@ -501,7 +502,7 @@ export function OrderPlans(props) {
             <h3 className="font-black">Default weekly plans</h3>
             <p className="mt-1 text-sm font-semibold text-slate-500">Choose a template, select its ordering days and save it once.</p>
             <div className="mt-3 space-y-2">
-              {SUGGESTED_ORDERS.filter((preset) => !schedules.some((schedule) => schedule.name.toLowerCase() === preset.name.toLowerCase() && (schedule.supplier || "").toLowerCase() === preset.supplier.toLowerCase())).map((preset) => (
+              {DEFAULT_ORDER_PLANS.filter((preset) => !schedules.some((schedule) => schedule.name.toLowerCase() === preset.name.toLowerCase() && (schedule.supplier || "").toLowerCase() === preset.supplier.toLowerCase())).map((preset) => (
                 <button key={`${preset.supplier}-${preset.name}`} onClick={() => onNew(preset)} className="flex w-full items-center justify-between rounded-lg border border-fuel-line px-3 py-2 text-left text-sm font-black hover:bg-fuel-mist"><span>{preset.supplier ? `${preset.supplier} — ` : ""}{preset.name}</span><Plus size={16} /></button>
               ))}
             </div>
