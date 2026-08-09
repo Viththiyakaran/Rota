@@ -444,17 +444,18 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
   const ordersByDate = new Map();
   submittedCurrentOrders.forEach((order) => ordersByDate.set(order.dueDate, (ordersByDate.get(order.dueDate) || 0) + Number(order.total || 0)));
 
-  const rows = weekDays.map((date) => ({
+  const rows = weekDays.map((date, index) => ({
     date,
     label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${date}T00:00:00`)),
     sales: salesByDate.get(date) || 0,
+    previousSales: salesByDate.get(previousDays[index]) || 0,
     orders: ordersByDate.get(date) || 0
   }));
   const currentSales = weekDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
   const previousSales = previousDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
   const currentOrderValue = submittedCurrentOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const previousOrderValue = submittedPreviousOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.sales, row.orders]));
+  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.sales, row.previousSales, row.orders]));
   const usingClockedIn = clockedInNow.length > 0;
   const workingRows = usingClockedIn ? clockedInNow : workingNow;
   const workingNames = workingRows.map((row) => row.staffName).filter(Boolean).join(", ");
@@ -501,14 +502,15 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
       <div className="grid border-t border-fuel-line lg:grid-cols-[1.55fr_0.75fr]">
         <div className="px-4 py-4 sm:px-5 lg:border-r lg:border-fuel-line">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Sales &amp; orders by day</p>
-            <div className="flex gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> Sales</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Daily sales comparison</p>
+            <div className="flex flex-wrap justify-end gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> This week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-blue-200" /> Last week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
           </div>
           <div className="mt-3 grid h-36 grid-cols-7 items-end gap-2 sm:gap-3">
             {rows.map((row) => (
               <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
-                <div className="flex flex-1 items-end justify-center gap-1 sm:gap-1.5">
-                  <div title={`Sales ${formatMoney(row.sales)}`} className="w-2.5 rounded-t bg-fuel-green sm:w-4" style={{ height: barHeight(row.sales, maxValue) }} />
+                <div className="flex flex-1 items-end justify-center gap-0.5 sm:gap-1">
+                  <div title={`This week ${formatMoney(row.sales)}`} className="w-2 rounded-t bg-fuel-green sm:w-3.5" style={{ height: barHeight(row.sales, maxValue) }} />
+                  <div title={`Last week ${formatMoney(row.previousSales)}`} className="w-2 rounded-t bg-blue-200 sm:w-3.5" style={{ height: barHeight(row.previousSales, maxValue) }} />
                   <div title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
                 </div>
                 <p className="mt-1.5 truncate text-center text-[11px] font-black text-slate-500">{row.label}</p>
