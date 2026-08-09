@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, Building2, Clock, History, ImagePlus, KeyRound, MapPin, PackageCheck, Plus, RotateCcw, Save, ShieldCheck, SlidersHorizontal, Trash2, TrendingUp } from "lucide-react";
+import { AlertTriangle, Building2, ClipboardList, Clock, History, ImagePlus, KeyRound, MapPin, PackageCheck, Plus, RotateCcw, Save, ShieldCheck, ShoppingCart, SlidersHorizontal, Trash2, TrendingUp } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Field, inputClass } from "../components/Field.jsx";
@@ -42,7 +42,7 @@ const UK_ROTA_RULES_CACHE_KEY = "localops.ukRotaRules";
 const SETTINGS_SECTIONS = [
   { id: "business", label: "Business", description: "Branding and optional features", icon: Building2 },
   { id: "rota", label: "Rota rules", description: "Hours, presets and planning rules", icon: SlidersHorizontal },
-  { id: "stock", label: "Gas stock", description: "Weekly count and low-stock levels", icon: PackageCheck },
+  { id: "tasks", label: "Tasks", description: "Enable gas and order tasks", icon: ClipboardList },
   { id: "access", label: "Login access", description: "Admin and staff accounts", icon: KeyRound },
   { id: "activity", label: "Activity", description: "Recent admin changes", icon: History }
 ];
@@ -68,7 +68,7 @@ function cacheUkRules(rules) {
   }
 }
 
-export function Settings({ branding, onBrandingSaved }) {
+export function Settings({ branding, goTo, onBrandingSaved }) {
   const [activeSection, setActiveSection] = React.useState("business");
   const [form, setForm] = React.useState(branding);
   const [users, setUsers] = React.useState([]);
@@ -83,6 +83,8 @@ export function Settings({ branding, onBrandingSaved }) {
   const [newRange, setNewRange] = React.useState({ label: "", startTime: "09:00", endTime: "17:00" });
   const [ukRules, setUkRules] = React.useState(readCachedUkRules);
   const [gasStockConfig, setGasStockConfig] = React.useState({ enabled: true, weekday: 6, assignedStaffId: null, products: [] });
+  const [orderSchedules, setOrderSchedules] = React.useState([]);
+  const [savingScheduleId, setSavingScheduleId] = React.useState(null);
   const [savedUkRules, setSavedUkRules] = React.useState(readCachedUkRules);
   const [adminForm, setAdminForm] = React.useState({ username: "", password: "" });
   const [error, setError] = React.useState("");
@@ -114,8 +116,8 @@ export function Settings({ branding, onBrandingSaved }) {
   };
 
   const loadAdminData = React.useCallback(() => {
-    Promise.all([api.users(), api.openingHours(), api.ukRotaRules(), api.audit(), api.gasStockSettings(), api.staff()])
-      .then(([userRows, hours, rules, auditRows, stockConfig, staffRows]) => {
+    Promise.all([api.users(), api.openingHours(), api.ukRotaRules(), api.audit(), api.gasStockSettings(), api.staff(), api.workSchedules()])
+      .then(([userRows, hours, rules, auditRows, stockConfig, staffRows, schedules]) => {
         setUsers(userRows);
         setOpeningHours(hours);
         const loadedRules = normaliseUkRules(rules);
@@ -125,6 +127,7 @@ export function Settings({ branding, onBrandingSaved }) {
         setAudit(auditRows);
         setGasStockConfig(stockConfig);
         setStaff(staffRows.filter((person) => person.active));
+        setOrderSchedules(schedules);
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -198,6 +201,21 @@ export function Settings({ branding, onBrandingSaved }) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const toggleOrderSchedule = async (schedule) => {
+    setSavingScheduleId(schedule.id);
+    setError("");
+    setMessage("");
+    try {
+      const saved = await api.updateWorkSchedule(schedule.id, { active: !schedule.active });
+      setOrderSchedules((rows) => rows.map((row) => row.id === saved.id ? saved : row));
+      showSavedPopup(`${saved.name} weekly order task ${saved.active ? "enabled" : "paused"}.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingScheduleId(null);
     }
   };
 
@@ -736,12 +754,13 @@ export function Settings({ branding, onBrandingSaved }) {
       </div>
       ) : null}
 
-      {activeSection === "stock" ? (
+      {activeSection === "tasks" ? (
+        <div className="space-y-5">
         <Card className="p-0">
           <SectionHeader
             icon={<PackageCheck size={20} />}
-            title="Weekly Gas Stock Count"
-            description="Create one recurring task each week and define when a product should be highlighted as low stock."
+            title="Gas Stock Task"
+            description="Enable the weekly count and choose when it should appear for staff."
           />
           <form className="space-y-5 px-5 pb-5" onSubmit={saveGasStockSettings}>
             <label className="flex cursor-pointer items-start justify-between gap-4 rounded-lg border border-fuel-line bg-white p-4">
@@ -807,9 +826,56 @@ export function Settings({ branding, onBrandingSaved }) {
             <div className="rounded-lg bg-blue-50 p-4 text-sm font-semibold text-blue-900">
               Staff can save a partial draft. The linked task moves to Doing, and it moves to Done only after every active product has been entered and submitted.
             </div>
-            <button className={primaryButton} disabled={saving}><Save size={18} /> {saving ? "Saving..." : "Save Gas Stock Settings"}</button>
+            <button className={primaryButton} disabled={saving}><Save size={18} /> {saving ? "Saving..." : "Save Gas Task"}</button>
           </form>
         </Card>
+
+        <Card className="p-0">
+          <SectionHeader
+            icon={<ShoppingCart size={20} />}
+            title="Order Tasks"
+            description="Enable or pause the weekly tasks created from your order plans."
+          />
+          <div className="space-y-3 px-5 pb-5">
+            {orderSchedules.length ? orderSchedules.map((schedule) => (
+              <div key={schedule.id} className="flex items-start justify-between gap-4 rounded-lg border border-fuel-line bg-white p-4">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-black text-fuel-ink">{schedule.supplier ? `${schedule.supplier} — ` : ""}{schedule.name}</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-black ${schedule.active ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                      {schedule.active ? "Enabled" : "Paused"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    {(schedule.weekdays || []).length} day{(schedule.weekdays || []).length === 1 ? "" : "s"} each week
+                    {schedule.assignedStaffName ? ` · ${schedule.assignedStaffName}` : " · Anyone"}
+                  </p>
+                </div>
+                <label className={`relative mt-1 inline-flex shrink-0 items-center ${savingScheduleId === schedule.id ? "cursor-wait opacity-60" : "cursor-pointer"}`}>
+                  <input
+                    type="checkbox"
+                    className="peer sr-only"
+                    checked={schedule.active}
+                    disabled={savingScheduleId === schedule.id}
+                    aria-label={`${schedule.active ? "Pause" : "Enable"} ${schedule.name} weekly order task`}
+                    onChange={() => toggleOrderSchedule(schedule)}
+                  />
+                  <span className="h-7 w-12 rounded-full bg-slate-300 transition peer-checked:bg-fuel-green" />
+                  <span className="absolute left-1 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
+                </label>
+              </div>
+            )) : (
+              <div className="rounded-lg bg-slate-50 p-4">
+                <p className="font-black text-fuel-ink">No order plans created yet</p>
+                <p className="mt-1 text-sm font-semibold text-slate-500">Create an order plan once, then its enable switch will appear here.</p>
+              </div>
+            )}
+            <button type="button" className={softButton} onClick={() => goTo?.("tasks")}>
+              <ShoppingCart size={18} /> Open Order Plans
+            </button>
+          </div>
+        </Card>
+        </div>
       ) : null}
 
       {activeSection === "access" ? (

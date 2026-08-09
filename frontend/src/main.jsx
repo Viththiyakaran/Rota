@@ -462,7 +462,7 @@ function App() {
         {page === "time-off" && <TimeOff currentUser={currentUser} />}
         {page === "reminders" && <Reminders branding={{ ...branding, appTitle }} currentUser={currentUser} />}
         {page === "account" && <Account currentUser={currentUser} onPasswordChanged={setCurrentUser} onProfileUpdated={setCurrentUser} />}
-        {page === "settings" && isAdmin && <Settings branding={branding} onBrandingSaved={setBranding} />}
+        {page === "settings" && isAdmin && <Settings branding={branding} goTo={setPage} onBrandingSaved={setBranding} />}
       </main>
 
       {popupNotification && (
