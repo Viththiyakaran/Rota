@@ -19,10 +19,7 @@ export function Reports({ goTo }) {
     setError("");
     const shiftRanges = getRangeChunks(range.start, range.end);
     const previousRange = getPreviousRange(range);
-    const orderWeeks = [...new Set([
-      ...getRangeChunks(previousRange.start, previousRange.end),
-      ...shiftRanges
-    ])];
+    const orderWeeks = [...new Set(shiftRanges)];
     Promise.allSettled([
       api.staff(),
       Promise.all(shiftRanges.map((start) => api.week(start))),
@@ -68,7 +65,6 @@ export function Reports({ goTo }) {
   const periodSales = data.sales.filter((entry) => entry.saleDate >= range.start && entry.saleDate <= range.end);
   const previousSales = data.sales.filter((entry) => entry.saleDate >= previousRange.start && entry.saleDate <= previousRange.end);
   const periodOrders = data.orders.filter((order) => order.submissionStatus === "submitted" && order.dueDate >= range.start && order.dueDate <= range.end);
-  const previousOrders = data.orders.filter((order) => order.submissionStatus === "submitted" && order.dueDate >= previousRange.start && order.dueDate <= previousRange.end);
   const totalHours = sumHours(periodShifts);
   const scheduledStaff = staffHours.length;
   const taskTotal = periodCompletedTasks.length + openTasks.length;
@@ -138,7 +134,6 @@ export function Reports({ goTo }) {
         <BusinessPerformanceReport
           goTo={goTo}
           orders={periodOrders}
-          previousOrders={previousOrders}
           previousRange={previousRange}
           previousSales={previousSales}
           range={range}
@@ -276,14 +271,18 @@ export function Reports({ goTo }) {
   );
 }
 
-function BusinessPerformanceReport({ goTo, orders, previousOrders, previousRange, previousSales, range, sales }) {
+function BusinessPerformanceReport({ goTo, orders, previousRange, previousSales, range, sales }) {
   const salesTotal = sales.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
-  const previousSalesTotal = previousSales.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
   const orderTotal = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const previousOrderTotal = previousOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const salesChange = percentageChange(salesTotal, previousSalesTotal);
-  const orderChange = percentageChange(orderTotal, previousOrderTotal);
-  const orderToSales = salesTotal > 0 ? (orderTotal / salesTotal) * 100 : null;
+  const comparison = buildMatchingSalesComparison(range, previousRange, sales, previousSales);
+  const salesChange = percentageChange(comparison.currentTotal, comparison.previousTotal);
+  const recordedSalesDates = new Set(sales.map((entry) => entry.saleDate));
+  const coveredOrders = orders.filter((order) => recordedSalesDates.has(order.dueDate));
+  const coveredOrderTotal = coveredOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const orderToSales = salesTotal > 0 ? (coveredOrderTotal / salesTotal) * 100 : null;
+  const today = toDateInputValue(new Date());
+  const isOpenPeriod = range.start <= today && range.end >= today;
+  const salesLabel = isOpenPeriod ? "Sales to date" : "Sales";
   const trendRows = buildBusinessTrend(range, sales, orders);
   const maxTrend = Math.max(1, ...trendRows.flatMap((row) => [row.sales, row.orders]));
   const departmentTotals = new Map();
@@ -297,10 +296,10 @@ function BusinessPerformanceReport({ goTo, orders, previousOrders, previousRange
   return (
     <section className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <BusinessKpi icon={PoundSterling} label="Sales" value={formatCurrency(salesTotal)} helper={`${sales.length} daily entries`} change={salesChange} />
-        <BusinessKpi icon={ShoppingCart} label="Submitted orders" value={formatCurrency(orderTotal)} helper={`${orders.length} order${orders.length === 1 ? "" : "s"}`} change={orderChange} tone="amber" />
-        <BusinessKpi icon={Percent} label="Order-to-sales" value={orderToSales === null ? "—" : `${orderToSales.toFixed(1)}%`} helper="Planning indicator, not margin" tone="indigo" />
-        <BusinessKpi icon={TrendingUp} label="Sales comparison" value={salesChange === null ? "—" : `${salesChange >= 0 ? "+" : ""}${salesChange.toFixed(1)}%`} helper={`Previous period ${formatCurrency(previousSalesTotal)}`} change={salesChange} tone="emerald" />
+        <BusinessKpi icon={PoundSterling} label={salesLabel} value={formatCurrency(salesTotal)} helper={`${sales.length} recorded day${sales.length === 1 ? "" : "s"}`} />
+        <BusinessKpi icon={ShoppingCart} label="Submitted orders" value={formatCurrency(orderTotal)} helper={`${orders.length} order${orders.length === 1 ? "" : "s"} in selected period`} tone="amber" />
+        <BusinessKpi icon={Percent} label="Order-to-sales" value={orderToSales === null ? "—" : `${orderToSales.toFixed(1)}%`} helper={`${formatCurrency(coveredOrderTotal)} orders across recorded sales days`} tone="indigo" />
+        <BusinessKpi icon={TrendingUp} label="Sales comparison" value={salesChange === null ? "—" : `${salesChange >= 0 ? "+" : ""}${salesChange.toFixed(1)}%`} helper={comparison.dayCount ? `${comparison.dayCount} matching day${comparison.dayCount === 1 ? "" : "s"} · Previous ${formatCurrency(comparison.previousTotal)}` : "No matching previous sales days"} change={salesChange} tone="emerald" />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_0.85fr]">
@@ -345,7 +344,7 @@ function BusinessPerformanceReport({ goTo, orders, previousOrders, previousRange
           )}
         </Card>
       </div>
-      <p className="px-1 text-xs font-semibold text-slate-500">Previous comparison period: {formatDateLabel(previousRange.start)} – {formatDateLabel(previousRange.end)}. Order-to-sales is an operational indicator and is not a profit margin.</p>
+      <p className="px-1 text-xs font-semibold text-slate-500">Sales comparison uses only dates recorded in both periods. Order-to-sales includes orders due on recorded sales days and is an operational indicator, not a profit margin.</p>
     </section>
   );
 }
@@ -803,6 +802,29 @@ function EmptyLine() {
 function percentageChange(current, previous) {
   if (!Number(previous)) return null;
   return ((Number(current || 0) - Number(previous)) / Number(previous)) * 100;
+}
+
+function buildMatchingSalesComparison(range, previousRange, sales, previousSales) {
+  const currentByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
+  const previousByDate = new Map(previousSales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
+  const currentStart = new Date(`${range.start}T00:00:00`);
+  const previousStart = new Date(`${previousRange.start}T00:00:00`);
+  const rangeEnd = new Date(`${range.end}T00:00:00`);
+  const rangeDays = Math.round((rangeEnd - currentStart) / 86400000) + 1;
+  let currentTotal = 0;
+  let previousTotal = 0;
+  let dayCount = 0;
+
+  for (let index = 0; index < rangeDays; index += 1) {
+    const currentDate = toDateInputValue(addDays(currentStart, index));
+    const previousDate = toDateInputValue(addDays(previousStart, index));
+    if (!currentByDate.has(currentDate) || !previousByDate.has(previousDate)) continue;
+    currentTotal += currentByDate.get(currentDate) || 0;
+    previousTotal += previousByDate.get(previousDate) || 0;
+    dayCount += 1;
+  }
+
+  return { currentTotal, previousTotal, dayCount };
 }
 
 function reportBarHeight(value, maxValue) {
