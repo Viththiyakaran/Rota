@@ -28,7 +28,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [timeOff, setTimeOff] = React.useState([]);
   const [tasks, setTasks] = React.useState([]);
   const [attendance, setAttendance] = React.useState([]);
-  const [performanceData, setPerformanceData] = React.useState({ sales: [], currentOrders: [], previousOrders: [] });
+  const [performanceData, setPerformanceData] = React.useState({ sales: [], currentOrders: [], previousOrders: [], salesMarginPercent: 0 });
   const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState("");
@@ -58,9 +58,10 @@ export function Dashboard({ goTo, currentUser, branding }) {
       isAdmin ? api.attendanceList() : Promise.resolve([]),
       isAdmin ? api.sales(previousWeekStart, currentWeekEnd) : Promise.resolve([]),
       isAdmin ? api.workOrderSummary(dashboardWeekStart) : Promise.resolve([]),
-      isAdmin ? api.workOrderSummary(previousWeekStart) : Promise.resolve([])
+      isAdmin ? api.workOrderSummary(previousWeekStart) : Promise.resolve([]),
+      isAdmin ? api.businessPerformanceSettings() : Promise.resolve({ salesMarginPercent: 0 })
     ])
-      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult, performanceSettingsResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
@@ -71,9 +72,10 @@ export function Dashboard({ goTo, currentUser, branding }) {
         setPerformanceData({
           sales: salesResult.status === "fulfilled" ? salesResult.value : [],
           currentOrders: currentOrdersResult.status === "fulfilled" ? currentOrdersResult.value : [],
-          previousOrders: previousOrdersResult.status === "fulfilled" ? previousOrdersResult.value : []
+          previousOrders: previousOrdersResult.status === "fulfilled" ? previousOrdersResult.value : [],
+          salesMarginPercent: performanceSettingsResult.status === "fulfilled" ? Number(performanceSettingsResult.value.salesMarginPercent || 0) : 0
         });
-        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult].find((result) => result.status === "rejected");
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult, performanceSettingsResult].find((result) => result.status === "rejected");
         if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
@@ -109,6 +111,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
             nextShift={nextShift}
             previousOrders={performanceData.previousOrders}
             sales={performanceData.sales}
+            salesMarginPercent={performanceData.salesMarginPercent}
             tasks={tasks}
             weekDays={weekDays}
             weekRange={weekRange}
@@ -436,7 +439,7 @@ function CompactDashboardSummary({
   );
 }
 
-function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, previousOrders, sales, tasks, weekDays, weekRange, workingNow }) {
+function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, previousOrders, sales, salesMarginPercent, tasks, weekDays, weekRange, workingNow }) {
   const previousDays = weekDays.map((day) => toDateInputValue(addDays(new Date(`${day}T00:00:00`), -7)));
   const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
   const submittedCurrentOrders = currentOrders.filter((order) => order.submissionStatus === "submitted");
@@ -455,6 +458,8 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
   }));
   const currentSales = weekDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
   const previousSales = previousDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
+  const currentEstimatedGrossProfit = currentSales * Number(salesMarginPercent || 0) / 100;
+  const previousEstimatedGrossProfit = previousSales * Number(salesMarginPercent || 0) / 100;
   const currentOrderValue = submittedCurrentOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const previousOrderValue = submittedPreviousOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const maxValue = Math.max(1, ...rows.flatMap((row) => [row.sales, row.previousSales, row.orders]));
@@ -494,10 +499,11 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
         </div>
       </div>
 
-      <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-5">
         <OverviewCard icon={Users} label="Working now" value={workingNames || "No one working"} detail={workingDetail} />
         <OverviewCard icon={Clock} label="Next shift" value={nextShiftValue} detail={nextShiftDetail} />
         <OverviewCard icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} detail={`Last week ${formatMoney(previousSales)}`} change={percentageChange(currentSales, previousSales)} />
+        <OverviewCard icon={TrendingUp} label="Estimated gross profit" value={salesMarginPercent > 0 ? formatMoney(currentEstimatedGrossProfit) : "Not configured"} detail={salesMarginPercent > 0 ? `${Number(salesMarginPercent).toFixed(2)}% margin · Last week ${formatMoney(previousEstimatedGrossProfit)}` : "Set sales margin in Settings"} tone="emerald" />
         <OverviewCard icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
       </div>
 
