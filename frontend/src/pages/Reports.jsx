@@ -288,7 +288,10 @@ function BusinessPerformanceReport({ goTo, orders, previousRange, previousSales,
   const departmentTotals = new Map();
   orders.forEach((order) => {
     Object.entries(order.amounts || {}).forEach(([department, amount]) => {
-      departmentTotals.set(department, (departmentTotals.get(department) || 0) + Number(amount || 0));
+      const label = department === "Total order"
+        ? (order.orderName || order.supplier || "Other order")
+        : department;
+      departmentTotals.set(label, (departmentTotals.get(label) || 0) + Number(amount || 0));
     });
   });
   const departments = [...departmentTotals.entries()].sort((left, right) => right[1] - left[1]);
