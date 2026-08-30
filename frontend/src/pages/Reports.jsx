@@ -7,12 +7,13 @@ import { addDays, formatDateLabel, formatDayLabel, getMonday, toDateInputValue }
 
 export function Reports({ goTo }) {
   const [period, setPeriod] = React.useState("this-week");
+  const [selectedMonth, setSelectedMonth] = React.useState(toMonthInputValue(new Date()));
   const [data, setData] = React.useState({ staff: [], shifts: [], timeOff: [], tasks: [], completedTasks: [], audit: [], sales: [], orders: [], businessPerformance: { salesMarginPercent: 0 } });
   const [loading, setLoading] = React.useState(true);
   const [workingTaskId, setWorkingTaskId] = React.useState(null);
   const [error, setError] = React.useState("");
 
-  const range = React.useMemo(() => getReportRange(period), [period]);
+  const range = React.useMemo(() => getReportRange(period, selectedMonth), [period, selectedMonth]);
 
   React.useEffect(() => {
     setLoading(true);
@@ -121,6 +122,16 @@ export function Reports({ goTo }) {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <p className="text-sm font-bold text-slate-500">{formatDateLabel(range.start)} – {formatDateLabel(range.end)}</p>
+            {period === "selected-month" && (
+              <input
+                type="month"
+                aria-label="Report month"
+                max={toMonthInputValue(new Date())}
+                className="min-h-11 rounded-lg border border-fuel-line bg-white px-3 text-sm font-bold text-fuel-ink outline-none focus:border-fuel-green focus:ring-2 focus:ring-blue-100"
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+              />
+            )}
             <select
               className="min-h-11 rounded-lg border border-fuel-line bg-white px-3 text-sm font-bold text-fuel-ink outline-none focus:border-fuel-green focus:ring-2 focus:ring-blue-100"
               value={period}
@@ -129,6 +140,9 @@ export function Reports({ goTo }) {
               <option value="this-week">This week</option>
               <option value="last-week">Last week</option>
               <option value="this-month">This month</option>
+              <option value="last-month">Last month</option>
+              <option value="two-months-ago">Two months ago</option>
+              <option value="selected-month">Select month…</option>
             </select>
           </div>
         </div>
@@ -901,7 +915,7 @@ function getPreviousRange(range) {
   };
 }
 
-function getReportRange(period) {
+function getReportRange(period, selectedMonth = "") {
   const now = new Date();
   if (period === "last-week") {
     const start = addDays(getMonday(now), -7);
@@ -912,8 +926,24 @@ function getReportRange(period) {
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
     return { start: toDateInputValue(start), end: toDateInputValue(end) };
   }
+  if (period === "last-month" || period === "two-months-ago") {
+    const monthsBack = period === "last-month" ? 1 : 2;
+    const start = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - monthsBack + 1, 0);
+    return { start: toDateInputValue(start), end: toDateInputValue(end) };
+  }
+  if (period === "selected-month" && /^\d{4}-\d{2}$/.test(selectedMonth)) {
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0);
+    return { start: toDateInputValue(start), end: toDateInputValue(end) };
+  }
   const start = getMonday(now);
   return { start: toDateInputValue(start), end: toDateInputValue(addDays(start, 6)) };
+}
+
+function toMonthInputValue(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function getRangeChunks(startDate, endDate) {
