@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, Clock, ListChecks, PlusCircle, PoundSterling, Printer, ShoppingCart, Sparkles, Users } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, Clock, ListChecks, PlusCircle, PoundSterling, Printer, ShoppingCart, Sparkles, TrendingUp, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
