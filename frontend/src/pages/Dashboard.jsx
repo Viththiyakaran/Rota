@@ -118,37 +118,157 @@ export function Dashboard({ goTo, currentUser, branding }) {
             workingNow={workingNow}
           />
         ) : (
-          <>
-            <TodayActionPlan
-              attentionItems={attentionItems}
-              clockedInNow={clockedInNow}
-              nextShift={nextShift}
-              tasksDueToday={tasksDueToday}
-              workingNow={workingNow}
-            />
-
-            <CompactDashboardSummary
-              activeStaff={staff.filter((person) => person.active)}
-              attentionItems={attentionItems}
-              reminders={reminders}
-              shifts={shifts}
-              timeOff={timeOff}
-              today={today}
-              weekDays={weekDays}
-              weekRange={weekRange}
-              onOpenWeek={() => goTo("rota")}
-              onOpenNotifications={() => goTo("reminders")}
-            />
-
-            <QuickActions
-              goTo={goTo}
-              isAdmin={isAdmin}
-              moreOpen={moreOpen}
-              onToggleMore={() => setMoreOpen((value) => !value)}
-            />
-          </>
+          <StaffDashboardOverview
+            currentUser={currentUser}
+            goTo={goTo}
+            reminders={reminders}
+            shifts={shifts}
+            tasks={tasks}
+            timeOff={timeOff}
+            today={today}
+            weekDays={weekDays}
+            weekRange={weekRange}
+          />
         )}
       </Status>
+    </div>
+  );
+}
+
+function StaffDashboardOverview({ currentUser, goTo, reminders, shifts, tasks, timeOff, today, weekDays, weekRange }) {
+  const staffId = String(currentUser?.staffId || "");
+  const myShifts = shifts
+    .filter((shift) => String(shift.staffId || "") === staffId && !isApprovedOffShift(shift, timeOff, shift.shiftDate))
+    .sort((left, right) => `${left.shiftDate}${left.startTime}`.localeCompare(`${right.shiftDate}${right.startTime}`));
+  const todayShift = myShifts.find((shift) => shift.shiftDate === today);
+  const nextShift = myShifts.find((shift) => new Date(`${shift.shiftDate}T${shift.startTime}:00`) > new Date());
+  const myOpenTasks = tasks
+    .filter((task) => task.status !== "done" && String(task.assignedStaffId || "") === staffId)
+    .sort((left, right) => String(left.dueDate || "").localeCompare(String(right.dueDate || "")));
+  const approvedTimeOff = timeOff.filter((request) =>
+    String(request.staffId || "") === staffId &&
+    request.status === "approved" &&
+    request.endDate >= today
+  );
+  const myReminders = reminders.filter((reminder) => String(reminder.staffId || "") === staffId);
+  const weeklyHours = myShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <Card className="overflow-hidden p-0">
+        <div className="bg-gradient-to-r from-fuel-deep via-[#12306f] to-fuel-green px-5 py-5 text-white">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-100">My week</p>
+              <h2 className="mt-1 text-2xl font-black">Your schedule at a glance</h2>
+              <p className="mt-1 text-sm font-semibold text-blue-100">{weekRange}</p>
+            </div>
+            <div className="flex gap-2">
+              <span className="rounded-lg bg-white/10 px-3 py-2 text-sm font-black ring-1 ring-white/15">{myShifts.length} shift{myShifts.length === 1 ? "" : "s"}</span>
+              <span className="rounded-lg bg-white/10 px-3 py-2 text-sm font-black ring-1 ring-white/15">{formatHourTotal(weeklyHours)}h paid</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <ActionMiniCard
+            icon={Clock}
+            title="My shift today"
+            value={todayShift ? formatShiftRange(todayShift.startTime, todayShift.endTime) : "Off today"}
+            detail={todayShift ? `${formatHourTotal(todayShift.paidHours)}h paid${todayShift.notes ? ` · ${todayShift.notes}` : ""}` : "No shift scheduled for you today."}
+            tone={todayShift ? "default" : "good"}
+          />
+          <ActionMiniCard
+            icon={CalendarDays}
+            title="My next shift"
+            value={nextShift ? formatDayLabel(nextShift.shiftDate) : "No upcoming shift"}
+            detail={nextShift ? formatShiftRange(nextShift.startTime, nextShift.endTime) : "Your week is currently clear."}
+          />
+          <ActionMiniCard
+            icon={ListChecks}
+            title="My open tasks"
+            value={myOpenTasks.length}
+            detail={myOpenTasks[0] ? `Next: ${myOpenTasks[0].title}` : "Nothing assigned to you."}
+            tone={myOpenTasks.length ? "warning" : "good"}
+          />
+          <ActionMiniCard
+            icon={CheckCircle2}
+            title="Approved time off"
+            value={approvedTimeOff.length}
+            detail={approvedTimeOff[0] ? `${formatDayLabel(approvedTimeOff[0].startDate)} – ${formatDayLabel(approvedTimeOff[0].endDate)}` : "No upcoming approved leave."}
+            tone="good"
+          />
+        </div>
+      </Card>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[1.3fr_0.8fr]">
+        <Card className="p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">My schedule</p>
+              <h2 className="mt-1 text-xl font-black text-fuel-ink">This week&apos;s shifts</h2>
+            </div>
+            <button type="button" className="text-sm font-black text-fuel-green" onClick={() => goTo("my-shifts")}>View all →</button>
+          </div>
+          <div className="mt-4 space-y-2">
+            {weekDays.map((day) => {
+              const shift = myShifts.find((item) => item.shiftDate === day);
+              const isToday = day === today;
+              return (
+                <div key={day} className={`grid grid-cols-[88px_1fr_auto] items-center gap-3 rounded-lg border px-3 py-2.5 ${isToday ? "border-blue-200 bg-fuel-mist" : "border-slate-100 bg-slate-50"}`}>
+                  <div>
+                    <p className={`text-sm font-black ${isToday ? "text-fuel-green" : "text-fuel-ink"}`}>{new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${day}T00:00:00`))}</p>
+                    <p className="text-[11px] font-bold text-slate-500">{new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${day}T00:00:00`))}</p>
+                  </div>
+                  <p className={`text-sm font-black ${shift ? "text-fuel-ink" : "text-slate-400"}`}>{shift ? formatShiftRange(shift.startTime, shift.endTime) : "Day off"}</p>
+                  <p className="text-xs font-bold text-slate-500">{shift ? `${formatHourTotal(shift.paidHours)}h` : "—"}</p>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+
+        <div className="space-y-4">
+          <Card className="p-4 sm:p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">My work</p>
+                <h2 className="mt-1 text-xl font-black text-fuel-ink">Assigned tasks</h2>
+              </div>
+              <button type="button" className="text-sm font-black text-fuel-green" onClick={() => goTo("tasks")}>Open Work →</button>
+            </div>
+            <div className="mt-4 space-y-2">
+              {myOpenTasks.slice(0, 4).map((task) => (
+                <div key={task.id} className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+                  <p className="truncate text-sm font-black text-fuel-ink">{task.title}</p>
+                  <p className="mt-0.5 text-xs font-bold text-slate-500">Due {formatDayLabel(task.dueDate)} · {task.status === "process" ? "In progress" : "To do"}</p>
+                </div>
+              ))}
+              {myOpenTasks.length === 0 && <div className="flex items-center gap-3 rounded-lg bg-emerald-50 px-3 py-3"><CheckCircle2 size={18} className="text-emerald-700" /><p className="text-sm font-bold text-emerald-800">You have no open assigned tasks.</p></div>}
+            </div>
+          </Card>
+
+          {myReminders.length > 0 && (
+            <Card className="p-4 sm:p-5">
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Coming up</p>
+              <div className="mt-3 space-y-2">
+                {myReminders.slice(0, 2).map((reminder) => (
+                  <div key={reminder.id} className="flex items-center gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
+                    <Clock size={17} className="shrink-0 text-fuel-green" />
+                    <p className="text-sm font-bold text-fuel-ink">Shift reminder · {formatDayLabel(reminder.shiftDate)} at {formatTimeLabel(reminder.startTime)}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-3">
+        <button type="button" onClick={() => goTo("my-shifts")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 py-3 font-black text-white shadow-sm"><CalendarDays size={18} />My Shifts</button>
+        <button type="button" onClick={() => goTo("tasks")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-fuel-line bg-white px-4 py-3 font-black text-fuel-ink shadow-sm"><ListChecks size={18} />Open Work</button>
+        <button type="button" onClick={() => goTo("time-off")} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-fuel-line bg-white px-4 py-3 font-black text-fuel-ink shadow-sm"><PlusCircle size={18} />Request Time Off</button>
+      </div>
     </div>
   );
 }
@@ -156,6 +276,9 @@ export function Dashboard({ goTo, currentUser, branding }) {
 function DashboardWelcome({ currentUser }) {
   const greeting = getGreeting();
   const name = currentUser?.staffName || currentUser?.username || "admin";
+  const introduction = currentUser?.role === "admin"
+    ? "Here is what needs your attention today."
+    : "Your shifts, assigned work and time off in one place.";
   const today = new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -166,7 +289,7 @@ function DashboardWelcome({ currentUser }) {
     <section className="flex flex-col gap-2 px-1 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
         <h1 className="text-2xl font-black leading-tight text-fuel-ink">{greeting}, {name}</h1>
-        <p className="mt-1 text-sm font-medium text-slate-600">Here is what needs your attention today.</p>
+        <p className="mt-1 text-sm font-medium text-slate-600">{introduction}</p>
       </div>
       <p className="text-sm font-bold text-slate-500">{today}</p>
     </section>
