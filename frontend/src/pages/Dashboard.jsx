@@ -447,6 +447,8 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
   const rows = weekDays.map((date, index) => ({
     date,
     label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${date}T00:00:00`)),
+    dateLabel: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00`)),
+    previousDateLabel: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${previousDays[index]}T00:00:00`)),
     sales: salesByDate.get(date) || 0,
     previousSales: salesByDate.get(previousDays[index]) || 0,
     orders: ordersByDate.get(date) || 0
@@ -505,17 +507,26 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">Daily sales comparison</p>
             <div className="flex flex-wrap justify-end gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> This week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-blue-200" /> Last week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
           </div>
-          <div className="mt-3 grid h-36 grid-cols-7 items-end gap-2 sm:gap-3">
-            {rows.map((row) => (
-              <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
-                <div className="flex flex-1 items-end justify-center gap-0.5 sm:gap-1">
-                  <div title={`This week ${formatMoney(row.sales)}`} className="w-2 rounded-t bg-fuel-green sm:w-3.5" style={{ height: barHeight(row.sales, maxValue) }} />
-                  <div title={`Last week ${formatMoney(row.previousSales)}`} className="w-2 rounded-t bg-blue-200 sm:w-3.5" style={{ height: barHeight(row.previousSales, maxValue) }} />
-                  <div title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
+          <p className="mt-2 text-xs font-semibold text-slate-500">Each day compares sales with the same weekday last week. Orders show submitted order value due this week.</p>
+          <div className="overflow-x-auto">
+            <div className="mt-3 grid h-64 min-w-[700px] grid-cols-7 items-end gap-2 sm:gap-3">
+              {rows.map((row) => (
+                <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
+                  <div className="flex flex-1 items-end justify-center gap-0.5 sm:gap-1">
+                    <div aria-label={`This week ${formatMoney(row.sales)}`} title={`This week ${formatMoney(row.sales)}`} className="w-2 rounded-t bg-fuel-green sm:w-3.5" style={{ height: barHeight(row.sales, maxValue) }} />
+                    <div aria-label={`Last week ${formatMoney(row.previousSales)}`} title={`Last week ${formatMoney(row.previousSales)}`} className="w-2 rounded-t bg-blue-200 sm:w-3.5" style={{ height: barHeight(row.previousSales, maxValue) }} />
+                    <div aria-label={`Orders ${formatMoney(row.orders)}`} title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
+                  </div>
+                  <p className="mt-1.5 truncate text-center text-[11px] font-black text-slate-600">{row.label}</p>
+                  <p className="truncate text-center text-[10px] font-bold text-slate-400">{row.dateLabel} vs {row.previousDateLabel}</p>
+                  <div className="mt-1.5 space-y-0.5 text-center text-[10px] font-black leading-tight">
+                    <p className="text-fuel-green">This {row.sales ? formatMoney(row.sales) : "—"}</p>
+                    <p className="text-blue-400">Last {row.previousSales ? formatMoney(row.previousSales) : "—"}</p>
+                    <p className="text-amber-600">Orders {row.orders ? formatMoney(row.orders) : "—"}</p>
+                  </div>
                 </div>
-                <p className="mt-1.5 truncate text-center text-[11px] font-black text-slate-500">{row.label}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Work to populate this chart.</p>}
         </div>
