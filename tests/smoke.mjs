@@ -233,6 +233,22 @@ async function runSmoke() {
     body: { weekStart: gasStock.weekStart, quantities: gasQuantities, notes: "Weekly count complete" }
   });
   assert(gasSubmitted.count.status === "submitted" && gasSubmitted.task.status === "done", "submitting gas count completes linked task");
+  const reopenedGasTask = await request(`/api/tasks/${gasStock.task.id}`, {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { status: "todo" }
+  });
+  assert(reopenedGasTask.status === "todo", "gas task mismatch can be reproduced");
+  const reconciledGasTasks = await request("/api/tasks", { cookie: admin.cookie });
+  const reconciledGasTask = reconciledGasTasks.find((task) => task.id === gasStock.task.id);
+  assert(reconciledGasTask?.status === "done" && reconciledGasTask.linkedRecordId === gasSubmitted.count.id, "submitted gas count repairs linked task status");
+  await request("/api/settings/gas-stock", {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { ...savedGasSettings, weekday: 5 }
+  });
+  const gasTasksAfterDayChange = await request("/api/tasks", { cookie: admin.cookie });
+  assert(gasTasksAfterDayChange.filter((task) => task.taskType === "gas_stock_count").length === 1, "changing the gas due day does not create a duplicate task for a submitted week");
   await expectStatus("/api/gas-stock/draft", 403, {
     cookie: staff.cookie,
     method: "PUT",

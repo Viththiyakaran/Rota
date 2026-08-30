@@ -832,6 +832,7 @@ app.post("/api/attendance/clock-out", async (req, res, next) => {
 app.get("/api/tasks", async (_req, res, next) => {
   try {
     await ensureWeeklyGasStockTask();
+    await reconcileGasStockTasks();
     await ensureRecurringWorkTasks();
     const rows = await all(
       `SELECT tasks.*, staff.name AS assignedStaffName, users.username AS createdByUsername
@@ -2228,8 +2229,10 @@ async function ensureWeeklyGasStockTask(configValue = null) {
   const weekStart = mondayForDate(datePartsInBusinessTimeZone().date);
   const dueDate = addDays(weekStart, Number(config.weekday || 0));
   let task = await get(
-    "SELECT * FROM tasks WHERE taskType = ? AND dueDate = ? ORDER BY id DESC LIMIT 1",
-    ["gas_stock_count", dueDate]
+    `SELECT * FROM tasks
+     WHERE taskType = ? AND dueDate >= ? AND dueDate <= ?
+     ORDER BY id DESC LIMIT 1`,
+    ["gas_stock_count", weekStart, addDays(weekStart, 6)]
   );
 
   if (!task) {
@@ -2255,16 +2258,78 @@ async function ensureWeeklyGasStockTask(configValue = null) {
     }
   } else if (
     task.status !== "done" &&
-    String(task.assignedStaffId || "") !== String(config.assignedStaffId || "")
+    (
+      task.dueDate !== dueDate ||
+      String(task.assignedStaffId || "") !== String(config.assignedStaffId || "")
+    )
   ) {
     await run(
-      "UPDATE tasks SET assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
-      [config.assignedStaffId || null, task.id]
+      "UPDATE tasks SET dueDate = ?, assignedStaffId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [dueDate, config.assignedStaffId || null, task.id]
     );
     task = await getTask(task.id);
   }
 
   return normaliseTask(task);
+}
+
+async function reconcileGasStockTasks() {
+  const counts = await all(
+    "SELECT * FROM gasStockCounts WHERE status IN ('draft', 'submitted') ORDER BY weekStart ASC"
+  );
+
+  for (const count of counts) {
+    const weekStart = mondayForDate(count.weekStart);
+    const weekEnd = addDays(weekStart, 6);
+    let task = count.taskId
+      ? await get("SELECT * FROM tasks WHERE id = ?", [count.taskId])
+      : null;
+
+    if (!task || task.taskType !== "gas_stock_count") {
+      task = await get(
+        `SELECT * FROM tasks
+         WHERE taskType = ? AND dueDate >= ? AND dueDate <= ?
+         ORDER BY id DESC LIMIT 1`,
+        ["gas_stock_count", weekStart, weekEnd]
+      );
+    }
+
+    if (!task) continue;
+
+    const nextStatus = count.status === "submitted" ? "done" : "process";
+    const nextCompletedAt = count.status === "submitted"
+      ? (count.submittedAt || count.updatedAt || new Date().toISOString())
+      : null;
+    const needsTaskUpdate =
+      task.status !== nextStatus ||
+      String(task.linkedRecordId || "") !== String(count.id) ||
+      String(task.completedAt || "") !== String(nextCompletedAt || "");
+
+    if (needsTaskUpdate) {
+      await run(
+        `UPDATE tasks
+         SET status = ?, linkedRecordId = ?, completedAt = ?, updatedAt = CURRENT_TIMESTAMP
+         WHERE id = ?`,
+        [nextStatus, count.id, nextCompletedAt, task.id]
+      );
+    }
+
+    if (String(count.taskId || "") !== String(task.id)) {
+      await run(
+        "UPDATE gasStockCounts SET taskId = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+        [task.id, count.id]
+      );
+    }
+
+    if (count.status === "submitted") {
+      await run(
+        `UPDATE tasks
+         SET status = 'done', linkedRecordId = ?, completedAt = ?, updatedAt = CURRENT_TIMESTAMP
+         WHERE taskType = ? AND dueDate >= ? AND dueDate <= ? AND status != 'done'`,
+        [count.id, nextCompletedAt, "gas_stock_count", weekStart, weekEnd]
+      );
+    }
+  }
 }
 
 async function buildGasStockView(weekStart, user) {
