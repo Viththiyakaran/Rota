@@ -317,16 +317,29 @@ function BusinessPerformanceReport({ goTo, orders, previousRange, previousSales,
             <div className="flex gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> Sales</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
           </div>
           {trendRows.some((row) => row.sales || row.orders) ? (
-            <div className="grid h-64 items-end gap-2 p-4" style={{ gridTemplateColumns: `repeat(${trendRows.length}, minmax(0, 1fr))` }}>
-              {trendRows.map((row) => (
-                <div key={row.key} className="flex h-full min-w-0 flex-col justify-end">
-                  <div className="flex flex-1 items-end justify-center gap-1">
-                    <div title={`Sales ${formatCurrency(row.sales)}`} className="w-3 rounded-t bg-fuel-green sm:w-5" style={{ height: reportBarHeight(row.sales, maxTrend) }} />
-                    <div title={`Orders ${formatCurrency(row.orders)}`} className="w-3 rounded-t bg-amber-400 sm:w-5" style={{ height: reportBarHeight(row.orders, maxTrend) }} />
-                  </div>
-                  <p className="mt-2 truncate text-center text-[10px] font-black text-slate-500 sm:text-xs">{row.label}</p>
+            <div>
+              <p className="px-4 pt-3 text-xs font-semibold text-slate-500">Blue shows recorded sales. Yellow shows submitted order value for the same period.</p>
+              <div className="overflow-x-auto">
+                <div
+                  className="grid h-72 items-end gap-2 p-4"
+                  style={{ gridTemplateColumns: `repeat(${trendRows.length}, minmax(88px, 1fr))`, minWidth: `${trendRows.length * 96}px` }}
+                >
+                  {trendRows.map((row) => (
+                    <div key={row.key} className="flex h-full min-w-0 flex-col justify-end">
+                      <div className="flex flex-1 items-end justify-center gap-1.5">
+                        <div aria-label={`Sales ${formatCurrency(row.sales)}`} title={`Sales ${formatCurrency(row.sales)}`} className="w-4 rounded-t bg-fuel-green sm:w-6" style={{ height: reportBarHeight(row.sales, maxTrend) }} />
+                        <div aria-label={`Orders ${formatCurrency(row.orders)}`} title={`Orders ${formatCurrency(row.orders)}`} className="w-4 rounded-t bg-amber-400 sm:w-6" style={{ height: reportBarHeight(row.orders, maxTrend) }} />
+                      </div>
+                      <p className="mt-2 truncate text-center text-xs font-black text-slate-600">{row.label}</p>
+                      <p className="truncate text-center text-[10px] font-bold text-slate-400">{row.detailLabel}</p>
+                      <div className="mt-1.5 space-y-0.5 text-center text-[10px] font-black leading-tight">
+                        <p className="text-fuel-green">Sales {row.sales ? formatCurrency(row.sales) : "—"}</p>
+                        <p className="text-amber-600">Orders {row.orders ? formatCurrency(row.orders) : "—"}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
           ) : <div className="p-5"><EmptyLine /></div>}
         </Card>
@@ -851,6 +864,7 @@ function buildBusinessTrend(range, sales, orders) {
       return {
         key: date,
         label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${date}T00:00:00`)),
+        detailLabel: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00`)),
         sales: salesByDate.get(date) || 0,
         orders: ordersByDate.get(date) || 0
       };
@@ -862,7 +876,7 @@ function buildBusinessTrend(range, sales, orders) {
     const dateObject = addDays(start, index);
     const date = toDateInputValue(dateObject);
     const weekStart = toDateInputValue(getMonday(dateObject));
-    const group = groups.get(weekStart) || { key: weekStart, label: `w/c ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${weekStart}T00:00:00`))}`, sales: 0, orders: 0 };
+    const group = groups.get(weekStart) || { key: weekStart, label: `w/c ${new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${weekStart}T00:00:00`))}`, detailLabel: "Weekly total", sales: 0, orders: 0 };
     group.sales += salesByDate.get(date) || 0;
     group.orders += ordersByDate.get(date) || 0;
     groups.set(weekStart, group);
