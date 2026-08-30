@@ -51,8 +51,10 @@ export function Reports({ goTo }) {
   const periodShifts = data.shifts.filter((shift) => shift.shiftDate >= range.start && shift.shiftDate <= range.end);
   const staffHours = buildStaffHours(data.staff, periodShifts);
   const periodTimeOff = data.timeOff.filter((request) => request.startDate <= range.end && request.endDate >= range.start);
-  const periodTasks = data.tasks.filter((task) => task.dueDate >= range.start && task.dueDate <= range.end);
+  const periodTasks = uniqueRowsBy([...data.tasks, ...data.completedTasks], "id")
+    .filter((task) => task.dueDate >= range.start && task.dueDate <= range.end);
   const openTasks = periodTasks.filter((task) => task.status !== "done");
+  const completedDueTasks = periodTasks.filter((task) => task.status === "done");
   const periodCompletedTasks = data.completedTasks.filter((task) => {
     const completedDate = task.completedAt ? toDateInputValue(new Date(task.completedAt)) : "";
     return completedDate >= range.start && completedDate <= range.end;
@@ -67,8 +69,8 @@ export function Reports({ goTo }) {
   const periodOrders = data.orders.filter((order) => order.submissionStatus === "submitted" && order.dueDate >= range.start && order.dueDate <= range.end);
   const totalHours = sumHours(periodShifts);
   const scheduledStaff = staffHours.length;
-  const taskTotal = periodCompletedTasks.length + openTasks.length;
-  const taskCompletionRate = taskTotal > 0 ? Math.round((periodCompletedTasks.length / taskTotal) * 100) : 0;
+  const taskTotal = periodTasks.length;
+  const taskCompletionRate = taskTotal > 0 ? Math.round((completedDueTasks.length / taskTotal) * 100) : 0;
   const hoursTrend = buildHoursTrend(range.start, range.end, periodShifts);
 
   const restoreTask = async (task) => {
@@ -166,7 +168,7 @@ export function Reports({ goTo }) {
             icon={CheckCircle2}
             label="Task completion"
             value={`${taskCompletionRate}%`}
-            helper={`${periodCompletedTasks.length} complete · ${openTasks.length} open`}
+            helper={`${completedDueTasks.length} complete · ${openTasks.length} open`}
             tone="amber"
           />
         </div>
@@ -200,18 +202,18 @@ export function Reports({ goTo }) {
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <p className="text-3xl font-black text-fuel-ink">{taskCompletionRate}%</p>
-                  <p className="text-xs font-bold text-slate-500">completed in this period</p>
+                  <p className="text-xs font-bold text-slate-500">tasks due in this period</p>
                 </div>
-                <p className="text-sm font-black text-fuel-green">{periodCompletedTasks.length}/{taskTotal}</p>
+                <p className="text-sm font-black text-fuel-green">{completedDueTasks.length}/{taskTotal}</p>
               </div>
               <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-slate-200">
                 <div className="h-full rounded-full bg-fuel-green transition-all" style={{ width: `${taskCompletionRate}%` }} />
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
-              <MiniMetric label="Complete" value={periodCompletedTasks.length} />
+              <MiniMetric label="Complete" value={completedDueTasks.length} />
               <MiniMetric label="Open" value={openTasks.length} />
-              <MiniMetric label="Archived" value={periodCompletedTasks.filter((task) => task.archived).length} />
+              <MiniMetric label="Archived" value={completedDueTasks.filter((task) => task.archived).length} />
             </div>
           </ReportCard>
         </div>
