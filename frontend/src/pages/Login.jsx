@@ -36,12 +36,12 @@ export function Login({ branding, onLogin }) {
             </span>
             <div>
               <h1 className="text-2xl font-black">LocalPlanner</h1>
-              <p className="text-sm font-semibold text-blue-50">Rota, weekly tasks and performance</p>
+              <p className="text-sm font-semibold text-blue-50">Rota, tasks, orders and sales</p>
             </div>
           </div>
           <div className="mt-8">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-blue-100">Your station, organised</p>
-            <h2 className="mt-2 text-3xl font-black leading-tight">One weekly view for the whole station.</h2>
+            <h2 className="mt-2 text-3xl font-black leading-tight">Run your station from one place.</h2>
             <p className="mt-2 max-w-md text-sm font-semibold leading-6 text-blue-100">
               Plan shifts, complete stock counts, manage orders and track sales from one simple workspace.
             </p>
@@ -56,7 +56,7 @@ export function Login({ branding, onLogin }) {
             </span>
             <div className="mt-3 min-w-0">
               <h1 className="text-2xl font-black leading-none text-fuel-ink">LocalPlanner</h1>
-              <p className="mt-2 text-sm font-semibold text-slate-500">Rota, weekly tasks and performance</p>
+              <p className="mt-2 text-sm font-semibold text-slate-500">Rota, tasks, orders and sales</p>
             </div>
           </div>
 
@@ -70,7 +70,7 @@ export function Login({ branding, onLogin }) {
             </span>
             <div className="mt-3 min-w-0 sm:mt-0">
               <h2 className="break-words text-lg font-black leading-tight text-fuel-ink sm:text-xl">{branding.businessName || "Your Business"}</h2>
-              <p className="mt-1 text-sm font-semibold text-slate-500">Rota, orders and staff planning</p>
+              <p className="mt-1 text-sm font-semibold text-slate-500">Rota, tasks, orders and sales</p>
             </div>
           </div>
 

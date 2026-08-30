@@ -117,7 +117,7 @@ function App() {
   }, []);
 
   React.useEffect(() => {
-    document.title = "LocalPlanner | Rota & Staff Planning";
+    document.title = "LocalPlanner | Rota, Orders & Sales";
   }, []);
 
   React.useEffect(() => {
@@ -297,7 +297,7 @@ function App() {
           </span>
           <span className="min-w-0">
             <span className="block truncate text-base font-black">{branding.businessName || "Your Business"}</span>
-            <span className="text-xs font-semibold text-blue-100">Rota, tasks and reminders</span>
+            <span className="text-xs font-semibold text-blue-100">Rota, tasks, orders and sales</span>
           </span>
         </button>
 
@@ -358,7 +358,7 @@ function App() {
             </button>
             <div className="hidden lg:block">
               <p className="text-sm font-black text-fuel-ink">{branding.businessName || "Your Business"}</p>
-              <p className="text-xs font-semibold text-slate-500">Rota, tasks, reminders and reports</p>
+              <p className="text-xs font-semibold text-slate-500">Rota, tasks, orders and sales</p>
             </div>
           </div>
           <div className="flex items-center justify-end gap-2">
