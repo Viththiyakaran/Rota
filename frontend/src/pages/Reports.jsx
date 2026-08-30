@@ -7,7 +7,7 @@ import { addDays, formatDateLabel, formatDayLabel, getMonday, toDateInputValue }
 
 export function Reports({ goTo }) {
   const [period, setPeriod] = React.useState("this-week");
-  const [data, setData] = React.useState({ staff: [], shifts: [], timeOff: [], tasks: [], completedTasks: [], audit: [], sales: [], orders: [] });
+  const [data, setData] = React.useState({ staff: [], shifts: [], timeOff: [], tasks: [], completedTasks: [], audit: [], sales: [], orders: [], businessPerformance: { salesMarginPercent: 0 } });
   const [loading, setLoading] = React.useState(true);
   const [workingTaskId, setWorkingTaskId] = React.useState(null);
   const [error, setError] = React.useState("");
@@ -28,9 +28,10 @@ export function Reports({ goTo }) {
       api.completedTasks(),
       api.audit(),
       api.sales(previousRange.start, range.end),
-      Promise.all(orderWeeks.map((weekStart) => api.workOrderSummary(weekStart)))
+      Promise.all(orderWeeks.map((weekStart) => api.workOrderSummary(weekStart))),
+      api.businessPerformanceSettings()
     ])
-      .then(([staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult, salesResult, orderResult]) => {
+      .then(([staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult, salesResult, orderResult, performanceResult]) => {
         setData({
           staff: staffResult.status === "fulfilled" ? staffResult.value : [],
           shifts: shiftResult.status === "fulfilled" ? uniqueRows(shiftResult.value.flat()) : [],
@@ -39,9 +40,10 @@ export function Reports({ goTo }) {
           completedTasks: completedTaskResult.status === "fulfilled" ? completedTaskResult.value : [],
           audit: auditResult.status === "fulfilled" ? auditResult.value : [],
           sales: salesResult.status === "fulfilled" ? salesResult.value : [],
-          orders: orderResult.status === "fulfilled" ? uniqueRowsBy(orderResult.value.flat(), "taskId") : []
+          orders: orderResult.status === "fulfilled" ? uniqueRowsBy(orderResult.value.flat(), "taskId") : [],
+          businessPerformance: performanceResult.status === "fulfilled" ? performanceResult.value : { salesMarginPercent: 0 }
         });
-        const failed = [staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult, salesResult, orderResult]
+        const failed = [staffResult, shiftResult, timeOffResult, taskResult, completedTaskResult, auditResult, salesResult, orderResult, performanceResult]
           .find((result) => result.status === "rejected");
         if (failed) setError(failed.reason.message);
       })
@@ -140,6 +142,7 @@ export function Reports({ goTo }) {
           previousSales={previousSales}
           range={range}
           sales={periodSales}
+          salesMarginPercent={data.businessPerformance.salesMarginPercent}
         />
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -273,8 +276,10 @@ export function Reports({ goTo }) {
   );
 }
 
-function BusinessPerformanceReport({ goTo, orders, previousRange, previousSales, range, sales }) {
+function BusinessPerformanceReport({ goTo, orders, previousRange, previousSales, range, sales, salesMarginPercent }) {
   const salesTotal = sales.reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const cleanSalesMargin = Number(salesMarginPercent || 0);
+  const estimatedGrossProfit = salesTotal * cleanSalesMargin / 100;
   const orderTotal = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const comparison = buildMatchingSalesComparison(range, previousRange, sales, previousSales);
   const salesChange = percentageChange(comparison.currentTotal, comparison.previousTotal);
@@ -300,8 +305,9 @@ function BusinessPerformanceReport({ goTo, orders, previousRange, previousSales,
 
   return (
     <section className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <BusinessKpi icon={PoundSterling} label={salesLabel} value={formatCurrency(salesTotal)} helper={`${sales.length} recorded day${sales.length === 1 ? "" : "s"}`} />
+        <BusinessKpi icon={PoundSterling} label="Estimated gross profit" value={cleanSalesMargin > 0 ? formatCurrency(estimatedGrossProfit) : "—"} helper={cleanSalesMargin > 0 ? `Using ${cleanSalesMargin.toFixed(2)}% sales margin` : "Set the sales margin in Settings"} tone="emerald" />
         <BusinessKpi icon={ShoppingCart} label="Submitted orders" value={formatCurrency(orderTotal)} helper={`${orders.length} order${orders.length === 1 ? "" : "s"} in selected period`} tone="amber" />
         <BusinessKpi icon={Percent} label="Order-to-sales" value={orderToSales === null ? "—" : `${orderToSales.toFixed(1)}%`} helper={`${formatCurrency(coveredOrderTotal)} orders across recorded sales days`} tone="indigo" />
         <BusinessKpi icon={TrendingUp} label="Sales comparison" value={salesChange === null ? "—" : `${salesChange >= 0 ? "+" : ""}${salesChange.toFixed(1)}%`} helper={comparison.dayCount ? `${comparison.dayCount} matching day${comparison.dayCount === 1 ? "" : "s"} · Previous ${formatCurrency(comparison.previousTotal)}` : "No matching previous sales days"} change={salesChange} tone="emerald" />

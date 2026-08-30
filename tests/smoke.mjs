@@ -61,6 +61,15 @@ async function runSmoke() {
   });
   assert(changedAdmin.user?.mustChangePassword === false, "admin first password change");
 
+  const savedBusinessPerformance = await request("/api/settings/business-performance", {
+    cookie: admin.cookie,
+    method: "PUT",
+    body: { salesMarginPercent: 25.5 }
+  });
+  assert(savedBusinessPerformance.salesMarginPercent === 25.5, "sales margin setting saves");
+  const reloadedBusinessPerformance = await request("/api/settings/business-performance", { cookie: admin.cookie });
+  assert(reloadedBusinessPerformance.salesMarginPercent === 25.5, "sales margin setting reloads");
+
   const orderPlan = await request("/api/work-schedules", {
     cookie: admin.cookie,
     method: "POST",

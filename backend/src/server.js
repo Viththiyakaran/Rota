@@ -18,6 +18,7 @@ import {
   ensureUserCalendarToken,
   findUserByUsername,
   get,
+  getBusinessPerformanceSettings,
   getBusinessTimezone,
   getBranding,
   getGasStockConfig,
@@ -37,6 +38,7 @@ import {
   updateUkRotaRules,
   updateUser,
   updateBranding,
+  updateBusinessPerformanceSettings,
   validTimeZone,
   verifyPassword
 } from "./db.js";
@@ -125,6 +127,8 @@ app.get("/api", (_req, res) => {
       "GET /api",
       "GET /api/health",
       "GET /api/settings/branding",
+      "GET /api/settings/business-performance",
+      "PUT /api/settings/business-performance",
       "GET /api/settings/uk-rules",
       "PUT /api/settings/uk-rules",
       "GET /api/settings/gas-stock",
@@ -540,6 +544,28 @@ app.put("/api/time-off/:id", requireAdmin, async (req, res, next) => {
 app.get("/api/audit", requireAdmin, async (_req, res, next) => {
   try {
     res.json(await listAudit());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/settings/business-performance", requireAdmin, async (_req, res, next) => {
+  try {
+    res.json(await getBusinessPerformanceSettings());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/settings/business-performance", requireAdmin, async (req, res, next) => {
+  try {
+    const salesMarginPercent = Number(req.body.salesMarginPercent);
+    if (!Number.isFinite(salesMarginPercent) || salesMarginPercent < 0 || salesMarginPercent > 100) {
+      return res.status(400).json({ error: "Sales margin must be between 0% and 100%." });
+    }
+    const saved = await updateBusinessPerformanceSettings({ salesMarginPercent });
+    await addAudit(req.user.id, "update_sales_margin", `Set sales margin to ${saved.salesMarginPercent}%`);
+    res.json(saved);
   } catch (error) {
     next(error);
   }

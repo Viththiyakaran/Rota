@@ -1182,6 +1182,16 @@ export async function getBranding() {
   };
 }
 
+export async function getBusinessPerformanceSettings() {
+  const row = await get("SELECT value FROM settings WHERE key = ?", ["salesMarginPercent"]);
+  const salesMarginPercent = Number(row?.value);
+  return {
+    salesMarginPercent: Number.isFinite(salesMarginPercent)
+      ? Math.min(100, Math.max(0, salesMarginPercent))
+      : 0
+  };
+}
+
 async function backfillPublishedRotas() {
   const existing = await get("SELECT COUNT(*) AS count FROM rotaPublications");
   if (Number(existing?.count || 0) > 0) return;
@@ -1404,6 +1414,20 @@ export async function updateBranding({ businessName, logoDataUrl, performanceTra
   }
 
   return getBranding();
+}
+
+export async function updateBusinessPerformanceSettings({ salesMarginPercent }) {
+  const requestedMargin = Number(salesMarginPercent);
+  const cleanMargin = Number.isFinite(requestedMargin)
+    ? Math.round(Math.min(100, Math.max(0, requestedMargin)) * 100) / 100
+    : 0;
+  await run(
+    `INSERT INTO settings (key, value)
+     VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ["salesMarginPercent", String(cleanMargin)]
+  );
+  return getBusinessPerformanceSettings();
 }
 
 function normaliseGasStockConfig(value) {

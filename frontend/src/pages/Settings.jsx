@@ -78,6 +78,7 @@ function cacheUkRules(rules) {
 export function Settings({ branding, initialSection = "business", onBrandingSaved }) {
   const [activeSection, setActiveSection] = React.useState(initialSection);
   const [form, setForm] = React.useState(branding);
+  const [businessPerformance, setBusinessPerformance] = React.useState({ salesMarginPercent: 0 });
   const [users, setUsers] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
   const [audit, setAudit] = React.useState([]);
@@ -133,8 +134,8 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
   };
 
   const loadAdminData = React.useCallback(() => {
-    Promise.all([api.users(), api.openingHours(), api.ukRotaRules(), api.audit(), api.gasStockSettings(), api.staff(), api.workSchedules()])
-      .then(([userRows, hours, rules, auditRows, stockConfig, staffRows, schedules]) => {
+    Promise.all([api.users(), api.openingHours(), api.ukRotaRules(), api.audit(), api.gasStockSettings(), api.staff(), api.workSchedules(), api.businessPerformanceSettings()])
+      .then(([userRows, hours, rules, auditRows, stockConfig, staffRows, schedules, performanceSettings]) => {
         setUsers(userRows);
         setOpeningHours(hours);
         const loadedRules = normaliseUkRules(rules);
@@ -145,6 +146,7 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
         setGasStockConfig(stockConfig);
         setStaff(staffRows.filter((person) => person.active));
         setOrderSchedules(schedules);
+        setBusinessPerformance(performanceSettings);
       })
       .catch((err) => setError(err.message));
   }, []);
@@ -180,7 +182,10 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
     setMessage("");
 
     try {
-      const saved = await api.updateBranding(form);
+      const [saved] = await Promise.all([
+        api.updateBranding(form),
+        api.updateBusinessPerformanceSettings(businessPerformance)
+      ]);
       onBrandingSaved(saved);
       showSavedPopup("Business settings updated.");
     } catch (err) {
@@ -601,6 +606,38 @@ export function Settings({ branding, initialSection = "business", onBrandingSave
                 <span className="absolute left-1 h-5 w-5 rounded-full bg-white shadow transition peer-checked:translate-x-5" />
               </span>
             </label>
+          </div>
+
+          <div className="rounded-lg border border-fuel-line bg-white p-4">
+            <div className="grid gap-4 sm:grid-cols-[1fr_240px] sm:items-end">
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700">
+                    <TrendingUp size={20} />
+                  </span>
+                  <div>
+                    <p className="font-black text-fuel-ink">Sales gross margin</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-600">Used to estimate gross profit from recorded sales in Reports.</p>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs font-semibold text-slate-500">Example: at {Number(businessPerformance.salesMarginPercent || 0).toFixed(2)}%, £10,000 sales gives an estimated gross profit of {new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" }).format(10000 * Number(businessPerformance.salesMarginPercent || 0) / 100)}. This is an estimate, not an accounting profit figure.</p>
+              </div>
+              <Field label="Gross margin percentage">
+                <div className="relative">
+                  <input
+                    required
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    className={`${inputClass} pr-10`}
+                    value={businessPerformance.salesMarginPercent ?? 0}
+                    onChange={(event) => setBusinessPerformance({ salesMarginPercent: event.target.value })}
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-black text-slate-500">%</span>
+                </div>
+              </Field>
+            </div>
           </div>
 
           <button
