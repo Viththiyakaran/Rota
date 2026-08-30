@@ -48,7 +48,7 @@ export function Tasks({ currentUser, goTo }) {
   const today = React.useMemo(() => toDateInputValue(new Date()), []);
   const weekStart = React.useMemo(() => mondayFor(today), [today]);
   const weekEnd = React.useMemo(() => addDays(weekStart, 6), [weekStart]);
-  const [view, setView] = React.useState("week");
+  const [view, setView] = React.useState("todo");
   const [tasks, setTasks] = React.useState([]);
   const [orderSummary, setOrderSummary] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
@@ -82,15 +82,22 @@ export function Tasks({ currentUser, goTo }) {
       (task.dueDate >= weekStart && task.dueDate <= weekEnd)
     )
   );
-  const doneThisWeek = tasks.filter((task) =>
-    task.status === "done" && task.dueDate >= weekStart && task.dueDate <= weekEnd
-  );
+  const doneThisWeek = tasks.filter((task) => {
+    if (task.status !== "done") return false;
+    const completedDate = task.completedAt ? toDateInputValue(new Date(task.completedAt)) : task.dueDate;
+    return completedDate >= weekStart && completedDate <= weekEnd;
+  });
   const manualTasks = tasks.filter((task) => !task.taskType);
+  const openManualTasks = manualTasks.filter((task) => task.status !== "done");
+  const orderTasks = tasks.filter((task) =>
+    task.taskType === "recurring_order" && task.dueDate && (
+      (task.status !== "done" && task.dueDate < today) ||
+      (task.dueDate >= weekStart && task.dueDate <= weekEnd)
+    )
+  );
   const dueToday = activeWeekTasks.filter((task) => task.dueDate === today).length;
   const overdue = activeWeekTasks.filter((task) => task.dueDate < today).length;
-  const weeklyOrderTotal = orderSummary
-    .filter((order) => order.submissionStatus === "submitted")
-    .reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const dueThisWeek = activeWeekTasks.filter((task) => task.dueDate >= today && task.dueDate <= weekEnd).length;
 
   const updateTask = async (task, payload) => {
     setError("");
@@ -158,40 +165,47 @@ export function Tasks({ currentUser, goTo }) {
       <PageHeader
         eyebrow="Station operations"
         title="Work"
-        description="Complete this week's enabled gas, supplier order and shop tasks."
+        description="See what needs doing next, then complete it."
         meta={<Pill><CalendarCheck2 size={18} /> {formatWeek(weekStart, weekEnd)}</Pill>}
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="Due today" value={dueToday} tone={dueToday ? "blue" : "slate"} />
+      <div className="grid gap-3 sm:grid-cols-3">
         <Metric label="Overdue" value={overdue} tone={overdue ? "red" : "slate"} />
-        <Metric label="Weekly order value" value={formatCurrency(weeklyOrderTotal)} tone="amber" />
-        <Metric label="Completed" value={doneThisWeek.length} tone="green" />
+        <Metric label="Due today" value={dueToday} tone={dueToday ? "blue" : "slate"} />
+        <Metric label="Due this week" value={dueThisWeek} tone={dueThisWeek ? "blue" : "slate"} />
       </div>
 
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm">
-        <ViewButton active={view === "week"} icon={CalendarCheck2} label="This week" onClick={() => setView("week")} />
-        <ViewButton active={view === "other"} icon={ClipboardList} label="Other tasks" onClick={() => setView("other")} />
+      <div className="grid grid-cols-2 gap-1 rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm lg:grid-cols-4" role="tablist" aria-label="Work views">
+        <ViewButton active={view === "todo"} icon={CalendarCheck2} label="To do" onClick={() => setView("todo")} />
+        <ViewButton active={view === "orders"} icon={ShoppingCart} label="Orders" onClick={() => setView("orders")} />
+        <ViewButton active={view === "shop"} icon={ClipboardList} label="Shop tasks" onClick={() => setView("shop")} />
+        <ViewButton active={view === "completed"} icon={CheckCircle2} label="Completed" onClick={() => setView("completed")} />
       </div>
 
       {error && <p className="rounded-lg border border-red-100 bg-red-50 p-3 font-bold text-red-700">{error}</p>}
 
       <Status loading={loading} error="" empty={false}>
-        {view === "week" && (
-          <ThisWeek
+        {view === "todo" && (
+          <ToDoView
             activeTasks={activeWeekTasks}
-            doneTasks={doneThisWeek}
             goTo={goTo}
             onOpenOrder={setSelectedOrderTask}
             onUpdate={updateTask}
-            orderSummary={orderSummary}
             today={today}
-            weekStart={weekStart}
           />
         )}
 
-        {view === "other" && (
-          <OtherTasks
+        {view === "orders" && (
+          <OrdersView
+            onOpenOrder={setSelectedOrderTask}
+            orderSummary={orderSummary}
+            tasks={orderTasks}
+            today={today}
+          />
+        )}
+
+        {view === "shop" && (
+          <ShopTasks
             currentUser={currentUser}
             form={quickTask}
             isAdmin={isAdmin}
@@ -201,7 +215,17 @@ export function Tasks({ currentUser, goTo }) {
             saving={saving}
             setForm={setQuickTask}
             staff={staff}
-            tasks={manualTasks}
+            tasks={openManualTasks}
+          />
+        )}
+
+        {view === "completed" && (
+          <CompletedView
+            goTo={goTo}
+            onOpenOrder={setSelectedOrderTask}
+            onUpdate={updateTask}
+            tasks={doneThisWeek}
+            today={today}
           />
         )}
       </Status>
@@ -288,77 +312,140 @@ export function DeleteConfirmationModal({ deleting, onCancel, onConfirm, target 
   );
 }
 
-function ThisWeek({ activeTasks, doneTasks, goTo, onOpenOrder, onUpdate, orderSummary, today, weekStart }) {
+function ToDoView({ activeTasks, goTo, onOpenOrder, onUpdate, today }) {
   const overdue = activeTasks.filter((task) => task.dueDate < today);
+  const dueToday = activeTasks.filter((task) => task.dueDate === today);
+  const later = activeTasks.filter((task) => task.dueDate > today);
   const groups = [
-    ...(overdue.length ? [{ key: "overdue", label: "Overdue", date: "Needs attention", tasks: overdue }] : []),
-    ...DAYS.map((day, index) => {
-      const date = addDays(weekStart, index);
-      return {
-        key: date,
-        label: date === today ? "Today" : day.label,
-        date: formatDate(date),
-        tasks: activeTasks.filter((task) => task.dueDate === date && task.dueDate >= today)
-      };
-    }).filter((group) => group.tasks.length)
+    ...(overdue.length ? [{ key: "attention", label: "Needs attention", detail: `${overdue.length} overdue`, tasks: overdue, urgent: true }] : []),
+    ...(dueToday.length ? [{ key: "today", label: "Due today", detail: `${dueToday.length} job${dueToday.length === 1 ? "" : "s"}`, tasks: dueToday }] : []),
+    ...(later.length ? [{ key: "later", label: "Later this week", detail: `${later.length} job${later.length === 1 ? "" : "s"}`, tasks: later }] : [])
   ];
 
-  const submittedOrders = orderSummary.filter((order) => order.submissionStatus === "submitted");
-
-  if (!groups.length && !doneTasks.length && !submittedOrders.length) {
+  if (!groups.length) {
     return (
       <Card className="text-center">
         <CheckCircle2 className="mx-auto text-emerald-600" size={38} />
-        <h3 className="mt-3 text-xl font-black">This week is clear</h3>
-        <p className="mt-1 font-semibold text-slate-500">Enabled gas and order plans will appear here automatically when they are due.</p>
+        <h3 className="mt-3 text-xl font-black">Nothing needs attention</h3>
+        <p className="mt-1 font-semibold text-slate-500">Gas counts, orders and shop tasks will appear here when they are due.</p>
       </Card>
     );
   }
 
   return (
     <div className="space-y-4">
-      {submittedOrders.length > 0 && (
-        <section className="rounded-xl border border-amber-200 bg-gradient-to-r from-amber-50 to-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div><p className="text-xs font-black uppercase tracking-wide text-amber-700">Order totals</p><h3 className="mt-1 text-lg font-black">This week</h3></div>
-            <p className="text-2xl font-black text-fuel-ink">{formatCurrency(submittedOrders.reduce((sum, order) => sum + Number(order.total || 0), 0))}</p>
-          </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {submittedOrders.map((order) => (
-              <div key={order.taskId} className="rounded-lg border border-amber-100 bg-white px-3 py-2">
-                <p className="text-xs font-bold text-slate-500">{order.supplier ? `${order.supplier} · ` : ""}{order.orderName}</p>
-                <p className="mt-0.5 font-black text-fuel-ink">{formatCurrency(order.total)}</p>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
       {groups.map((group) => (
-        <section key={group.key} className={`overflow-hidden rounded-xl border bg-white shadow-sm ${group.key === "overdue" ? "border-red-200" : "border-fuel-line"}`}>
-          <div className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${group.key === "overdue" ? "border-red-100 bg-red-50" : "border-fuel-line bg-slate-50/70"}`}>
-            <h3 className={`font-black ${group.key === "overdue" ? "text-red-700" : "text-fuel-ink"}`}>{group.label}</h3>
-            <span className="text-xs font-bold text-slate-500">{group.date} · {group.tasks.length}</span>
+        <section key={group.key} className={`overflow-hidden rounded-xl border bg-white shadow-sm ${group.urgent ? "border-red-200" : "border-fuel-line"}`}>
+          <div className={`flex items-center justify-between gap-3 border-b px-4 py-3 ${group.urgent ? "border-red-100 bg-red-50" : "border-fuel-line bg-slate-50/70"}`}>
+            <h3 className={`font-black ${group.urgent ? "text-red-700" : "text-fuel-ink"}`}>{group.label}</h3>
+            <span className="text-xs font-bold text-slate-500">{group.detail}</span>
           </div>
           <div className="divide-y divide-slate-100">
-            {group.tasks.map((task) => <WorkRow key={task.id} goTo={goTo} onOpenOrder={onOpenOrder} onUpdate={onUpdate} task={task} />)}
+            {group.tasks.map((task) => <WorkRow key={task.id} goTo={goTo} onOpenOrder={onOpenOrder} onUpdate={onUpdate} task={task} today={today} />)}
           </div>
         </section>
       ))}
-      {doneTasks.length > 0 && (
-        <details className="rounded-xl border border-fuel-line bg-white shadow-sm">
-          <summary className="cursor-pointer list-none px-4 py-3 font-black text-emerald-700 [&::-webkit-details-marker]:hidden">
-            <span className="inline-flex items-center gap-2"><CheckCircle2 size={18} /> Completed this week ({doneTasks.length})</span>
-          </summary>
-          <div className="divide-y divide-slate-100 border-t border-fuel-line">
-            {doneTasks.map((task) => <WorkRow key={task.id} goTo={goTo} onOpenOrder={onOpenOrder} onUpdate={onUpdate} task={task} />)}
-          </div>
-        </details>
-      )}
     </div>
   );
 }
 
-function WorkRow({ goTo, onOpenOrder, onUpdate, task }) {
+function OrdersView({ onOpenOrder, orderSummary, tasks, today }) {
+  const summaries = new Map(orderSummary.map((order) => [String(order.taskId), order]));
+  const submitted = tasks.filter((task) => summaries.get(String(task.id))?.submissionStatus === "submitted");
+  const pending = tasks.filter((task) => summaries.get(String(task.id))?.submissionStatus !== "submitted");
+  const submittedTotal = submitted.reduce((sum, task) => sum + Number(summaries.get(String(task.id))?.total || 0), 0);
+
+  if (!tasks.length) {
+    return (
+      <Card className="text-center">
+        <ShoppingCart className="mx-auto text-amber-600" size={38} />
+        <h3 className="mt-3 text-xl font-black">No orders this week</h3>
+        <p className="mt-1 font-semibold text-slate-500">Enabled order plans will appear here automatically on their ordering days.</p>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <section className="overflow-hidden rounded-xl border border-fuel-line bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-fuel-line bg-slate-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h3 className="font-black text-fuel-ink">Weekly orders</h3>
+            <p className={`mt-1 text-xs font-black ${pending.length ? "text-amber-700" : "text-emerald-700"}`}>
+              {pending.length ? `${pending.length} awaiting submission` : "All planned orders submitted"}
+            </p>
+          </div>
+          <div className="sm:text-right">
+            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Submitted total</p>
+            <p className="mt-1 text-2xl font-black text-fuel-ink">{formatCurrency(submittedTotal)}</p>
+          </div>
+        </div>
+        {pending.length > 0 && (
+          <div>
+            <div className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-amber-800">Pending</div>
+            <div className="divide-y divide-slate-100">
+              {pending.map((task) => <OrderRow key={task.id} onOpenOrder={onOpenOrder} summary={summaries.get(String(task.id))} task={task} today={today} />)}
+            </div>
+          </div>
+        )}
+        {submitted.length > 0 && (
+          <div>
+            <div className="border-y border-emerald-100 bg-emerald-50 px-4 py-2 text-xs font-black uppercase tracking-wide text-emerald-800">Submitted</div>
+            <div className="divide-y divide-slate-100">
+              {submitted.map((task) => <OrderRow key={task.id} onOpenOrder={onOpenOrder} summary={summaries.get(String(task.id))} task={task} today={today} />)}
+            </div>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function OrderRow({ onOpenOrder, summary, task, today }) {
+  const submitted = summary?.submissionStatus === "submitted";
+  const overdue = task.status !== "done" && task.dueDate < today;
+  return (
+    <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+      <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${submitted ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+        {submitted ? <CheckCircle2 size={21} /> : <ShoppingCart size={21} />}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-black text-fuel-ink">{summary?.supplier ? `${summary.supplier} — ` : ""}{summary?.orderName || task.title.replace(/^Order\s+—\s+/, "")}</p>
+        <p className="mt-1 text-xs font-bold text-slate-500">{overdue ? "Overdue" : `Due ${formatDate(task.dueDate)}`}{task.assignedStaffName ? ` · ${task.assignedStaffName}` : " · Anyone"}</p>
+        <p className={`mt-1 text-xs font-black ${submitted ? "text-emerald-700" : "text-amber-700"}`}>{submitted ? `Submitted · ${formatCurrency(summary.total)}` : "Not submitted"}</p>
+      </div>
+      <button type="button" onClick={() => onOpenOrder?.(task)} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-black ${submitted ? "bg-slate-100 text-slate-700" : "bg-amber-500 text-white"}`}>
+        {submitted ? "View order" : "Enter order"} <ChevronRight size={17} />
+      </button>
+    </div>
+  );
+}
+
+function CompletedView({ goTo, onOpenOrder, onUpdate, tasks, today }) {
+  if (!tasks.length) {
+    return (
+      <Card className="text-center">
+        <CheckCircle2 className="mx-auto text-emerald-600" size={38} />
+        <h3 className="mt-3 text-xl font-black">Nothing completed yet</h3>
+        <p className="mt-1 font-semibold text-slate-500">Completed gas counts, orders and shop tasks will be kept here.</p>
+      </Card>
+    );
+  }
+
+  return (
+    <section className="overflow-hidden rounded-xl border border-fuel-line bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-emerald-100 bg-emerald-50 px-4 py-3">
+        <h3 className="inline-flex items-center gap-2 font-black text-emerald-800"><CheckCircle2 size={18} /> Completed this week</h3>
+        <span className="text-xs font-bold text-emerald-800">{tasks.length} item{tasks.length === 1 ? "" : "s"}</span>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {tasks.map((task) => <WorkRow key={task.id} goTo={goTo} onOpenOrder={onOpenOrder} onUpdate={onUpdate} task={task} today={today} />)}
+      </div>
+    </section>
+  );
+}
+
+function WorkRow({ goTo, onOpenOrder, onUpdate, task, today }) {
   const isGas = task.taskType === "gas_stock_count";
   const isOrder = task.taskType === "recurring_order";
   const Icon = isGas ? PackageCheck : isOrder ? ShoppingCart : ClipboardList;
@@ -375,11 +462,18 @@ function WorkRow({ goTo, onOpenOrder, onUpdate, task }) {
           </span>
         </div>
         {task.description && <p className="mt-1 text-sm font-semibold text-slate-500">{task.description}</p>}
-        {task.assignedStaffName && <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-slate-500"><UserRound size={13} /> {task.assignedStaffName}</p>}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-bold text-slate-500">
+          {task.status === "done" ? (
+            <span>Completed{task.completedAt ? ` ${formatDateTime(task.completedAt)}` : ""}</span>
+          ) : (
+            <span className={task.dueDate < today ? "text-red-700" : ""}>{task.dueDate < today ? `Overdue from ${formatDate(task.dueDate)}` : `Due ${formatDate(task.dueDate)}`}</span>
+          )}
+          <span className="inline-flex items-center gap-1"><UserRound size={13} /> {task.assignedStaffName || "Anyone"}</span>
+        </div>
       </div>
-      {isGas && task.status !== "done" ? (
+      {isGas ? (
         <button type="button" onClick={() => goTo?.("gas-stock")} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-fuel-green px-4 text-sm font-black text-white">
-          Open count <ChevronRight size={17} />
+          {task.status === "done" ? "View count" : "Open count"} <ChevronRight size={17} />
         </button>
       ) : isOrder ? (
         <button type="button" onClick={() => onOpenOrder?.(task)} className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-black ${task.status === "done" ? "bg-slate-100 text-slate-700" : "bg-amber-500 text-white"}`}>
@@ -635,7 +729,7 @@ function OrderEntry({ onBack, onSaved, task }) {
   );
 }
 
-function OtherTasks({ currentUser, form, isAdmin, onCreate, onDelete, onUpdate, saving, setForm, staff, tasks }) {
+function ShopTasks({ currentUser, form, isAdmin, onCreate, onDelete, onUpdate, saving, setForm, staff, tasks }) {
   const assignable = isAdmin ? staff : staff.filter((person) => String(person.id) === String(currentUser?.staffId));
   return (
     <div className="space-y-4">
@@ -648,7 +742,7 @@ function OtherTasks({ currentUser, form, isAdmin, onCreate, onDelete, onUpdate, 
         </form>
       </Card>
       <section className="overflow-hidden rounded-xl border border-fuel-line bg-white shadow-sm">
-        <div className="border-b border-fuel-line bg-slate-50 px-4 py-3"><h3 className="font-black">Other shop tasks</h3></div>
+        <div className="border-b border-fuel-line bg-slate-50 px-4 py-3"><h3 className="font-black">Shop tasks</h3><p className="mt-1 text-xs font-bold text-slate-500">One-off cleaning, safety and maintenance jobs.</p></div>
         {tasks.length ? <div className="divide-y divide-slate-100">{tasks.map((task) => (
           <div key={task.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
             <button onClick={() => onUpdate(task, { status: task.status === "done" ? "todo" : "done" })} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 ${task.status === "done" ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent"}`}><Check size={16} /></button>
@@ -667,7 +761,7 @@ function Metric({ label, tone, value }) {
 }
 
 function ViewButton({ active, icon: Icon, label, onClick }) {
-  return <button type="button" onClick={onClick} className={`flex min-w-max flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-black transition ${active ? "bg-fuel-green text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}><Icon size={17} /> {label}</button>;
+  return <button type="button" role="tab" aria-selected={active} onClick={onClick} className={`flex min-w-0 items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-black transition ${active ? "bg-fuel-green text-white shadow-sm" : "text-slate-600 hover:bg-slate-50"}`}><Icon className="shrink-0" size={17} /> <span className="truncate">{label}</span></button>;
 }
 
 function frequencyLabel(weekdays = []) {
