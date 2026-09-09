@@ -585,25 +585,12 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
   const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
   const submittedCurrentOrders = currentOrders.filter((order) => order.submissionStatus === "submitted");
   const submittedPreviousOrders = previousOrders.filter((order) => order.submissionStatus === "submitted");
-  const ordersByDate = new Map();
-  submittedCurrentOrders.forEach((order) => ordersByDate.set(order.dueDate, (ordersByDate.get(order.dueDate) || 0) + Number(order.total || 0)));
-
-  const rows = weekDays.map((date, index) => ({
-    date,
-    label: new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(`${date}T00:00:00`)),
-    dateLabel: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00`)),
-    previousDateLabel: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(new Date(`${previousDays[index]}T00:00:00`)),
-    sales: salesByDate.get(date) || 0,
-    previousSales: salesByDate.get(previousDays[index]) || 0,
-    orders: ordersByDate.get(date) || 0
-  }));
   const currentSales = weekDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
   const previousSales = previousDays.reduce((sum, date) => sum + (salesByDate.get(date) || 0), 0);
   const currentEstimatedGrossProfit = currentSales * Number(salesMarginPercent || 0) / 100;
   const previousEstimatedGrossProfit = previousSales * Number(salesMarginPercent || 0) / 100;
   const currentOrderValue = submittedCurrentOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const previousOrderValue = submittedPreviousOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.sales, row.previousSales, row.orders]));
   const usingClockedIn = clockedInNow.length > 0;
   const workingRows = usingClockedIn ? clockedInNow : workingNow;
   const today = toDateInputValue(new Date());
@@ -631,8 +618,8 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
   const actionCount = Number(!todaySalesEntered) + dueOrderTasks.length + gasTasksDue.length + urgentCodeChecks.length + oneOffTasksDue.length;
 
   return (
-    <div className="space-y-4">
-      <Card className="p-4 sm:p-5">
+    <div className="space-y-3">
+      <Card className="p-3 sm:p-4">
         <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Station operations</p>
@@ -642,7 +629,7 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
           <p className="text-xs font-black text-slate-500">{weekRange}</p>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2.5 xl:grid-cols-4">
           <DashboardAttentionCard
             detail={urgentWorkTasks.length ? `${urgentWorkTasks.length} overdue or due today` : `${laterWorkTasks.length} task${laterWorkTasks.length === 1 ? "" : "s"} later this week`}
             icon={ListChecks}
@@ -668,7 +655,7 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
             value={expiredCodeChecks.length ? `${expiredCodeChecks.length} expired` : urgentCodeChecks.length ? `${urgentCodeChecks.length} short dated` : "Up to date"}
           />
           <DashboardAttentionCard
-            detail={nextShift ? `Next: ${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today"}
+            detail={handoverRow ? `Handover: ${handoverRow.staffName} ends ${formatTimeLabel(handoverRow.endTime)}` : nextShift ? `Next: ${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today"}
             icon={Users}
             label="Staff"
             onClick={() => goTo("rota")}
@@ -678,8 +665,8 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
         </div>
       </Card>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[1.35fr_0.65fr]">
-        <Card className="p-0 sm:p-0">
+      <div className="grid items-start gap-3 xl:grid-cols-[1.35fr_0.65fr]">
+        <Card className="min-w-0 p-0 sm:p-0">
           <div className="flex items-center justify-between border-b border-fuel-line px-4 py-3 sm:px-5">
             <div>
               <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Today</p>
@@ -687,14 +674,14 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
             </div>
             <span className={`rounded-full px-2.5 py-1 text-xs font-black ${actionCount ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{actionCount ? `${actionCount} to check` : "All clear"}</span>
           </div>
-          <div className="divide-y divide-fuel-line">
+          <div className="grid gap-2 p-3 sm:grid-cols-2">
             {!todaySalesEntered && <DashboardActionRow icon={PoundSterling} title="Enter today&apos;s sales" detail="Today&apos;s sales have not been recorded." buttonLabel="Enter sales" onClick={() => goTo("performance")} tone="amber" />}
             {dueOrderTasks.length > 0 && <DashboardActionRow icon={ShoppingCart} title="Complete due orders" detail={`${dueOrderTasks.length} order${dueOrderTasks.length === 1 ? " is" : "s are"} due or awaiting submission.`} buttonLabel="Open orders" onClick={() => goTo("orders")} tone="amber" />}
             {gasTasksDue.length > 0 && <DashboardActionRow icon={PackageSearch} title="Submit gas stock count" detail={`${gasTasksDue.length} gas stock count${gasTasksDue.length === 1 ? " is" : "s are"} due.`} buttonLabel="Open gas stock" onClick={() => goTo("gas-stock")} tone="blue" />}
             {urgentCodeChecks.length > 0 && <DashboardActionRow icon={AlertTriangle} title="Review short-dated products" detail={`${expiredCodeChecks.length} expired and ${urgentCodeChecks.length - expiredCodeChecks.length} due within 7 days.`} buttonLabel="Open code check" onClick={() => goTo("code-checks")} tone={expiredCodeChecks.length ? "red" : "amber"} />}
             {oneOffTasksDue.length > 0 && <DashboardActionRow icon={ListChecks} title="Complete one-off tasks" detail={`${oneOffTasksDue.length} task${oneOffTasksDue.length === 1 ? " is" : "s are"} overdue or due today.`} buttonLabel="Open work" onClick={() => goTo("tasks")} tone="blue" />}
             {!actionCount && (
-              <div className="flex items-center gap-3 px-4 py-5 sm:px-5">
+              <div className="flex items-center gap-3 rounded-xl border border-fuel-line bg-white p-3 sm:col-span-2">
                 <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><CheckCircle2 size={20} /></span>
                 <div><p className="font-black text-fuel-ink">All caught up</p><p className="text-sm font-semibold text-slate-500">There are no overdue or due-today actions.</p></div>
               </div>
@@ -702,63 +689,31 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
           </div>
         </Card>
 
-        <Card className="p-4 sm:p-5">
+        <Card className="min-w-0 p-3 sm:p-4">
           <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Coming up</p>
           <h2 className="mt-0.5 text-lg font-black text-fuel-ink">Upcoming</h2>
-          <div className="mt-3 space-y-2.5">
+          <div className="mt-2.5 grid gap-2 sm:grid-cols-2 xl:grid-cols-2">
             <DashboardStatusLine icon={Clock} label="Next shift" value={nextShift ? `${nextShift.staffName} · ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today"} />
             <DashboardStatusLine icon={ShoppingCart} label="Next order" value={nextOrder ? `${String(nextOrder.title).replace(/^Order\s+—\s+/, "")} · ${formatDayLabel(nextOrder.dueDate)}` : "No planned orders"} />
             <DashboardStatusLine icon={CalendarDays} label="Upcoming time off" value={upcomingTimeOff ? `${upcomingTimeOff.staffName || "Staff"} · ${formatDayLabel(upcomingTimeOff.startDate)}` : "No approved leave coming up"} />
             <DashboardStatusLine icon={ListChecks} label="Work later this week" value={laterWorkTasks.length ? `${laterWorkTasks.length} task${laterWorkTasks.length === 1 ? "" : "s"}` : "Nothing scheduled"} />
-            <DashboardStatusLine icon={Clock} label="Shift handover" value={handoverRow ? `${handoverRow.staffName} ends ${formatTimeLabel(handoverRow.endTime)}` : "No active handover"} />
           </div>
         </Card>
       </div>
 
-      <Card className="overflow-hidden p-0 sm:p-0">
-        <div className="flex flex-col gap-2 border-b border-fuel-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+      <Card className="p-3 sm:p-3">
+        <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-[190px_repeat(4,minmax(0,1fr))]">
           <div>
             <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Admin only</p>
             <h2 className="mt-0.5 text-lg font-black text-fuel-ink">Weekly performance</h2>
+            <button type="button" onClick={() => goTo("performance")} className="mt-2 rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green">Open Performance</button>
           </div>
-          <button type="button" onClick={() => goTo("performance")} className="self-start rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green">Open Performance</button>
-        </div>
-
-        <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
           <OverviewCard icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} detail={`Last week ${formatMoney(previousSales)}`} change={percentageChange(currentSales, previousSales)} />
           <OverviewCard icon={TrendingUp} label="Estimated gross profit" value={salesMarginPercent > 0 ? formatMoney(currentEstimatedGrossProfit) : "Not configured"} detail={salesMarginPercent > 0 ? `${Number(salesMarginPercent).toFixed(2)}% margin · Last week ${formatMoney(previousEstimatedGrossProfit)}` : "Set sales margin in Settings"} tone="emerald" />
           <OverviewCard icon={ShoppingCart} label="Order spend this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
           <OverviewCard icon={BarChart3} label="Sales vs last week" value={salesChange === null ? "No comparison" : `${salesChange >= 0 ? "+" : ""}${salesChange.toFixed(1)}%`} detail={`${formatMoney(currentSales)} vs ${formatMoney(previousSales)}`} tone={salesChange !== null && salesChange < 0 ? "amber" : "emerald"} />
         </div>
 
-        <div className="border-t border-fuel-line px-4 py-4 sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-xs font-black uppercase tracking-wide text-slate-500">Daily sales comparison</p>
-            <div className="flex flex-wrap justify-end gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> This week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-blue-200" /> Last week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
-          </div>
-          <p className="mt-2 text-xs font-semibold text-slate-500">Each day compares sales with the same weekday last week. Orders show submitted order value due this week.</p>
-          <div className="overflow-x-auto">
-            <div className="mt-3 grid h-44 min-w-[700px] grid-cols-7 items-end gap-2 sm:gap-3">
-              {rows.map((row) => (
-                <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
-                  <div className="flex flex-1 items-end justify-center gap-0.5 sm:gap-1">
-                    <div aria-label={`This week ${formatMoney(row.sales)}`} title={`This week ${formatMoney(row.sales)}`} className="w-2 rounded-t bg-fuel-green sm:w-3.5" style={{ height: barHeight(row.sales, maxValue) }} />
-                    <div aria-label={`Last week ${formatMoney(row.previousSales)}`} title={`Last week ${formatMoney(row.previousSales)}`} className="w-2 rounded-t bg-blue-200 sm:w-3.5" style={{ height: barHeight(row.previousSales, maxValue) }} />
-                    <div aria-label={`Orders ${formatMoney(row.orders)}`} title={`Orders ${formatMoney(row.orders)}`} className="w-2.5 rounded-t bg-amber-400 sm:w-4" style={{ height: barHeight(row.orders, maxValue) }} />
-                  </div>
-                  <p className="mt-1.5 truncate text-center text-[11px] font-black text-slate-600">{row.label}</p>
-                  <p className="truncate text-center text-[10px] font-bold text-slate-400">{row.dateLabel} vs {row.previousDateLabel}</p>
-                  <div className="mt-1.5 space-y-0.5 text-center text-[10px] font-black leading-tight">
-                    <p className="text-fuel-green">This {row.sales ? formatMoney(row.sales) : "—"}</p>
-                    <p className="text-blue-400">Last {row.previousSales ? formatMoney(row.previousSales) : "—"}</p>
-                    <p className="text-amber-600">Orders {row.orders ? formatMoney(row.orders) : "—"}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-          {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Orders to populate this chart.</p>}
-        </div>
       </Card>
     </div>
   );
@@ -767,12 +722,12 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
 function DashboardAttentionCard({ detail, icon: Icon, label, onClick, tone = "blue", value }) {
   const toneClasses = tone === "red" ? "bg-red-50 text-red-700" : tone === "amber" ? "bg-amber-50 text-amber-700" : tone === "green" ? "bg-emerald-50 text-emerald-700" : "bg-fuel-mist text-fuel-green";
   return (
-    <button type="button" onClick={onClick} className="group rounded-xl border border-fuel-line bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-fuel-green/30 sm:p-4">
+    <button type="button" onClick={onClick} className="group rounded-xl border border-fuel-line bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-fuel-green/30">
       <div className="flex items-center justify-between gap-3">
         <span className={`grid h-9 w-9 place-items-center rounded-xl sm:h-10 sm:w-10 ${toneClasses}`}><Icon size={19} /></span>
         <span className="text-xs font-black text-fuel-green transition group-hover:translate-x-0.5">Open →</span>
       </div>
-      <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-2 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-base font-black leading-tight text-fuel-ink sm:text-lg">{value}</p>
       <p className="mt-1 truncate text-xs font-semibold text-slate-500" title={detail}>{detail}</p>
     </button>
@@ -782,13 +737,13 @@ function DashboardAttentionCard({ detail, icon: Icon, label, onClick, tone = "bl
 function DashboardActionRow({ buttonLabel, detail, icon: Icon, onClick, title, tone = "blue" }) {
   const toneClasses = tone === "red" ? "bg-red-50 text-red-700" : tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-fuel-mist text-fuel-green";
   return (
-    <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:px-5">
-      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${toneClasses}`}><Icon size={19} /></span>
+    <div className="flex items-center gap-2.5 rounded-xl border border-fuel-line bg-white p-2.5 shadow-sm">
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${toneClasses}`}><Icon size={18} /></span>
       <div className="min-w-0 flex-1">
-        <p className="font-black text-fuel-ink">{title}</p>
-        <p className="mt-0.5 text-sm font-semibold text-slate-500">{detail}</p>
+        <p className="truncate text-sm font-black text-fuel-ink" title={title}>{title}</p>
+        <p className="mt-0.5 truncate text-xs font-semibold text-slate-500" title={detail}>{detail}</p>
       </div>
-      <button type="button" onClick={onClick} className="self-start rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green sm:self-auto">{buttonLabel}</button>
+      <button type="button" onClick={onClick} className="shrink-0 rounded-lg bg-fuel-mist px-2.5 py-2 text-xs font-black text-fuel-green">{buttonLabel}</button>
     </div>
   );
 }
@@ -796,13 +751,13 @@ function DashboardActionRow({ buttonLabel, detail, icon: Icon, onClick, title, t
 function OverviewCard({ change = null, detail, icon: Icon, label, tone = "blue", value }) {
   const improved = change !== null && change >= 0;
   return (
-    <div className="rounded-xl border border-fuel-line bg-white p-3.5 shadow-sm">
+    <div className="rounded-xl border border-fuel-line bg-white p-3 shadow-sm">
       <div className="flex items-center justify-between gap-2">
         <span className={`grid h-9 w-9 place-items-center rounded-lg ${tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-fuel-mist text-fuel-green"}`}><Icon size={18} /></span>
         {change !== null && <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-black ${tone === "amber" ? "bg-amber-50 text-amber-700" : improved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>{improved ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}{Math.abs(change).toFixed(1)}%</span>}
       </div>
-      <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="mt-1 truncate text-xl font-black text-fuel-ink" title={String(value)}>{value}</p>
+      <p className="mt-2 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 truncate text-lg font-black text-fuel-ink" title={String(value)}>{value}</p>
       <p className="mt-1 truncate text-xs font-semibold text-slate-500" title={detail}>{detail}</p>
     </div>
   );
@@ -810,8 +765,8 @@ function OverviewCard({ change = null, detail, icon: Icon, label, tone = "blue",
 
 function DashboardStatusLine({ icon: Icon, label, value, warning = false }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-fuel-line bg-white p-3 shadow-sm">
-      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${warning ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}><Icon size={17} /></span>
+    <div className="flex items-center gap-2.5 rounded-xl border border-fuel-line bg-white p-2.5 shadow-sm">
+      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${warning ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}><Icon size={16} /></span>
       <div className="min-w-0">
         <p className="text-[11px] font-black uppercase tracking-wide text-slate-400">{label}</p>
         <p className={`mt-0.5 truncate text-sm font-black ${warning ? "text-amber-800" : "text-fuel-ink"}`} title={value}>{value}</p>
@@ -823,11 +778,6 @@ function DashboardStatusLine({ icon: Icon, label, value, warning = false }) {
 function percentageChange(current, previous) {
   if (!previous) return null;
   return ((Number(current || 0) - Number(previous)) / Number(previous)) * 100;
-}
-
-function barHeight(value, maxValue) {
-  if (!value) return "0%";
-  return `${Math.max(4, (Number(value) / maxValue) * 100)}%`;
 }
 
 function formatMoney(value) {
