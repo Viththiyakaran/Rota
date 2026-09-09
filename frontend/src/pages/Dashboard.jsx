@@ -117,6 +117,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
             sales={performanceData.sales}
             salesMarginPercent={performanceData.salesMarginPercent}
             tasks={tasks}
+            timeOff={timeOff}
             weekDays={weekDays}
             weekRange={weekRange}
             workingNow={workingNow}
@@ -579,7 +580,7 @@ function CompactDashboardSummary({
   );
 }
 
-function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo, nextShift, previousOrders, sales, salesMarginPercent, tasks, weekDays, weekRange, workingNow }) {
+function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo, nextShift, previousOrders, sales, salesMarginPercent, tasks, timeOff, weekDays, weekRange, workingNow }) {
   const previousDays = weekDays.map((day) => toDateInputValue(addDays(new Date(`${day}T00:00:00`), -7)));
   const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
   const submittedCurrentOrders = currentOrders.filter((order) => order.submissionStatus === "submitted");
@@ -605,17 +606,8 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
   const maxValue = Math.max(1, ...rows.flatMap((row) => [row.sales, row.previousSales, row.orders]));
   const usingClockedIn = clockedInNow.length > 0;
   const workingRows = usingClockedIn ? clockedInNow : workingNow;
-  const workingNames = workingRows.map((row) => row.staffName).filter(Boolean).join(", ");
-  const workingDetail = usingClockedIn
-    ? `${workingRows.length} clocked in now`
-    : workingRows.length
-      ? workingRows.map((row) => formatShiftRange(row.startTime, row.endTime)).join(" · ")
-      : "No one scheduled at this time";
-  const nextShiftValue = nextShift ? nextShift.staffName : "No more shifts today";
   const today = toDateInputValue(new Date());
   const todaySalesEntered = salesByDate.has(today);
-  const todayOrderTasks = tasks.filter((task) => task.taskType === "recurring_order" && task.dueDate === today);
-  const submittedTodayOrders = submittedCurrentOrders.filter((order) => order.dueDate === today);
   const pendingOrders = tasks
     .filter((task) => task.taskType === "recurring_order" && task.status !== "done")
     .sort((left, right) => String(left.dueDate || "").localeCompare(String(right.dueDate || "")));
@@ -623,47 +615,130 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
   const handoverRow = [...workingRows]
     .filter((row) => row.endTime)
     .sort((left, right) => timeToMinutes(left.endTime) - timeToMinutes(right.endTime))[0];
-  const nextShiftDetail = nextShift ? `${formatTimeLabel(nextShift.startTime)} · ${formatShiftRange(nextShift.startTime, nextShift.endTime)}` : "All remaining staff are off";
   const codeCheckCutoff = toDateInputValue(addDays(new Date(`${today}T00:00:00`), 7));
   const urgentCodeChecks = codeChecks.filter((row) => row.status === "open" && row.sellByDate <= codeCheckCutoff);
+  const expiredCodeChecks = urgentCodeChecks.filter((row) => row.sellByDate < today);
+  const openWorkTasks = tasks.filter((task) => task.taskType !== "recurring_order" && task.status !== "done");
+  const urgentWorkTasks = openWorkTasks.filter((task) => task.dueDate && task.dueDate <= today);
+  const laterWorkTasks = openWorkTasks.filter((task) => task.dueDate > today && task.dueDate <= weekDays[6]);
+  const dueOrderTasks = pendingOrders.filter((task) => task.dueDate && task.dueDate <= today);
+  const gasTasksDue = urgentWorkTasks.filter((task) => task.taskType === "gas_stock_count");
+  const oneOffTasksDue = urgentWorkTasks.filter((task) => !task.taskType);
+  const upcomingTimeOff = [...timeOff]
+    .filter((request) => request.status === "approved" && request.endDate >= today)
+    .sort((left, right) => String(left.startDate).localeCompare(String(right.startDate)))[0];
+  const salesChange = percentageChange(currentSales, previousSales);
+  const actionCount = Number(!todaySalesEntered) + dueOrderTasks.length + gasTasksDue.length + urgentCodeChecks.length + oneOffTasksDue.length;
 
   return (
-    <Card className="overflow-hidden p-0 sm:p-0">
-      <div className="flex flex-col gap-2 border-b border-fuel-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Live station overview</p>
-          <h2 className="mt-0.5 text-xl font-black text-fuel-ink">Today &amp; this week</h2>
-          <p className="mt-0.5 text-xs font-semibold text-slate-500">{weekRange}</p>
+    <div className="space-y-4">
+      <Card className="p-4 sm:p-5">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Station operations</p>
+            <h2 className="mt-1 text-xl font-black text-fuel-ink">Needs attention today</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-500">Start with anything overdue or due today.</p>
+          </div>
+          <p className="text-xs font-black text-slate-500">{weekRange}</p>
         </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => goTo("tasks")} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">Open Work</button>
-          <button type="button" onClick={() => goTo("orders")} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">Open Orders</button>
-          <button type="button" onClick={() => goTo("performance")} className="rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green">Open Performance</button>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <DashboardAttentionCard
+            detail={urgentWorkTasks.length ? `${urgentWorkTasks.length} overdue or due today` : `${laterWorkTasks.length} task${laterWorkTasks.length === 1 ? "" : "s"} later this week`}
+            icon={ListChecks}
+            label="Work"
+            onClick={() => goTo("tasks")}
+            tone={urgentWorkTasks.length ? "amber" : "green"}
+            value={urgentWorkTasks.length ? `${urgentWorkTasks.length} need action` : "Up to date"}
+          />
+          <DashboardAttentionCard
+            detail={nextOrder ? `Next: ${String(nextOrder.title).replace(/^Order\s+—\s+/, "")} · ${formatDayLabel(nextOrder.dueDate)}` : "All planned orders complete"}
+            icon={ShoppingCart}
+            label="Orders"
+            onClick={() => goTo("orders")}
+            tone={dueOrderTasks.length ? "amber" : "green"}
+            value={dueOrderTasks.length ? `${dueOrderTasks.length} due or awaiting` : "Nothing due today"}
+          />
+          <DashboardAttentionCard
+            detail={urgentCodeChecks.length ? `${expiredCodeChecks.length} expired · ${urgentCodeChecks.length - expiredCodeChecks.length} due within 7 days` : "No products due within 7 days"}
+            icon={expiredCodeChecks.length ? AlertTriangle : PackageSearch}
+            label="Code Check"
+            onClick={() => goTo("code-checks")}
+            tone={expiredCodeChecks.length ? "red" : urgentCodeChecks.length ? "amber" : "green"}
+            value={expiredCodeChecks.length ? `${expiredCodeChecks.length} expired` : urgentCodeChecks.length ? `${urgentCodeChecks.length} short dated` : "Up to date"}
+          />
+          <DashboardAttentionCard
+            detail={nextShift ? `Next: ${nextShift.staffName} at ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today"}
+            icon={Users}
+            label="Staff"
+            onClick={() => goTo("rota")}
+            tone="blue"
+            value={workingRows.length ? `${workingRows.length} working now` : "No one working"}
+          />
         </div>
+      </Card>
+
+      <div className="grid items-start gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <Card className="p-0 sm:p-0">
+          <div className="flex items-center justify-between border-b border-fuel-line px-4 py-3 sm:px-5">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Today</p>
+              <h2 className="mt-0.5 text-lg font-black text-fuel-ink">Action list</h2>
+            </div>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-black ${actionCount ? "bg-amber-50 text-amber-700" : "bg-emerald-50 text-emerald-700"}`}>{actionCount ? `${actionCount} to check` : "All clear"}</span>
+          </div>
+          <div className="divide-y divide-fuel-line">
+            {!todaySalesEntered && <DashboardActionRow icon={PoundSterling} title="Enter today&apos;s sales" detail="Today&apos;s sales have not been recorded." buttonLabel="Enter sales" onClick={() => goTo("performance")} tone="amber" />}
+            {dueOrderTasks.length > 0 && <DashboardActionRow icon={ShoppingCart} title="Complete due orders" detail={`${dueOrderTasks.length} order${dueOrderTasks.length === 1 ? " is" : "s are"} due or awaiting submission.`} buttonLabel="Open orders" onClick={() => goTo("orders")} tone="amber" />}
+            {gasTasksDue.length > 0 && <DashboardActionRow icon={PackageSearch} title="Submit gas stock count" detail={`${gasTasksDue.length} gas stock count${gasTasksDue.length === 1 ? " is" : "s are"} due.`} buttonLabel="Open gas stock" onClick={() => goTo("gas-stock")} tone="blue" />}
+            {urgentCodeChecks.length > 0 && <DashboardActionRow icon={AlertTriangle} title="Review short-dated products" detail={`${expiredCodeChecks.length} expired and ${urgentCodeChecks.length - expiredCodeChecks.length} due within 7 days.`} buttonLabel="Open code check" onClick={() => goTo("code-checks")} tone={expiredCodeChecks.length ? "red" : "amber"} />}
+            {oneOffTasksDue.length > 0 && <DashboardActionRow icon={ListChecks} title="Complete one-off tasks" detail={`${oneOffTasksDue.length} task${oneOffTasksDue.length === 1 ? " is" : "s are"} overdue or due today.`} buttonLabel="Open work" onClick={() => goTo("tasks")} tone="blue" />}
+            {!actionCount && (
+              <div className="flex items-center gap-3 px-4 py-5 sm:px-5">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700"><CheckCircle2 size={20} /></span>
+                <div><p className="font-black text-fuel-ink">All caught up</p><p className="text-sm font-semibold text-slate-500">There are no overdue or due-today actions.</p></div>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-4 sm:p-5">
+          <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Coming up</p>
+          <h2 className="mt-0.5 text-lg font-black text-fuel-ink">Upcoming</h2>
+          <div className="mt-3 space-y-2.5">
+            <DashboardStatusLine icon={Clock} label="Next shift" value={nextShift ? `${nextShift.staffName} · ${formatTimeLabel(nextShift.startTime)}` : "No more shifts today"} />
+            <DashboardStatusLine icon={ShoppingCart} label="Next order" value={nextOrder ? `${String(nextOrder.title).replace(/^Order\s+—\s+/, "")} · ${formatDayLabel(nextOrder.dueDate)}` : "No planned orders"} />
+            <DashboardStatusLine icon={CalendarDays} label="Upcoming time off" value={upcomingTimeOff ? `${upcomingTimeOff.staffName || "Staff"} · ${formatDayLabel(upcomingTimeOff.startDate)}` : "No approved leave coming up"} />
+            <DashboardStatusLine icon={ListChecks} label="Work later this week" value={laterWorkTasks.length ? `${laterWorkTasks.length} task${laterWorkTasks.length === 1 ? "" : "s"}` : "Nothing scheduled"} />
+            <DashboardStatusLine icon={Clock} label="Shift handover" value={handoverRow ? `${handoverRow.staffName} ends ${formatTimeLabel(handoverRow.endTime)}` : "No active handover"} />
+          </div>
+        </Card>
       </div>
 
-      <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-6">
-        <OverviewCard icon={Users} label="Working now" value={workingNames || "No one working"} detail={workingDetail} />
-        <OverviewCard icon={Clock} label="Next shift" value={nextShiftValue} detail={nextShiftDetail} />
-        <OverviewCard icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} detail={`Last week ${formatMoney(previousSales)}`} change={percentageChange(currentSales, previousSales)} />
-        <OverviewCard icon={TrendingUp} label="Estimated gross profit" value={salesMarginPercent > 0 ? formatMoney(currentEstimatedGrossProfit) : "Not configured"} detail={salesMarginPercent > 0 ? `${Number(salesMarginPercent).toFixed(2)}% margin · Last week ${formatMoney(previousEstimatedGrossProfit)}` : "Set sales margin in Settings"} tone="emerald" />
-        <button type="button" className="text-left" onClick={() => goTo("orders")}>
-          <OverviewCard icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
-        </button>
-        <button type="button" className="text-left" onClick={() => goTo("code-checks")}>
-          <OverviewCard icon={urgentCodeChecks.length ? AlertTriangle : PackageSearch} label="Code check" value={urgentCodeChecks.length ? `${urgentCodeChecks.length} urgent` : "Up to date"} detail="Expired or due within 7 days" tone={urgentCodeChecks.length ? "amber" : "emerald"} />
-        </button>
-      </div>
+      <Card className="overflow-hidden p-0 sm:p-0">
+        <div className="flex flex-col gap-2 border-b border-fuel-line px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Admin only</p>
+            <h2 className="mt-0.5 text-lg font-black text-fuel-ink">Weekly performance</h2>
+          </div>
+          <button type="button" onClick={() => goTo("performance")} className="self-start rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green">Open Performance</button>
+        </div>
 
-      <div className="grid border-t border-fuel-line lg:grid-cols-[1.55fr_0.75fr]">
-        <div className="px-4 py-4 sm:px-5 lg:border-r lg:border-fuel-line">
+        <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
+          <OverviewCard icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} detail={`Last week ${formatMoney(previousSales)}`} change={percentageChange(currentSales, previousSales)} />
+          <OverviewCard icon={TrendingUp} label="Estimated gross profit" value={salesMarginPercent > 0 ? formatMoney(currentEstimatedGrossProfit) : "Not configured"} detail={salesMarginPercent > 0 ? `${Number(salesMarginPercent).toFixed(2)}% margin · Last week ${formatMoney(previousEstimatedGrossProfit)}` : "Set sales margin in Settings"} tone="emerald" />
+          <OverviewCard icon={ShoppingCart} label="Order spend this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
+          <OverviewCard icon={BarChart3} label="Sales vs last week" value={salesChange === null ? "No comparison" : `${salesChange >= 0 ? "+" : ""}${salesChange.toFixed(1)}%`} detail={`${formatMoney(currentSales)} vs ${formatMoney(previousSales)}`} tone={salesChange !== null && salesChange < 0 ? "amber" : "emerald"} />
+        </div>
+
+        <div className="border-t border-fuel-line px-4 py-4 sm:px-5">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs font-black uppercase tracking-wide text-slate-500">Daily sales comparison</p>
             <div className="flex flex-wrap justify-end gap-3 text-xs font-black text-slate-500"><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-fuel-green" /> This week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-blue-200" /> Last week</span><span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-amber-400" /> Orders</span></div>
           </div>
           <p className="mt-2 text-xs font-semibold text-slate-500">Each day compares sales with the same weekday last week. Orders show submitted order value due this week.</p>
           <div className="overflow-x-auto">
-            <div className="mt-3 grid h-64 min-w-[700px] grid-cols-7 items-end gap-2 sm:gap-3">
+            <div className="mt-3 grid h-44 min-w-[700px] grid-cols-7 items-end gap-2 sm:gap-3">
               {rows.map((row) => (
                 <div key={row.date} className="flex h-full min-w-0 flex-col justify-end">
                   <div className="flex flex-1 items-end justify-center gap-0.5 sm:gap-1">
@@ -684,36 +759,37 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
           </div>
           {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Orders to populate this chart.</p>}
         </div>
+      </Card>
+    </div>
+  );
+}
 
-        <aside className="border-t border-fuel-line bg-slate-50/70 p-4 lg:border-t-0 sm:p-5">
-          <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Today&apos;s status</p>
-          <div className="mt-3 space-y-2.5">
-            <DashboardStatusLine
-              icon={todaySalesEntered ? CheckCircle2 : AlertTriangle}
-              label="Sales entry"
-              value={todaySalesEntered ? formatMoney(salesByDate.get(today)) : "Not entered today"}
-              warning={!todaySalesEntered}
-            />
-            <DashboardStatusLine
-              icon={todayOrderTasks.length && submittedTodayOrders.length < todayOrderTasks.length ? AlertTriangle : CheckCircle2}
-              label="Today&apos;s orders"
-              value={!todayOrderTasks.length ? "No order due today" : submittedTodayOrders.length === todayOrderTasks.length ? `${submittedTodayOrders.length} submitted` : `${todayOrderTasks.length - submittedTodayOrders.length} pending`}
-              warning={todayOrderTasks.length > submittedTodayOrders.length}
-            />
-            <DashboardStatusLine
-              icon={ShoppingCart}
-              label="Next order"
-              value={nextOrder ? `${String(nextOrder.title).replace(/^Order\s+—\s+/, "")} · ${formatDayLabel(nextOrder.dueDate)}` : "All planned orders complete"}
-            />
-            <DashboardStatusLine
-              icon={Clock}
-              label="Shift handover"
-              value={handoverRow ? `${handoverRow.staffName} ends ${formatTimeLabel(handoverRow.endTime)}` : "No active handover"}
-            />
-          </div>
-        </aside>
+function DashboardAttentionCard({ detail, icon: Icon, label, onClick, tone = "blue", value }) {
+  const toneClasses = tone === "red" ? "bg-red-50 text-red-700" : tone === "amber" ? "bg-amber-50 text-amber-700" : tone === "green" ? "bg-emerald-50 text-emerald-700" : "bg-fuel-mist text-fuel-green";
+  return (
+    <button type="button" onClick={onClick} className="group rounded-xl border border-fuel-line bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-fuel-green/30 sm:p-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className={`grid h-9 w-9 place-items-center rounded-xl sm:h-10 sm:w-10 ${toneClasses}`}><Icon size={19} /></span>
+        <span className="text-xs font-black text-fuel-green transition group-hover:translate-x-0.5">Open →</span>
       </div>
-    </Card>
+      <p className="mt-3 text-xs font-black uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-base font-black leading-tight text-fuel-ink sm:text-lg">{value}</p>
+      <p className="mt-1 truncate text-xs font-semibold text-slate-500" title={detail}>{detail}</p>
+    </button>
+  );
+}
+
+function DashboardActionRow({ buttonLabel, detail, icon: Icon, onClick, title, tone = "blue" }) {
+  const toneClasses = tone === "red" ? "bg-red-50 text-red-700" : tone === "amber" ? "bg-amber-50 text-amber-700" : "bg-fuel-mist text-fuel-green";
+  return (
+    <div className="flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center sm:px-5">
+      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${toneClasses}`}><Icon size={19} /></span>
+      <div className="min-w-0 flex-1">
+        <p className="font-black text-fuel-ink">{title}</p>
+        <p className="mt-0.5 text-sm font-semibold text-slate-500">{detail}</p>
+      </div>
+      <button type="button" onClick={onClick} className="self-start rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green sm:self-auto">{buttonLabel}</button>
+    </div>
   );
 }
 
