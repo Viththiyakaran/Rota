@@ -314,19 +314,20 @@ export function CodeChecks({ currentUser }) {
 }
 
 function MonthlyPrintReport({ month, rows }) {
+  const blankRows = Array.from({ length: Math.max(0, 32 - rows.length) });
   return (
     <section className="code-check-print-area" aria-hidden="true">
-      <header>
-        <p className="print-kicker">LocalPlanner · Stock safety</p>
-        <div className="print-title-row">
-          <div>
-            <h1>Code Checklist <span>– Monthly</span></h1>
-            <p>Record products found during physical code checks that must be reduced, removed, returned or otherwise cleared.</p>
-          </div>
-          <div className="print-month"><small>Month</small><strong>{formatMonth(month)}</strong></div>
+      <header className="print-sheet-header">
+        <div className="print-month-box">
+          <strong>{month?.slice(5) || ""}</strong>
+          <span>{month?.slice(0, 4) || ""}</span>
+        </div>
+        <div className="print-heading-copy">
+          <h1>Code Checklist <span>– Monthly</span></h1>
+          <p>Record all potential date/code issues with products that will need to be removed before the next check as per the code/cleaning calendar.</p>
         </div>
       </header>
-      <table>
+      <table className="print-checklist-table">
         <thead>
           <tr>
             <th>Date</th>
@@ -350,14 +351,28 @@ function MonthlyPrintReport({ month, rows }) {
               <td>{row.signedOffAt ? `${row.signedOffByName} · ${formatShortDate(row.signedOffAt.slice(0, 10))}` : ""}</td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td className="print-empty" colSpan="7">No products recorded for this month.</td></tr>}
+          {blankRows.map((_, index) => (
+            <tr className="print-blank-row" key={`blank-${index}`}>
+              <td>&nbsp;</td><td /><td /><td /><td /><td /><td />
+            </tr>
+          ))}
         </tbody>
       </table>
-      <footer>
-        <span>Generated from LocalPlanner on {formatDate(toDateInputValue(new Date()))}</span>
-        <span>{rows.length} product record{rows.length === 1 ? "" : "s"}</span>
+      <footer className="print-signatures">
+        <SignatureBox title="Operator – Week 2" />
+        <SignatureBox title="Operator – Week 4" />
+        <SignatureBox title="Area Manager" />
       </footer>
     </section>
+  );
+}
+
+function SignatureBox({ title }) {
+  return (
+    <div className="print-signature-box">
+      <strong>{title}</strong>
+      <div><span>Date</span><span>Sign</span></div>
+    </div>
   );
 }
 

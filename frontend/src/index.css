@@ -42,7 +42,7 @@ textarea {
 @media print {
   @page {
     size: A4 portrait;
-    margin: 12mm;
+    margin: 8mm;
   }
 
   body {
@@ -67,26 +67,40 @@ textarea {
     font-family: Arial, sans-serif;
   }
 
-  .code-check-print-area .print-kicker {
-    margin: 0 0 5mm;
-    color: #176ef2;
-    font-size: 8pt;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+  .code-check-print-area .print-sheet-header {
+    display: grid;
+    grid-template-columns: 43mm 1fr;
+    min-height: 31mm;
+    margin-bottom: 3mm;
   }
 
-  .code-check-print-area .print-title-row {
+  .code-check-print-area .print-month-box {
     display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10mm;
-    margin-bottom: 6mm;
+    align-items: center;
+    justify-content: center;
+    gap: 3mm;
+    border-bottom: 1px solid #111827;
+    border-right: 1px solid #111827;
+    font-size: 17pt;
+  }
+
+  .code-check-print-area .print-month-box strong {
+    padding-right: 3mm;
+    border-right: 1px solid #111827;
+    font-weight: 500;
+  }
+
+  .code-check-print-area .print-month-box span {
+    font-weight: 400;
+  }
+
+  .code-check-print-area .print-heading-copy {
+    padding: 2mm 0 0 5mm;
   }
 
   .code-check-print-area h1 {
     margin: 0;
-    font-size: 22pt;
+    font-size: 21pt;
     font-weight: 800;
     line-height: 1;
   }
@@ -95,48 +109,25 @@ textarea {
     font-weight: 400;
   }
 
-  .code-check-print-area header p:not(.print-kicker) {
-    max-width: 130mm;
+  .code-check-print-area header p {
+    max-width: 145mm;
     margin: 3mm 0 0;
-    font-size: 9pt;
-    line-height: 1.35;
-  }
-
-  .code-check-print-area .print-month {
-    min-width: 40mm;
-    border: 1px solid #111827;
-    padding: 3mm;
-    text-align: center;
-  }
-
-  .code-check-print-area .print-month small,
-  .code-check-print-area .print-month strong {
-    display: block;
-  }
-
-  .code-check-print-area .print-month small {
-    margin-bottom: 1mm;
-    font-size: 7pt;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-  }
-
-  .code-check-print-area .print-month strong {
-    font-size: 11pt;
+    font-size: 8.5pt;
+    line-height: 1.25;
   }
 
   .code-check-print-area table {
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
-    font-size: 8pt;
+    font-size: 7.8pt;
   }
 
   .code-check-print-area th,
   .code-check-print-area td {
     border: 1px solid #4b5563;
-    padding: 2.3mm 1.5mm;
+    height: 5.8mm;
+    padding: 1mm 1.3mm;
     vertical-align: top;
     overflow-wrap: anywhere;
   }
@@ -144,15 +135,17 @@ textarea {
   .code-check-print-area th {
     background: #172033 !important;
     color: white !important;
-    font-size: 7.5pt;
+    height: auto;
+    padding: 1.3mm;
+    font-size: 7.3pt;
     font-weight: 800;
     text-align: left;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
 
-  .code-check-print-area tbody tr:nth-child(even) td {
-    background: #f1f5f9 !important;
+  .code-check-print-area tbody tr:nth-child(odd) td {
+    background: #e5e7eb !important;
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
@@ -172,20 +165,52 @@ textarea {
   .code-check-print-area th:nth-child(7),
   .code-check-print-area td:nth-child(7) { width: 16%; }
 
-  .code-check-print-area .print-empty {
-    height: 25mm;
-    color: #6b7280;
-    text-align: center;
-    vertical-align: middle;
+  .code-check-print-area .print-blank-row td {
+    height: 5.8mm;
   }
 
-  .code-check-print-area footer {
-    display: flex;
-    justify-content: space-between;
-    gap: 8mm;
-    margin-top: 4mm;
-    color: #4b5563;
+  .code-check-print-area .print-signatures {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    margin-top: 3mm;
+    color: #111827;
+  }
+
+  .code-check-print-area .print-signature-box {
+    border: 1px solid #4b5563;
+    border-right: 0;
+  }
+
+  .code-check-print-area .print-signature-box:last-child {
+    border-right: 1px solid #4b5563;
+  }
+
+  .code-check-print-area .print-signature-box > strong {
+    display: block;
+    padding: 1.2mm;
+    background: #172033 !important;
+    color: white !important;
     font-size: 7.5pt;
+    text-align: center;
+    text-transform: uppercase;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .code-check-print-area .print-signature-box > div {
+    display: grid;
+    grid-template-columns: 38% 62%;
+    min-height: 9mm;
+  }
+
+  .code-check-print-area .print-signature-box span {
+    padding: 1.2mm;
+    font-size: 7.5pt;
+  }
+
+  .code-check-print-area .print-signature-box span + span {
+    border-left: 1px solid #4b5563;
   }
 }
 
