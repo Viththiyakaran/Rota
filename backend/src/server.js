@@ -141,6 +141,13 @@ app.get("/api", (_req, res) => {
       "GET /api/staff",
       "POST /api/staff",
       "PUT /api/staff/:id",
+      "GET /api/code-checks",
+      "POST /api/code-checks",
+      "PUT /api/code-checks/:id",
+      "POST /api/code-checks/:id/clear",
+      "POST /api/code-checks/:id/reopen",
+      "POST /api/code-checks/:id/sign-off",
+      "DELETE /api/code-checks/:id",
       "GET /api/shifts/week?startDate=yyyy-mm-dd",
       "GET /api/shifts/my",
       "GET /api/shifts/publication?startDate=yyyy-mm-dd",
@@ -1393,6 +1400,152 @@ app.put("/api/staff/:id", requireAdmin, async (req, res, next) => {
   }
 });
 
+app.get("/api/code-checks", async (_req, res, next) => {
+  try {
+    const rows = await all(
+      `SELECT codeChecks.*,
+              recorder.username AS recordedByName,
+              clearer.username AS clearedByName,
+              signer.username AS signedOffByName
+       FROM codeChecks
+       JOIN users AS recorder ON recorder.id = codeChecks.recordedBy
+       LEFT JOIN users AS clearer ON clearer.id = codeChecks.clearedBy
+       LEFT JOIN users AS signer ON signer.id = codeChecks.signedOffBy
+       ORDER BY CASE WHEN codeChecks.status = 'open' THEN 0 ELSE 1 END,
+                codeChecks.sellByDate ASC, codeChecks.createdAt DESC`
+    );
+    res.json(rows);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/code-checks", async (req, res, next) => {
+  try {
+    const checkedDate = String(req.body.checkedDate || new Date().toISOString().slice(0, 10));
+    const productName = String(req.body.productName || "").trim();
+    const sellByDate = String(req.body.sellByDate || "");
+    const quantity = Number(req.body.quantity);
+    const barcode = String(req.body.barcode || "").trim().slice(0, 80);
+    const area = String(req.body.area || "").trim().slice(0, 100);
+    const notes = String(req.body.notes || "").trim().slice(0, 1000);
+    if (!productName) return res.status(400).json({ error: "Product name is required." });
+    if (!isDate(checkedDate) || !isDate(sellByDate)) return res.status(400).json({ error: "Valid check and sell-by dates are required." });
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return res.status(400).json({ error: "Quantity must be a whole number of at least 1." });
+
+    const result = await run(
+      `INSERT INTO codeChecks (checkedDate, productName, barcode, quantity, sellByDate, area, notes, recordedBy)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [checkedDate, productName.slice(0, 200), barcode, quantity, sellByDate, area, notes, req.user.id]
+    );
+    const row = await loadCodeCheck(result.id);
+    await addAudit(req.user.id, "create_code_check", `Recorded ${quantity} × ${productName}, dated ${sellByDate}`);
+    res.status(201).json(row);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/code-checks/:id", async (req, res, next) => {
+  try {
+    const current = await get("SELECT * FROM codeChecks WHERE id = ?", [req.params.id]);
+    if (!current) return res.status(404).json({ error: "Code-check item not found." });
+    if (current.status !== "open") return res.status(400).json({ error: "Reopen this item before editing it." });
+
+    const checkedDate = String(req.body.checkedDate ?? current.checkedDate);
+    const productName = String(req.body.productName ?? current.productName).trim();
+    const sellByDate = String(req.body.sellByDate ?? current.sellByDate);
+    const quantity = Number(req.body.quantity ?? current.quantity);
+    if (!productName) return res.status(400).json({ error: "Product name is required." });
+    if (!isDate(checkedDate) || !isDate(sellByDate)) return res.status(400).json({ error: "Valid check and sell-by dates are required." });
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 100000) return res.status(400).json({ error: "Quantity must be a whole number of at least 1." });
+
+    await run(
+      `UPDATE codeChecks
+       SET checkedDate = ?, productName = ?, barcode = ?, quantity = ?, sellByDate = ?, area = ?, notes = ?, updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [
+        checkedDate,
+        productName.slice(0, 200),
+        String(req.body.barcode ?? current.barcode ?? "").trim().slice(0, 80),
+        quantity,
+        sellByDate,
+        String(req.body.area ?? current.area ?? "").trim().slice(0, 100),
+        String(req.body.notes ?? current.notes ?? "").trim().slice(0, 1000),
+        req.params.id
+      ]
+    );
+    await addAudit(req.user.id, "update_code_check", `Updated code-check item ${productName}`);
+    res.json(await loadCodeCheck(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/code-checks/:id/clear", async (req, res, next) => {
+  try {
+    const current = await get("SELECT * FROM codeChecks WHERE id = ?", [req.params.id]);
+    if (!current) return res.status(404).json({ error: "Code-check item not found." });
+    const actionTaken = String(req.body.actionTaken || "").trim();
+    if (!actionTaken) return res.status(400).json({ error: "Select or enter the action taken." });
+    await run(
+      `UPDATE codeChecks
+       SET status = 'cleared', actionTaken = ?, clearedBy = ?, clearedAt = CURRENT_TIMESTAMP,
+           signedOffBy = NULL, signedOffAt = NULL, updatedAt = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [actionTaken.slice(0, 200), req.user.id, req.params.id]
+    );
+    await addAudit(req.user.id, "clear_code_check", `Cleared ${current.productName}: ${actionTaken}`);
+    res.json(await loadCodeCheck(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/code-checks/:id/reopen", requireAdmin, async (req, res, next) => {
+  try {
+    const current = await get("SELECT * FROM codeChecks WHERE id = ?", [req.params.id]);
+    if (!current) return res.status(404).json({ error: "Code-check item not found." });
+    await run(
+      `UPDATE codeChecks SET status = 'open', actionTaken = '', clearedBy = NULL, clearedAt = NULL,
+       signedOffBy = NULL, signedOffAt = NULL, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+      [req.params.id]
+    );
+    await addAudit(req.user.id, "reopen_code_check", `Reopened ${current.productName}`);
+    res.json(await loadCodeCheck(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/code-checks/:id/sign-off", requireAdmin, async (req, res, next) => {
+  try {
+    const current = await get("SELECT * FROM codeChecks WHERE id = ?", [req.params.id]);
+    if (!current) return res.status(404).json({ error: "Code-check item not found." });
+    if (current.status !== "cleared") return res.status(400).json({ error: "The item must be cleared before manager sign-off." });
+    await run(
+      "UPDATE codeChecks SET signedOffBy = ?, signedOffAt = CURRENT_TIMESTAMP, updatedAt = CURRENT_TIMESTAMP WHERE id = ?",
+      [req.user.id, req.params.id]
+    );
+    await addAudit(req.user.id, "sign_off_code_check", `Signed off ${current.productName}`);
+    res.json(await loadCodeCheck(req.params.id));
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/code-checks/:id", requireAdmin, async (req, res, next) => {
+  try {
+    const current = await get("SELECT * FROM codeChecks WHERE id = ?", [req.params.id]);
+    if (!current) return res.status(404).json({ error: "Code-check item not found." });
+    await run("DELETE FROM codeChecks WHERE id = ?", [req.params.id]);
+    await addAudit(req.user.id, "delete_code_check", `Deleted ${current.productName}`);
+    res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.get("/api/shifts/week", async (req, res, next) => {
   try {
     const startDate = req.query.startDate;
@@ -1854,6 +2007,21 @@ function requirePasswordChange(req, res, next) {
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Admin access is required." });
   next();
+}
+
+function loadCodeCheck(id) {
+  return get(
+    `SELECT codeChecks.*,
+            recorder.username AS recordedByName,
+            clearer.username AS clearedByName,
+            signer.username AS signedOffByName
+     FROM codeChecks
+     JOIN users AS recorder ON recorder.id = codeChecks.recordedBy
+     LEFT JOIN users AS clearer ON clearer.id = codeChecks.clearedBy
+     LEFT JOIN users AS signer ON signer.id = codeChecks.signedOffBy
+     WHERE codeChecks.id = ?`,
+    [id]
+  );
 }
 
 initDb().then(async () => {

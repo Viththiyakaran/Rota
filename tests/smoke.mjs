@@ -48,6 +48,7 @@ async function runSmoke() {
   assert(routeList.endpoints?.includes("PUT /api/sales"), "sales route is listed");
   assert(routeList.endpoints?.includes("GET /api/work-schedules"), "work schedules route is listed");
   assert(routeList.endpoints?.includes("POST /api/work-orders/:taskId/submit"), "work order submission route is listed");
+  assert(routeList.endpoints?.includes("GET /api/code-checks"), "code-check route is listed");
 
   const publicBranding = await request("/api/settings/branding");
   assert(publicBranding.businessName, "public branding works");
@@ -160,6 +161,46 @@ async function runSmoke() {
     body: { currentPassword: "staff123", newPassword: "staff456" }
   });
   assert(changedStaff.user?.mustChangePassword === false, "staff first password change");
+
+  const codeCheck = await request("/api/code-checks", {
+    cookie: staff.cookie,
+    method: "POST",
+    body: {
+      checkedDate: "2026-09-09",
+      productName: "Smoke Test Chocolate",
+      barcode: "5012345678900",
+      quantity: 4,
+      sellByDate: "2026-09-12",
+      area: "Confectionery",
+      notes: "Front shelf"
+    }
+  });
+  assert(codeCheck.productName === "Smoke Test Chocolate" && codeCheck.status === "open", "staff records a short-dated product");
+  await expectStatus("/api/code-checks", 400, {
+    cookie: staff.cookie,
+    method: "POST",
+    body: { checkedDate: "2026-09-09", productName: "Invalid quantity", quantity: 0, sellByDate: "2026-09-12" }
+  });
+  const updatedCodeCheck = await request(`/api/code-checks/${codeCheck.id}`, {
+    cookie: staff.cookie,
+    method: "PUT",
+    body: { quantity: 3, notes: "One sold during the check" }
+  });
+  assert(updatedCodeCheck.quantity === 3, "open code-check item can be updated");
+  await expectStatus(`/api/code-checks/${codeCheck.id}/sign-off`, 403, { cookie: staff.cookie, method: "POST" });
+  const clearedCodeCheck = await request(`/api/code-checks/${codeCheck.id}/clear`, {
+    cookie: staff.cookie,
+    method: "POST",
+    body: { actionTaken: "Removed from sale" }
+  });
+  assert(clearedCodeCheck.status === "cleared" && clearedCodeCheck.clearedByName, "staff clears a code-check item with an action");
+  const signedCodeCheck = await request(`/api/code-checks/${codeCheck.id}/sign-off`, { cookie: admin.cookie, method: "POST" });
+  assert(signedCodeCheck.signedOffAt && signedCodeCheck.signedOffByName, "admin signs off a cleared code-check item");
+  const listedCodeChecks = await request("/api/code-checks", { cookie: admin.cookie });
+  assert(listedCodeChecks.some((row) => row.id === codeCheck.id), "code-check history reloads");
+  const reopenedCodeCheck = await request(`/api/code-checks/${codeCheck.id}/reopen`, { cookie: admin.cookie, method: "POST" });
+  assert(reopenedCodeCheck.status === "open" && !reopenedCodeCheck.signedOffAt, "admin can reopen a code-check item");
+  await request(`/api/code-checks/${codeCheck.id}`, { cookie: admin.cookie, method: "DELETE" });
 
   const staffRows = await request("/api/staff", { cookie: admin.cookie });
   assert(staffRows.length >= 3, "seed staff exists");

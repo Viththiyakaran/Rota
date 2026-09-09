@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, Clock, ListChecks, PlusCircle, PoundSterling, Printer, ShoppingCart, Sparkles, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BarChart3, Bot, CalendarDays, CheckCircle2, ChevronDown, Clock, ListChecks, PackageSearch, PlusCircle, PoundSterling, Printer, ShoppingCart, Sparkles, TrendingUp, Users } from "lucide-react";
 import { api } from "../api.js";
 import { Card } from "../components/Card.jsx";
 import { Status } from "../components/Status.jsx";
@@ -28,6 +28,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   const [timeOff, setTimeOff] = React.useState([]);
   const [tasks, setTasks] = React.useState([]);
   const [attendance, setAttendance] = React.useState([]);
+  const [codeChecks, setCodeChecks] = React.useState([]);
   const [performanceData, setPerformanceData] = React.useState({ sales: [], currentOrders: [], previousOrders: [], salesMarginPercent: 0 });
   const [ukRules, setUkRules] = React.useState(DEFAULT_UK_ROTA_RULES);
   const [loading, setLoading] = React.useState(true);
@@ -59,9 +60,10 @@ export function Dashboard({ goTo, currentUser, branding }) {
       isAdmin ? api.sales(previousWeekStart, currentWeekEnd) : Promise.resolve([]),
       isAdmin ? api.workOrderSummary(dashboardWeekStart) : Promise.resolve([]),
       isAdmin ? api.workOrderSummary(previousWeekStart) : Promise.resolve([]),
-      isAdmin ? api.businessPerformanceSettings() : Promise.resolve({ salesMarginPercent: 0 })
+      isAdmin ? api.businessPerformanceSettings() : Promise.resolve({ salesMarginPercent: 0 }),
+      api.codeChecks()
     ])
-      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult, performanceSettingsResult]) => {
+      .then(([staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult, performanceSettingsResult, codeCheckResult]) => {
         if (staffResult.status === "fulfilled") setStaff(staffResult.value);
         if (shiftResult.status === "fulfilled") setShifts(shiftResult.value);
         if (reminderResult.status === "fulfilled") setReminders(reminderResult.value);
@@ -69,13 +71,14 @@ export function Dashboard({ goTo, currentUser, branding }) {
         if (taskResult.status === "fulfilled") setTasks(taskResult.value);
         if (ukRulesResult.status === "fulfilled") setUkRules({ ...DEFAULT_UK_ROTA_RULES, ...ukRulesResult.value });
         if (attendanceResult.status === "fulfilled") setAttendance(attendanceResult.value);
+        if (codeCheckResult.status === "fulfilled") setCodeChecks(codeCheckResult.value);
         setPerformanceData({
           sales: salesResult.status === "fulfilled" ? salesResult.value : [],
           currentOrders: currentOrdersResult.status === "fulfilled" ? currentOrdersResult.value : [],
           previousOrders: previousOrdersResult.status === "fulfilled" ? previousOrdersResult.value : [],
           salesMarginPercent: performanceSettingsResult.status === "fulfilled" ? Number(performanceSettingsResult.value.salesMarginPercent || 0) : 0
         });
-        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult, performanceSettingsResult].find((result) => result.status === "rejected");
+        const failed = [staffResult, shiftResult, reminderResult, timeOffResult, taskResult, ukRulesResult, attendanceResult, salesResult, currentOrdersResult, previousOrdersResult, performanceSettingsResult, codeCheckResult].find((result) => result.status === "rejected");
         if (failed && !isPasswordChangeRequired(failed.reason.message)) setError(failed.reason.message);
       })
       .catch((err) => setError(err.message))
@@ -106,6 +109,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
         {isAdmin ? (
           <AdminDashboardOverview
             clockedInNow={clockedInNow}
+            codeChecks={codeChecks}
             currentOrders={performanceData.currentOrders}
             goTo={goTo}
             nextShift={nextShift}
@@ -119,6 +123,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
           />
         ) : (
           <StaffDashboardOverview
+            codeChecks={codeChecks}
             currentUser={currentUser}
             goTo={goTo}
             reminders={reminders}
@@ -135,7 +140,7 @@ export function Dashboard({ goTo, currentUser, branding }) {
   );
 }
 
-function StaffDashboardOverview({ currentUser, goTo, reminders, shifts, tasks, timeOff, today, weekDays, weekRange }) {
+function StaffDashboardOverview({ codeChecks, currentUser, goTo, reminders, shifts, tasks, timeOff, today, weekDays, weekRange }) {
   const staffId = String(currentUser?.staffId || "");
   const myShifts = shifts
     .filter((shift) => String(shift.staffId || "") === staffId && !isApprovedOffShift(shift, timeOff, shift.shiftDate))
@@ -152,6 +157,8 @@ function StaffDashboardOverview({ currentUser, goTo, reminders, shifts, tasks, t
   );
   const myReminders = reminders.filter((reminder) => String(reminder.staffId || "") === staffId);
   const weeklyHours = myShifts.reduce((sum, shift) => sum + Number(shift.paidHours || 0), 0);
+  const codeCheckCutoff = toDateInputValue(addDays(new Date(`${today}T00:00:00`), 7));
+  const urgentCodeChecks = codeChecks.filter((row) => row.status === "open" && row.sellByDate <= codeCheckCutoff);
 
   return (
     <div className="space-y-4">
@@ -170,7 +177,7 @@ function StaffDashboardOverview({ currentUser, goTo, reminders, shifts, tasks, t
           </div>
         </div>
 
-        <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-5">
           <ActionMiniCard
             icon={Clock}
             title="My shift today"
@@ -198,6 +205,15 @@ function StaffDashboardOverview({ currentUser, goTo, reminders, shifts, tasks, t
             detail={approvedTimeOff[0] ? `${formatDayLabel(approvedTimeOff[0].startDate)} – ${formatDayLabel(approvedTimeOff[0].endDate)}` : "No upcoming approved leave."}
             tone="good"
           />
+          <button type="button" className="text-left" onClick={() => goTo("code-checks")}>
+            <ActionMiniCard
+              icon={urgentCodeChecks.length ? AlertTriangle : PackageSearch}
+              title="Code check"
+              value={urgentCodeChecks.length ? `${urgentCodeChecks.length} urgent` : "No urgent items"}
+              detail={urgentCodeChecks.length ? "Open the code check and take action." : "Record short-dated products during shelf checks."}
+              tone={urgentCodeChecks.length ? "warning" : "good"}
+            />
+          </button>
         </div>
       </Card>
 
@@ -562,7 +578,7 @@ function CompactDashboardSummary({
   );
 }
 
-function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, previousOrders, sales, salesMarginPercent, tasks, weekDays, weekRange, workingNow }) {
+function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo, nextShift, previousOrders, sales, salesMarginPercent, tasks, weekDays, weekRange, workingNow }) {
   const previousDays = weekDays.map((day) => toDateInputValue(addDays(new Date(`${day}T00:00:00`), -7)));
   const salesByDate = new Map(sales.map((entry) => [entry.saleDate, Number(entry.amount || 0)]));
   const submittedCurrentOrders = currentOrders.filter((order) => order.submissionStatus === "submitted");
@@ -607,6 +623,8 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
     .filter((row) => row.endTime)
     .sort((left, right) => timeToMinutes(left.endTime) - timeToMinutes(right.endTime))[0];
   const nextShiftDetail = nextShift ? `${formatTimeLabel(nextShift.startTime)} · ${formatShiftRange(nextShift.startTime, nextShift.endTime)}` : "All remaining staff are off";
+  const codeCheckCutoff = toDateInputValue(addDays(new Date(`${today}T00:00:00`), 7));
+  const urgentCodeChecks = codeChecks.filter((row) => row.status === "open" && row.sellByDate <= codeCheckCutoff);
 
   return (
     <Card className="overflow-hidden p-0 sm:p-0">
@@ -622,12 +640,15 @@ function AdminDashboardOverview({ clockedInNow, currentOrders, goTo, nextShift, 
         </div>
       </div>
 
-      <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-3 bg-slate-50/70 p-4 sm:grid-cols-2 xl:grid-cols-6">
         <OverviewCard icon={Users} label="Working now" value={workingNames || "No one working"} detail={workingDetail} />
         <OverviewCard icon={Clock} label="Next shift" value={nextShiftValue} detail={nextShiftDetail} />
         <OverviewCard icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} detail={`Last week ${formatMoney(previousSales)}`} change={percentageChange(currentSales, previousSales)} />
         <OverviewCard icon={TrendingUp} label="Estimated gross profit" value={salesMarginPercent > 0 ? formatMoney(currentEstimatedGrossProfit) : "Not configured"} detail={salesMarginPercent > 0 ? `${Number(salesMarginPercent).toFixed(2)}% margin · Last week ${formatMoney(previousEstimatedGrossProfit)}` : "Set sales margin in Settings"} tone="emerald" />
         <OverviewCard icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
+        <button type="button" className="text-left" onClick={() => goTo("code-checks")}>
+          <OverviewCard icon={urgentCodeChecks.length ? AlertTriangle : PackageSearch} label="Code check" value={urgentCodeChecks.length ? `${urgentCodeChecks.length} urgent` : "Up to date"} detail="Expired or due within 7 days" tone={urgentCodeChecks.length ? "amber" : "emerald"} />
+        </button>
       </div>
 
       <div className="grid border-t border-fuel-line lg:grid-cols-[1.55fr_0.75fr]">

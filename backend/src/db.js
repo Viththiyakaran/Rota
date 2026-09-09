@@ -110,7 +110,7 @@ function preparePostgresSql(sql) {
     .replace(/\?/g, () => `$${++index}`)
     .replace(/\bCURRENT_TIMESTAMP\b/g, "(CURRENT_TIMESTAMP::text)");
 
-  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|workSchedules|workOrderSubmissions|attendance|gasStockCounts|gasStockEntries)\b/i.test(query)
+  if (/^\s*INSERT\s+INTO\s+(staff|shifts|users|availability|timeOffRequests|auditLog|notifications|pushSubscriptions|tasks|workSchedules|workOrderSubmissions|attendance|gasStockCounts|gasStockEntries|codeChecks)\b/i.test(query)
     && !/\bRETURNING\b/i.test(query)
     && !/\bON\s+CONFLICT\b/i.test(query)) {
     query = `${query.trim()} RETURNING id`;
@@ -190,7 +190,18 @@ const pgKeyMap = new Map(Object.entries({
   countid: "countId",
   productid: "productId",
   productname: "productName",
-  reorderlevel: "reorderLevel"
+  reorderlevel: "reorderLevel",
+  checkeddate: "checkedDate",
+  sellbydate: "sellByDate",
+  actiontaken: "actionTaken",
+  recordedby: "recordedBy",
+  recordedbyname: "recordedByName",
+  clearedby: "clearedBy",
+  clearedbyname: "clearedByName",
+  clearedat: "clearedAt",
+  signedoffby: "signedOffBy",
+  signedoffbyname: "signedOffByName",
+  signedoffat: "signedOffAt"
 }));
 
 function cameliseRow(row) {
@@ -500,6 +511,31 @@ export async function initDb() {
       reorderLevel INTEGER NOT NULL DEFAULT 0,
       FOREIGN KEY (countId) REFERENCES gasStockCounts(id),
       UNIQUE(countId, productId)
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS codeChecks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      checkedDate TEXT NOT NULL,
+      productName TEXT NOT NULL,
+      barcode TEXT,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      sellByDate TEXT NOT NULL,
+      area TEXT,
+      actionTaken TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'cleared')),
+      recordedBy INTEGER NOT NULL,
+      clearedBy INTEGER,
+      clearedAt TEXT,
+      signedOffBy INTEGER,
+      signedOffAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (recordedBy) REFERENCES users(id),
+      FOREIGN KEY (clearedBy) REFERENCES users(id),
+      FOREIGN KEY (signedOffBy) REFERENCES users(id)
       )
     `);
   }
@@ -839,6 +875,28 @@ async function createPostgresSchema() {
       quantity INTEGER NOT NULL DEFAULT 0,
       reorderLevel INTEGER NOT NULL DEFAULT 0,
       UNIQUE(countId, productId)
+    )
+  `);
+
+  await run(`
+    CREATE TABLE IF NOT EXISTS codeChecks (
+      id SERIAL PRIMARY KEY,
+      checkedDate TEXT NOT NULL,
+      productName TEXT NOT NULL,
+      barcode TEXT,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      sellByDate TEXT NOT NULL,
+      area TEXT,
+      actionTaken TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'cleared')),
+      recordedBy INTEGER NOT NULL REFERENCES users(id),
+      clearedBy INTEGER REFERENCES users(id),
+      clearedAt TEXT,
+      signedOffBy INTEGER REFERENCES users(id),
+      signedOffAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
   `);
 }

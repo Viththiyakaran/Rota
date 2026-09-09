@@ -16,6 +16,7 @@ The app keeps each business name and logo configurable, so it can be used by fue
 ## Main Features
 
 - Admin and staff login
+- Mobile code checks for short-dated products, clearing actions, expiry alerts, and manager sign-off
 - Forced password change after first login or password reset
 - HTTP-only secure session cookies
 - Rate-limited login attempts

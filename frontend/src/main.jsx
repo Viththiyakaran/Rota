@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PackageCheck, PlusCircle, Settings as SettingsIcon, TrendingUp, UserRound, Users, X } from "lucide-react";
+import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PackageCheck, PackageSearch, PlusCircle, Settings as SettingsIcon, TrendingUp, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { StaffAvatar } from "./components/StaffAvatar.jsx";
@@ -22,6 +22,7 @@ import { WeeklyRota } from "./pages/WeeklyRota.jsx";
 import { Reports } from "./pages/Reports.jsx";
 import { Performance } from "./pages/Performance.jsx";
 import { GasStock } from "./pages/GasStock.jsx";
+import { CodeChecks } from "./pages/CodeChecks.jsx";
 
 const navItems = [
   { id: "dashboard", label: "Dashboard", icon: Home, roles: ["admin", "staff"] },
@@ -34,6 +35,7 @@ const navItems = [
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "edit-shift", label: "Edit Shift", icon: CalendarDays, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Work", icon: ListChecks, roles: ["admin", "staff"] },
+  { id: "code-checks", label: "Code Check", icon: PackageSearch, roles: ["admin", "staff"] },
   { id: "gas-stock", label: "Gas Stock", icon: PackageCheck, roles: ["admin", "staff"] },
   { id: "performance", label: "Performance", icon: TrendingUp, roles: ["admin", "staff"] },
   { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
@@ -62,7 +64,7 @@ function App() {
   const mobileNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && mobileNavIds.includes(item.id));
   const desktopNav = navItems.filter((item) =>
     item.roles.includes(currentUser?.role) &&
-    ["dashboard", "my-shifts", "staff", "rota", "tasks", "performance", "reports", "time-off", "settings"].includes(item.id) &&
+    ["dashboard", "my-shifts", "staff", "rota", "tasks", "code-checks", "performance", "reports", "time-off", "settings"].includes(item.id) &&
     (item.id !== "performance" || performanceEnabled)
   );
   const appTitle = buildRotaTitle(branding.businessName);
@@ -456,6 +458,7 @@ function App() {
           />
         )}
         {page === "tasks" && <Tasks currentUser={currentUser} goTo={setPage} />}
+        {page === "code-checks" && <CodeChecks currentUser={currentUser} />}
         {page === "gas-stock" && <GasStock currentUser={currentUser} />}
         {page === "performance" && performanceEnabled && <Performance branding={branding} currentUser={currentUser} />}
         {page === "reports" && isAdmin && <Reports goTo={setPage} />}
@@ -515,7 +518,7 @@ function App() {
                 key={item.id}
                 onClick={() => setPage(item.id)}
                 title={item.label}
-                className={`flex min-h-14 min-w-20 flex-1 flex-col items-center justify-center rounded-lg px-2 py-2 text-[11px] font-black normal-case transition sm:min-w-24 ${
+                className={`flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center rounded-lg px-1 py-2 text-[11px] font-black normal-case transition sm:min-w-24 sm:px-2 ${
                   active ? "bg-fuel-green text-white shadow-sm" : "bg-transparent text-slate-500 shadow-none hover:bg-fuel-mist hover:text-fuel-green"
                 }`}
               >
