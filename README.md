@@ -256,11 +256,15 @@ Notes:
 
 Use this split setup when the React frontend is on Netlify and the Node API is on Render.
 
-Netlify environment variable:
+Optional local-development frontend variable:
 
 ```text
 VITE_API_BASE=https://your-render-backend.onrender.com
 ```
+
+For Netlify production, leave `VITE_API_BASE` unset. The included `/api/*`
+proxy keeps login cookies on the frontend domain so authentication works in
+iPhone browsers. If the Render URL changes, update `netlify.toml`.
 
 Render backend environment variables:
 

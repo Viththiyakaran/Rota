@@ -75,11 +75,15 @@ Notes:
 
 ## Netlify Frontend And Render Backend
 
-Netlify frontend variable:
+Optional local-development frontend variable:
 
 ```text
 VITE_API_BASE=https://your-render-backend.onrender.com
 ```
+
+For Netlify production, leave `VITE_API_BASE` unset. Netlify proxies `/api/*`
+to Render, keeping the session cookie first-party for iPhone browsers. If the
+Render URL changes, update `netlify.toml`.
 
 Render backend variables:
 
