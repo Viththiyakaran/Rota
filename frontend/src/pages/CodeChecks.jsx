@@ -9,8 +9,10 @@ import {
   PackageSearch,
   Pencil,
   Plus,
+  Printer,
   RotateCcw,
   Save,
+  Share2,
   ShieldCheck,
   Trash2,
   X
@@ -49,6 +51,7 @@ export function CodeChecks({ currentUser }) {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
   const [message, setMessage] = React.useState("");
+  const [reportMonth, setReportMonth] = React.useState(toDateInputValue(new Date()).slice(0, 7));
   const isAdmin = currentUser?.role === "admin";
 
   const load = React.useCallback(() => {
@@ -74,6 +77,9 @@ export function CodeChecks({ currentUser }) {
     return true;
   });
   const productSuggestions = [...new Set(rows.map((row) => row.productName).filter(Boolean))].sort();
+  const reportRows = rows
+    .filter((row) => row.checkedDate?.startsWith(reportMonth))
+    .sort((left, right) => `${left.checkedDate}${left.productName}`.localeCompare(`${right.checkedDate}${right.productName}`));
 
   const resetForm = () => {
     setEditingId(null);
@@ -149,6 +155,30 @@ export function CodeChecks({ currentUser }) {
     }
   };
 
+  const printReport = () => window.print();
+
+  const shareReport = async () => {
+    setError("");
+    setMessage("");
+    const filename = `code-check-${reportMonth}.csv`;
+    const file = new File([buildReportCsv(reportRows)], filename, { type: "text/csv;charset=utf-8" });
+    try {
+      if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))) {
+        await navigator.share({
+          title: `Monthly Code Checklist - ${formatMonth(reportMonth)}`,
+          text: `${reportRows.length} code-check record${reportRows.length === 1 ? "" : "s"} for ${formatMonth(reportMonth)}.`,
+          files: [file]
+        });
+        setMessage("Monthly code-check report shared.");
+        return;
+      }
+      downloadFile(file, filename);
+      setMessage("Sharing is not available in this browser, so the monthly report was downloaded instead.");
+    } catch (err) {
+      if (err.name !== "AbortError") setError("The monthly report could not be shared. Please use Print and save it as a PDF.");
+    }
+  };
+
   return (
     <div className="space-y-5">
       <PageHeader
@@ -168,6 +198,24 @@ export function CodeChecks({ currentUser }) {
         <Metric icon={PackageSearch} label="Within 30 days" value={dueThisMonth.length} tone="blue" />
         <Metric icon={ShieldCheck} label="Awaiting sign-off" value={awaitingSignOff.length} tone={awaitingSignOff.length ? "amber" : "green"} />
       </div>
+
+      <Card className="print:hidden">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[0.14em] text-fuel-green">Monthly checklist</p>
+            <h2 className="mt-1 text-xl font-black text-fuel-ink">Print or share the final record</h2>
+            <p className="mt-1 text-sm font-medium text-slate-600">The report contains the seven useful columns from the paper sheet and leaves out internal app details.</p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <Field label="Report month">
+              <input aria-label="Report month" type="month" className={`${inputClass} min-w-44`} value={reportMonth} onChange={(event) => setReportMonth(event.target.value)} />
+            </Field>
+            <button type="button" className={softButton} onClick={printReport}><Printer size={18} /> Print / PDF</button>
+            <button type="button" className={primaryButton} onClick={shareReport}><Share2 size={18} /> Share</button>
+          </div>
+        </div>
+        <p className="mt-3 text-xs font-bold text-slate-500">{reportRows.length} record{reportRows.length === 1 ? "" : "s"} in {formatMonth(reportMonth)}</p>
+      </Card>
 
       {formOpen && (
         <Card className="border-blue-200 p-4 sm:p-5">
@@ -259,7 +307,57 @@ export function CodeChecks({ currentUser }) {
           </div>
         </div>
       </Card>
+
+      <MonthlyPrintReport month={reportMonth} rows={reportRows} />
     </div>
+  );
+}
+
+function MonthlyPrintReport({ month, rows }) {
+  return (
+    <section className="code-check-print-area" aria-hidden="true">
+      <header>
+        <p className="print-kicker">LocalPlanner · Stock safety</p>
+        <div className="print-title-row">
+          <div>
+            <h1>Code Checklist <span>– Monthly</span></h1>
+            <p>Record products found during physical code checks that must be reduced, removed, returned or otherwise cleared.</p>
+          </div>
+          <div className="print-month"><small>Month</small><strong>{formatMonth(month)}</strong></div>
+        </div>
+      </header>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Product</th>
+            <th>Qty</th>
+            <th>Sell-by date</th>
+            <th>Action taken</th>
+            <th>Date cleared</th>
+            <th>Sign-off</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td>{formatShortDate(row.checkedDate)}</td>
+              <td>{row.productName}</td>
+              <td>{row.quantity}</td>
+              <td>{formatShortDate(row.sellByDate)}</td>
+              <td>{row.actionTaken || ""}</td>
+              <td>{row.clearedAt ? formatShortDate(row.clearedAt.slice(0, 10)) : ""}</td>
+              <td>{row.signedOffAt ? `${row.signedOffByName} · ${formatShortDate(row.signedOffAt.slice(0, 10))}` : ""}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td className="print-empty" colSpan="7">No products recorded for this month.</td></tr>}
+        </tbody>
+      </table>
+      <footer>
+        <span>Generated from LocalPlanner on {formatDate(toDateInputValue(new Date()))}</span>
+        <span>{rows.length} product record{rows.length === 1 ? "" : "s"}</span>
+      </footer>
+    </section>
   );
 }
 
@@ -354,4 +452,41 @@ function formatDate(value) {
 function formatDateTime(value) {
   if (!value) return "";
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
+}
+
+function formatShortDate(value) {
+  if (!value) return "";
+  return new Intl.DateTimeFormat("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" }).format(new Date(`${value}T12:00:00`));
+}
+
+function formatMonth(value) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-GB", { month: "long", year: "numeric" }).format(new Date(`${value}-01T12:00:00`));
+}
+
+function buildReportCsv(rows) {
+  const columns = ["Date", "Product", "Quantity", "Sell By Date", "Action Taken", "Date Cleared", "Sign Off"];
+  const values = rows.map((row) => [
+    row.checkedDate,
+    row.productName,
+    row.quantity,
+    row.sellByDate,
+    row.actionTaken || "",
+    row.clearedAt ? row.clearedAt.slice(0, 10) : "",
+    row.signedOffAt ? `${row.signedOffByName} (${row.signedOffAt.slice(0, 10)})` : ""
+  ]);
+  return [columns, ...values].map((line) => line.map(csvCell).join(",")).join("\r\n");
+}
+
+function csvCell(value) {
+  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+}
+
+function downloadFile(file, filename) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

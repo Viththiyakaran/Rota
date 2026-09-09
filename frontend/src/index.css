@@ -35,6 +35,160 @@ textarea {
   color: #101735;
 }
 
+.code-check-print-area {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  .code-check-print-area,
+  .code-check-print-area * {
+    visibility: visible !important;
+  }
+
+  .code-check-print-area {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    color: #111827;
+    font-family: Arial, sans-serif;
+  }
+
+  .code-check-print-area .print-kicker {
+    margin: 0 0 5mm;
+    color: #176ef2;
+    font-size: 8pt;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .code-check-print-area .print-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10mm;
+    margin-bottom: 6mm;
+  }
+
+  .code-check-print-area h1 {
+    margin: 0;
+    font-size: 22pt;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .code-check-print-area h1 span {
+    font-weight: 400;
+  }
+
+  .code-check-print-area header p:not(.print-kicker) {
+    max-width: 130mm;
+    margin: 3mm 0 0;
+    font-size: 9pt;
+    line-height: 1.35;
+  }
+
+  .code-check-print-area .print-month {
+    min-width: 40mm;
+    border: 1px solid #111827;
+    padding: 3mm;
+    text-align: center;
+  }
+
+  .code-check-print-area .print-month small,
+  .code-check-print-area .print-month strong {
+    display: block;
+  }
+
+  .code-check-print-area .print-month small {
+    margin-bottom: 1mm;
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .code-check-print-area .print-month strong {
+    font-size: 11pt;
+  }
+
+  .code-check-print-area table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 8pt;
+  }
+
+  .code-check-print-area th,
+  .code-check-print-area td {
+    border: 1px solid #4b5563;
+    padding: 2.3mm 1.5mm;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .code-check-print-area th {
+    background: #172033 !important;
+    color: white !important;
+    font-size: 7.5pt;
+    font-weight: 800;
+    text-align: left;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .code-check-print-area tbody tr:nth-child(even) td {
+    background: #f1f5f9 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .code-check-print-area th:nth-child(1),
+  .code-check-print-area td:nth-child(1) { width: 10%; }
+  .code-check-print-area th:nth-child(2),
+  .code-check-print-area td:nth-child(2) { width: 23%; }
+  .code-check-print-area th:nth-child(3),
+  .code-check-print-area td:nth-child(3) { width: 7%; text-align: center; }
+  .code-check-print-area th:nth-child(4),
+  .code-check-print-area td:nth-child(4) { width: 12%; }
+  .code-check-print-area th:nth-child(5),
+  .code-check-print-area td:nth-child(5) { width: 20%; }
+  .code-check-print-area th:nth-child(6),
+  .code-check-print-area td:nth-child(6) { width: 12%; }
+  .code-check-print-area th:nth-child(7),
+  .code-check-print-area td:nth-child(7) { width: 16%; }
+
+  .code-check-print-area .print-empty {
+    height: 25mm;
+    color: #6b7280;
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .code-check-print-area footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 8mm;
+    margin-top: 4mm;
+    color: #4b5563;
+    font-size: 7.5pt;
+  }
+}
+
 .login-story-panel {
   position: relative;
   overflow: hidden;
