@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   PackageCheck,
+  PackageSearch,
   Pencil,
   PoundSterling,
   Plus,
@@ -50,9 +51,8 @@ export function Tasks({ currentUser, goTo }) {
   const weekEnd = React.useMemo(() => addDays(weekStart, 6), [weekStart]);
   const [view, setView] = React.useState("todo");
   const [tasks, setTasks] = React.useState([]);
-  const [orderSummary, setOrderSummary] = React.useState([]);
+  const [codeChecks, setCodeChecks] = React.useState([]);
   const [staff, setStaff] = React.useState([]);
-  const [selectedOrderTask, setSelectedOrderTask] = React.useState(null);
   const [deleteTarget, setDeleteTarget] = React.useState(null);
   const [deleting, setDeleting] = React.useState(false);
   const [quickTask, setQuickTask] = React.useState({ title: "", dueDate: today, assignedStaffId: "" });
@@ -64,11 +64,11 @@ export function Tasks({ currentUser, goTo }) {
   const load = React.useCallback(() => {
     setLoading(true);
     setError("");
-    Promise.all([api.tasks(), api.staff(), api.workOrderSummary(weekStart)])
-      .then(([taskRows, staffRows, summaryRows]) => {
+    Promise.all([api.tasks(), api.staff(), api.codeChecks()])
+      .then(([taskRows, staffRows, codeCheckRows]) => {
         setTasks(taskRows);
         setStaff(staffRows.filter((person) => person.active));
-        setOrderSummary(summaryRows);
+        setCodeChecks(codeCheckRows);
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
@@ -77,24 +77,22 @@ export function Tasks({ currentUser, goTo }) {
   React.useEffect(() => load(), [load]);
 
   const activeWeekTasks = tasks.filter((task) =>
+    task.taskType !== "recurring_order" &&
     task.status !== "done" && task.dueDate && (
       task.dueDate < today ||
       (task.dueDate >= weekStart && task.dueDate <= weekEnd)
     )
   );
   const doneThisWeek = tasks.filter((task) => {
-    if (task.status !== "done") return false;
+    if (task.taskType === "recurring_order" || task.status !== "done") return false;
     const completedDate = task.completedAt ? toDateInputValue(new Date(task.completedAt)) : task.dueDate;
     return completedDate >= weekStart && completedDate <= weekEnd;
   });
   const manualTasks = tasks.filter((task) => !task.taskType);
   const openManualTasks = manualTasks.filter((task) => task.status !== "done");
-  const orderTasks = tasks.filter((task) =>
-    task.taskType === "recurring_order" && task.dueDate && (
-      (task.status !== "done" && task.dueDate < today) ||
-      (task.dueDate >= weekStart && task.dueDate <= weekEnd)
-    )
-  );
+  const gasTasks = activeWeekTasks.filter((task) => task.taskType === "gas_stock_count");
+  const codeCheckCutoff = addDays(today, 7);
+  const urgentCodeChecks = codeChecks.filter((row) => row.status === "open" && row.sellByDate <= codeCheckCutoff);
   const dueToday = activeWeekTasks.filter((task) => task.dueDate === today).length;
   const overdue = activeWeekTasks.filter((task) => task.dueDate < today).length;
   const dueThisWeek = activeWeekTasks.filter((task) => task.dueDate >= today && task.dueDate <= weekEnd).length;
@@ -130,15 +128,9 @@ export function Tasks({ currentUser, goTo }) {
     setDeleting(true);
     setError("");
     try {
-      if (deleteTarget.type === "schedule") {
-        await api.deleteWorkSchedule(deleteTarget.item.id);
-        setDeleteTarget(null);
-        load();
-      } else {
-        await api.deleteTask(deleteTarget.item.id);
-        setTasks((rows) => rows.filter((row) => row.id !== deleteTarget.item.id));
-        setDeleteTarget(null);
-      }
+      await api.deleteTask(deleteTarget.item.id);
+      setTasks((rows) => rows.filter((row) => row.id !== deleteTarget.item.id));
+      setDeleteTarget(null);
     } catch (err) {
       setError(err.message);
       setDeleteTarget(null);
@@ -147,25 +139,12 @@ export function Tasks({ currentUser, goTo }) {
     }
   };
 
-  if (selectedOrderTask) {
-    return (
-      <OrderEntry
-        onBack={() => setSelectedOrderTask(null)}
-        onSaved={(viewData) => {
-          setTasks((rows) => rows.map((row) => row.id === viewData.task.id ? viewData.task : row));
-          api.workOrderSummary(weekStart).then(setOrderSummary).catch(() => {});
-        }}
-        task={selectedOrderTask}
-      />
-    );
-  }
-
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Station operations"
         title="Work"
-        description="See what needs doing next, then complete it."
+        description="Manage one-off shop tasks, gas stock counts and product code checks."
         meta={<Pill><CalendarCheck2 size={18} /> {formatWeek(weekStart, weekEnd)}</Pill>}
       />
 
@@ -175,10 +154,33 @@ export function Tasks({ currentUser, goTo }) {
         <Metric label="Due this week" value={dueThisWeek} tone={dueThisWeek ? "blue" : "slate"} />
       </div>
 
-      <div className="grid grid-cols-2 gap-1 rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm lg:grid-cols-4" role="tablist" aria-label="Work views">
-        <ViewButton active={view === "todo"} icon={CalendarCheck2} label="To do" onClick={() => setView("todo")} />
-        <ViewButton active={view === "orders"} icon={ShoppingCart} label="Orders" onClick={() => setView("orders")} />
-        <ViewButton active={view === "shop"} icon={ClipboardList} label="Shop tasks" onClick={() => setView("shop")} />
+      <div className="grid gap-3 md:grid-cols-3">
+        <WorkModuleCard
+          detail={`${openManualTasks.length} open task${openManualTasks.length === 1 ? "" : "s"}`}
+          icon={ClipboardList}
+          label="One-off Tasks"
+          onClick={() => setView("shop")}
+          tone="slate"
+        />
+        <WorkModuleCard
+          detail={gasTasks.length ? `${gasTasks.length} count${gasTasks.length === 1 ? "" : "s"} due` : "Open weekly bottle counts"}
+          icon={PackageCheck}
+          label="Gas Stock"
+          onClick={() => goTo("gas-stock")}
+          tone="blue"
+        />
+        <WorkModuleCard
+          detail={urgentCodeChecks.length ? `${urgentCodeChecks.length} urgent product${urgentCodeChecks.length === 1 ? "" : "s"}` : "Record and clear expiry issues"}
+          icon={PackageSearch}
+          label="Code Check"
+          onClick={() => goTo("code-checks")}
+          tone={urgentCodeChecks.length ? "amber" : "green"}
+        />
+      </div>
+
+      <div className="grid grid-cols-3 gap-1 rounded-xl border border-fuel-line bg-white p-1.5 shadow-sm" role="tablist" aria-label="Work views">
+        <ViewButton active={view === "todo"} icon={CalendarCheck2} label="Overview" onClick={() => setView("todo")} />
+        <ViewButton active={view === "shop"} icon={ClipboardList} label="One-off tasks" onClick={() => setView("shop")} />
         <ViewButton active={view === "completed"} icon={CheckCircle2} label="Completed" onClick={() => setView("completed")} />
       </div>
 
@@ -189,17 +191,7 @@ export function Tasks({ currentUser, goTo }) {
           <ToDoView
             activeTasks={activeWeekTasks}
             goTo={goTo}
-            onOpenOrder={setSelectedOrderTask}
             onUpdate={updateTask}
-            today={today}
-          />
-        )}
-
-        {view === "orders" && (
-          <OrdersView
-            onOpenOrder={setSelectedOrderTask}
-            orderSummary={orderSummary}
-            tasks={orderTasks}
             today={today}
           />
         )}
@@ -222,7 +214,6 @@ export function Tasks({ currentUser, goTo }) {
         {view === "completed" && (
           <CompletedView
             goTo={goTo}
-            onOpenOrder={setSelectedOrderTask}
             onUpdate={updateTask}
             tasks={doneThisWeek}
             today={today}
@@ -237,6 +228,94 @@ export function Tasks({ currentUser, goTo }) {
         target={deleteTarget}
       />
     </div>
+  );
+}
+
+export function Orders({ currentUser, goTo }) {
+  const today = React.useMemo(() => toDateInputValue(new Date()), []);
+  const weekStart = React.useMemo(() => mondayFor(today), [today]);
+  const weekEnd = React.useMemo(() => addDays(weekStart, 6), [weekStart]);
+  const [tasks, setTasks] = React.useState([]);
+  const [orderSummary, setOrderSummary] = React.useState([]);
+  const [selectedOrderTask, setSelectedOrderTask] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+
+  const load = React.useCallback(() => {
+    setLoading(true);
+    setError("");
+    Promise.all([api.tasks(), api.workOrderSummary(weekStart)])
+      .then(([taskRows, summaryRows]) => {
+        setTasks(taskRows);
+        setOrderSummary(summaryRows);
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [weekStart]);
+
+  React.useEffect(() => load(), [load]);
+
+  const orderTasks = tasks.filter((task) =>
+    task.taskType === "recurring_order" && task.dueDate && (
+      (task.status !== "done" && task.dueDate < today) ||
+      (task.dueDate >= weekStart && task.dueDate <= weekEnd)
+    )
+  );
+  const summaries = new Map(orderSummary.map((order) => [String(order.taskId), order]));
+  const pending = orderTasks.filter((task) => summaries.get(String(task.id))?.submissionStatus !== "submitted");
+  const submitted = orderTasks.filter((task) => summaries.get(String(task.id))?.submissionStatus === "submitted");
+  const overdue = pending.filter((task) => task.dueDate < today).length;
+  const submittedValue = submitted.reduce((sum, task) => sum + Number(summaries.get(String(task.id))?.total || 0), 0);
+
+  if (selectedOrderTask) {
+    return (
+      <OrderEntry
+        onBack={() => setSelectedOrderTask(null)}
+        onSaved={(viewData) => {
+          setTasks((rows) => rows.map((row) => row.id === viewData.task.id ? viewData.task : row));
+          api.workOrderSummary(weekStart).then(setOrderSummary).catch(() => {});
+        }}
+        task={selectedOrderTask}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        eyebrow="Supplier purchasing"
+        title="Orders"
+        description="Complete scheduled supplier orders and review submitted totals."
+        meta={<Pill tone="amber"><ShoppingCart size={18} /> {formatWeek(weekStart, weekEnd)}</Pill>}
+        action={currentUser?.role === "admin" ? <button type="button" className={primaryButton} onClick={() => goTo("settings-tasks")}><Pencil size={17} /> Manage order plans</button> : null}
+      />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Metric label="Overdue" value={overdue} tone={overdue ? "red" : "slate"} />
+        <Metric label="Awaiting submission" value={pending.length} tone={pending.length ? "amber" : "slate"} />
+        <Metric label="Submitted" value={submitted.length} tone={submitted.length ? "green" : "slate"} />
+        <Metric label="Submitted value" value={formatCurrency(submittedValue)} tone="blue" />
+      </div>
+      {error && <p className="rounded-lg border border-red-100 bg-red-50 p-3 font-bold text-red-700">{error}</p>}
+      <Status loading={loading} error="" empty={false}>
+        <OrdersView onOpenOrder={setSelectedOrderTask} orderSummary={orderSummary} tasks={orderTasks} today={today} />
+      </Status>
+    </div>
+  );
+}
+
+function WorkModuleCard({ detail, icon: Icon, label, onClick, tone }) {
+  const tones = {
+    slate: "bg-slate-100 text-slate-700",
+    blue: "bg-blue-50 text-blue-700",
+    amber: "bg-amber-50 text-amber-700",
+    green: "bg-emerald-50 text-emerald-700"
+  };
+  return (
+    <button type="button" onClick={onClick} className="flex items-center gap-3 rounded-xl border border-fuel-line bg-white p-4 text-left shadow-sm transition hover:border-blue-200 hover:shadow-soft">
+      <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl ${tones[tone]}`}><Icon size={23} /></span>
+      <span className="min-w-0 flex-1"><strong className="block text-base font-black text-fuel-ink">{label}</strong><span className="mt-1 block text-xs font-bold text-slate-500">{detail}</span></span>
+      <ChevronRight className="shrink-0 text-slate-400" size={19} />
+    </button>
   );
 }
 
@@ -327,7 +406,7 @@ function ToDoView({ activeTasks, goTo, onOpenOrder, onUpdate, today }) {
       <Card className="text-center">
         <CheckCircle2 className="mx-auto text-emerald-600" size={38} />
         <h3 className="mt-3 text-xl font-black">Nothing needs attention</h3>
-        <p className="mt-1 font-semibold text-slate-500">Gas counts, orders and shop tasks will appear here when they are due.</p>
+        <p className="mt-1 font-semibold text-slate-500">Gas counts and one-off tasks will appear here when they are due.</p>
       </Card>
     );
   }
@@ -427,7 +506,7 @@ function CompletedView({ goTo, onOpenOrder, onUpdate, tasks, today }) {
       <Card className="text-center">
         <CheckCircle2 className="mx-auto text-emerald-600" size={38} />
         <h3 className="mt-3 text-xl font-black">Nothing completed yet</h3>
-        <p className="mt-1 font-semibold text-slate-500">Completed gas counts, orders and shop tasks will be kept here.</p>
+        <p className="mt-1 font-semibold text-slate-500">Completed gas counts and one-off tasks will be kept here.</p>
       </Card>
     );
   }
@@ -742,7 +821,7 @@ function ShopTasks({ currentUser, form, isAdmin, onCreate, onDelete, onUpdate, s
         </form>
       </Card>
       <section className="overflow-hidden rounded-xl border border-fuel-line bg-white shadow-sm">
-        <div className="border-b border-fuel-line bg-slate-50 px-4 py-3"><h3 className="font-black">Shop tasks</h3><p className="mt-1 text-xs font-bold text-slate-500">One-off cleaning, safety and maintenance jobs.</p></div>
+        <div className="border-b border-fuel-line bg-slate-50 px-4 py-3"><h3 className="font-black">One-off tasks</h3><p className="mt-1 text-xs font-bold text-slate-500">Cleaning, safety, maintenance and other non-recurring jobs.</p></div>
         {tasks.length ? <div className="divide-y divide-slate-100">{tasks.map((task) => (
           <div key={task.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
             <button onClick={() => onUpdate(task, { status: task.status === "done" ? "todo" : "done" })} className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 ${task.status === "done" ? "border-emerald-600 bg-emerald-600 text-white" : "border-slate-300 text-transparent"}`}><Check size={16} /></button>

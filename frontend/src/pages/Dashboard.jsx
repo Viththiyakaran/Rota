@@ -148,7 +148,7 @@ function StaffDashboardOverview({ codeChecks, currentUser, goTo, reminders, shif
   const todayShift = myShifts.find((shift) => shift.shiftDate === today);
   const nextShift = myShifts.find((shift) => new Date(`${shift.shiftDate}T${shift.startTime}:00`) > new Date());
   const myOpenTasks = tasks
-    .filter((task) => task.status !== "done" && String(task.assignedStaffId || "") === staffId)
+    .filter((task) => task.taskType !== "recurring_order" && task.status !== "done" && String(task.assignedStaffId || "") === staffId)
     .sort((left, right) => String(left.dueDate || "").localeCompare(String(right.dueDate || "")));
   const approvedTimeOff = timeOff.filter((request) =>
     String(request.staffId || "") === staffId &&
@@ -382,7 +382,8 @@ function QuickActions({ goTo, isAdmin, moreOpen, onToggleMore }) {
     { label: "Print Rota", page: "rota", icon: Printer },
     { label: "Rota AI", page: "rota-ai", icon: Bot },
     { label: "Reports", page: "reports", icon: BarChart3 },
-    { label: "Tasks", page: "tasks", icon: ListChecks }
+    { label: "Work", page: "tasks", icon: ListChecks },
+    { label: "Orders", page: "orders", icon: ShoppingCart }
   ];
 
   React.useEffect(() => {
@@ -636,6 +637,7 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => goTo("tasks")} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">Open Work</button>
+          <button type="button" onClick={() => goTo("orders")} className="rounded-lg bg-amber-50 px-3 py-2 text-xs font-black text-amber-700">Open Orders</button>
           <button type="button" onClick={() => goTo("performance")} className="rounded-lg bg-fuel-mist px-3 py-2 text-xs font-black text-fuel-green">Open Performance</button>
         </div>
       </div>
@@ -645,7 +647,9 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
         <OverviewCard icon={Clock} label="Next shift" value={nextShiftValue} detail={nextShiftDetail} />
         <OverviewCard icon={PoundSterling} label="Sales this week" value={formatMoney(currentSales)} detail={`Last week ${formatMoney(previousSales)}`} change={percentageChange(currentSales, previousSales)} />
         <OverviewCard icon={TrendingUp} label="Estimated gross profit" value={salesMarginPercent > 0 ? formatMoney(currentEstimatedGrossProfit) : "Not configured"} detail={salesMarginPercent > 0 ? `${Number(salesMarginPercent).toFixed(2)}% margin · Last week ${formatMoney(previousEstimatedGrossProfit)}` : "Set sales margin in Settings"} tone="emerald" />
-        <OverviewCard icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
+        <button type="button" className="text-left" onClick={() => goTo("orders")}>
+          <OverviewCard icon={ShoppingCart} label="Orders this week" value={formatMoney(currentOrderValue)} detail={`Last week ${formatMoney(previousOrderValue)}`} change={percentageChange(currentOrderValue, previousOrderValue)} tone="amber" />
+        </button>
         <button type="button" className="text-left" onClick={() => goTo("code-checks")}>
           <OverviewCard icon={urgentCodeChecks.length ? AlertTriangle : PackageSearch} label="Code check" value={urgentCodeChecks.length ? `${urgentCodeChecks.length} urgent` : "Up to date"} detail="Expired or due within 7 days" tone={urgentCodeChecks.length ? "amber" : "emerald"} />
         </button>
@@ -678,7 +682,7 @@ function AdminDashboardOverview({ clockedInNow, codeChecks, currentOrders, goTo,
               ))}
             </div>
           </div>
-          {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Work to populate this chart.</p>}
+          {currentSales === 0 && currentOrderValue === 0 && <p className="mt-2 text-center text-xs font-semibold text-slate-500">Enter sales in Performance and submit orders in Orders to populate this chart.</p>}
         </div>
 
         <aside className="border-t border-fuel-line bg-slate-50/70 p-4 lg:border-t-0 sm:p-5">

@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PackageCheck, PackageSearch, PlusCircle, Settings as SettingsIcon, TrendingUp, UserRound, Users, X } from "lucide-react";
+import { BarChart3, Bell, Bot, CalendarDays, Clock, Home, Layers, ListChecks, LogOut, Menu, PackageCheck, PackageSearch, PlusCircle, Settings as SettingsIcon, ShoppingCart, TrendingUp, UserRound, Users, X } from "lucide-react";
 import "./index.css";
 import { api, setAuthToken } from "./api.js";
 import { StaffAvatar } from "./components/StaffAvatar.jsx";
@@ -16,7 +16,7 @@ import { RotaAi } from "./pages/RotaAi.jsx";
 import { RotaPattern } from "./pages/RotaPattern.jsx";
 import { Settings } from "./pages/Settings.jsx";
 import { StaffList } from "./pages/StaffList.jsx";
-import { Tasks } from "./pages/Tasks.jsx";
+import { Orders, Tasks } from "./pages/Tasks.jsx";
 import { TimeOff } from "./pages/TimeOff.jsx";
 import { WeeklyRota } from "./pages/WeeklyRota.jsx";
 import { Reports } from "./pages/Reports.jsx";
@@ -35,8 +35,9 @@ const navItems = [
   { id: "add-shift", label: "Add Shift", icon: PlusCircle, roles: ["admin"], hidden: true },
   { id: "edit-shift", label: "Edit Shift", icon: CalendarDays, roles: ["admin"], hidden: true },
   { id: "tasks", label: "Work", icon: ListChecks, roles: ["admin", "staff"] },
-  { id: "code-checks", label: "Code Check", icon: PackageSearch, roles: ["admin", "staff"] },
-  { id: "gas-stock", label: "Gas Stock", icon: PackageCheck, roles: ["admin", "staff"] },
+  { id: "orders", label: "Orders", icon: ShoppingCart, roles: ["admin", "staff"] },
+  { id: "code-checks", label: "Code Check", icon: PackageSearch, roles: ["admin", "staff"], hidden: true },
+  { id: "gas-stock", label: "Gas Stock", icon: PackageCheck, roles: ["admin", "staff"], hidden: true },
   { id: "performance", label: "Performance", icon: TrendingUp, roles: ["admin", "staff"] },
   { id: "reports", label: "Reports", icon: BarChart3, roles: ["admin"] },
   { id: "time-off", label: "Time Off", icon: Clock, roles: ["admin", "staff"] },
@@ -64,7 +65,7 @@ function App() {
   const mobileNav = navItems.filter((item) => item.roles.includes(currentUser?.role) && mobileNavIds.includes(item.id));
   const desktopNav = navItems.filter((item) =>
     item.roles.includes(currentUser?.role) &&
-    ["dashboard", "my-shifts", "staff", "rota", "tasks", "code-checks", "performance", "reports", "time-off", "settings"].includes(item.id) &&
+    ["dashboard", "my-shifts", "staff", "rota", "tasks", "orders", "performance", "reports", "time-off", "settings"].includes(item.id) &&
     (item.id !== "performance" || performanceEnabled)
   );
   const appTitle = buildRotaTitle(branding.businessName);
@@ -458,6 +459,7 @@ function App() {
           />
         )}
         {page === "tasks" && <Tasks currentUser={currentUser} goTo={setPage} />}
+        {page === "orders" && <Orders currentUser={currentUser} goTo={setPage} />}
         {page === "code-checks" && <CodeChecks currentUser={currentUser} />}
         {page === "gas-stock" && <GasStock currentUser={currentUser} />}
         {page === "performance" && performanceEnabled && <Performance branding={branding} currentUser={currentUser} />}
