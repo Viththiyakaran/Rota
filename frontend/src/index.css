@@ -39,12 +39,12 @@ textarea {
   display: none;
 }
 
-@media print {
-  @page {
-    size: A4 portrait;
-    margin: 8mm;
-  }
+@page {
+  size: 210mm 297mm;
+  margin: 8mm;
+}
 
+@media print {
   body {
     background: white !important;
   }
@@ -62,7 +62,10 @@ textarea {
     position: absolute;
     inset: 0;
     display: block;
-    width: 100%;
+    box-sizing: border-box;
+    width: 194mm;
+    max-width: 194mm;
+    min-height: 281mm;
     color: #111827;
     font-family: Arial, sans-serif;
   }
